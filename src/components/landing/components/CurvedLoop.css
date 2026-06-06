@@ -1,0 +1,38 @@
+.curved-loop-jacket {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  overflow: visible;
+  position: relative;
+}
+
+.curved-loop-svg {
+  user-select: none;
+  width: 100%;
+  aspect-ratio: 140 / 12;
+  overflow: visible;
+  display: block;
+  font-size: 2.2rem;
+  fill: #0b6b49; /* Slightly darker and more rich green */
+  user-select: none;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+@keyframes marquee-dash-offset {
+  from {
+    stroke-dashoffset: 44;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-marquee-dash {
+  animation: marquee-dash-offset 3.5s linear infinite;
+}

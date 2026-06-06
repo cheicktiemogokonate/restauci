@@ -1,0 +1,245 @@
+import type { Commande, Restaurant } from "@/types";
+import type { OrderDetailsHeaderProps } from "./order-details-header";
+
+const PLACEHOLDER_IMAGE =
+  "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop";
+const CLIENT_AVATAR =
+  "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop";
+const DRIVER_AVATAR =
+  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop";
+
+export interface OrderDetailItem {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  notes?: string;
+  unitPrice: number;
+  total: number;
+  image: string;
+}
+
+export interface TrackingStep {
+  id: string;
+  label: string;
+  date: string;
+  time: string;
+  completed: boolean;
+  current?: boolean;
+}
+
+export interface CommandeDetailsView {
+  id: string;
+  displayId: string;
+  status: OrderDetailsHeaderProps["status"];
+  date: string;
+  time: string;
+  orderType: OrderDetailsHeaderProps["orderType"];
+  modeCommande: Commande["modeCommande"];
+  items: OrderDetailItem[];
+  subtotal: number;
+  total: number;
+  client: {
+    name: string;
+    status: string;
+    phone: string;
+    email: string;
+    address: string;
+    avatar: string;
+  };
+  delivery: {
+    restaurantName: string;
+    restaurantAddress: string;
+    customerName: string;
+    customerAddress: string;
+    distance: string;
+    estimatedTime: string;
+    departureTime: string;
+    departureDate: string;
+    arrivalTime: string;
+    arrivalDate: string;
+  };
+  tracking: TrackingStep[];
+  driver: {
+    name: string;
+    status: "en_ligne" | "hors_ligne" | "en_livraison";
+    phone: string;
+    vehicleType: string;
+    vehicleNumber: string;
+    avatar: string;
+  } | null;
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatShortDate(date: Date): string {
+  return date.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export function mapStatutToDetailsStatus(
+  statut: Commande["statut"]
+): OrderDetailsHeaderProps["status"] {
+  switch (statut) {
+    case "recue":
+    case "en_preparation":
+      return "en_cours";
+    case "prete":
+      return "prete";
+    case "servie":
+      return "livree";
+    case "annulee":
+      return "annulee";
+    default:
+      return "en_cours";
+  }
+}
+
+export function mapModeToOrderType(
+  mode: Commande["modeCommande"]
+): OrderDetailsHeaderProps["orderType"] {
+  switch (mode) {
+    case "sur_place":
+      return "sur_place";
+    case "emporter":
+      return "a_emporter";
+    case "livraison":
+      return "en_ligne";
+  }
+}
+
+function buildTracking(commande: Commande, created: Date): TrackingStep[] {
+  const date = formatShortDate(created);
+  const time = formatTime(created);
+  const { statut, modeCommande } = commande;
+  const isLivraison = modeCommande === "livraison";
+
+  const labels = isLivraison
+    ? [
+        "Commande reçue",
+        "En préparation",
+        "Prête pour la livraison",
+        "En livraison",
+        "Livrée",
+      ]
+    : ["Commande reçue", "En préparation", "Prête", "Servie"];
+
+  const activeIndex: Record<Commande["statut"], number> = {
+    annulee: -1,
+    recue: 0,
+    en_preparation: 1,
+    prete: isLivraison ? 3 : 2,
+    servie: labels.length - 1,
+  };
+
+  const currentIdx = activeIndex[statut];
+
+  return labels.map((label, index) => {
+    const completed =
+      statut === "servie" || (statut !== "annulee" && index < currentIdx);
+    const current =
+      statut !== "annulee" && statut !== "servie" && index === currentIdx;
+    const showDate = completed || current;
+
+    return {
+      id: String(index + 1),
+      label,
+      date: showDate ? date : "",
+      time: showDate ? time : "",
+      completed,
+      current,
+    };
+  });
+}
+
+export function commandeToDetailsView(
+  commande: Commande,
+  restaurant: Restaurant
+): CommandeDetailsView {
+  const created = new Date(commande.createdAt);
+  const orderNote = commande.noteClient?.trim();
+
+  const items: OrderDetailItem[] = commande.items.map((item, index) => ({
+    id: `${commande.id}-${index}`,
+    name: item.nom,
+    category: "Plat",
+    quantity: item.quantite,
+    notes: index === 0 && orderNote ? orderNote : undefined,
+    unitPrice: item.prix,
+    total: item.prix * item.quantite,
+    image: PLACEHOLDER_IMAGE,
+  }));
+
+  const customerAddress =
+    commande.modeCommande === "sur_place" && commande.numeroTable
+      ? `Table ${commande.numeroTable}`
+      : commande.adresseLivraison || restaurant.adresse;
+
+  const distanceLabel =
+    commande.distanceKm != null
+      ? `${commande.distanceKm.toFixed(1)} km`
+      : "—";
+
+  const estimated = new Date(created.getTime() + 30 * 60 * 1000);
+
+  return {
+    id: commande.id,
+    displayId: commande.numero.startsWith("#") ? commande.numero : commande.numero,
+    status: mapStatutToDetailsStatus(commande.statut),
+    date: formatDate(created),
+    time: formatTime(created),
+    orderType: mapModeToOrderType(commande.modeCommande),
+    modeCommande: commande.modeCommande,
+    items,
+    subtotal: commande.sousTotal,
+    total: commande.total,
+    client: {
+      name: commande.nomClient,
+      status: "Client",
+      phone: commande.telephoneClient || "—",
+      email: "—",
+      address: customerAddress,
+      avatar: CLIENT_AVATAR,
+    },
+    delivery: {
+      restaurantName: restaurant.nom,
+      restaurantAddress: restaurant.adresse,
+      customerName: commande.nomClient,
+      customerAddress,
+      distance: distanceLabel,
+      estimatedTime: commande.modeCommande === "livraison" ? "~30 min" : "—",
+      departureTime: formatTime(created),
+      departureDate: formatShortDate(created),
+      arrivalTime: formatTime(estimated),
+      arrivalDate: formatShortDate(estimated),
+    },
+    tracking: buildTracking(commande, created),
+    driver:
+      commande.modeCommande === "livraison"
+        ? {
+            name: "Non assigné",
+            status: "hors_ligne",
+            phone: commande.telephoneClient || "—",
+            vehicleType: "—",
+            vehicleNumber: "—",
+            avatar: DRIVER_AVATAR,
+          }
+        : null,
+  };
+}
