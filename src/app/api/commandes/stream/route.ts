@@ -1,117 +1,115 @@
-import { cookies } from "next/headers";
-import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
-import { db, pool } from "@/lib/db";
-import { restaurants, commandes } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "your-secret-key-change-in-production"
-);
+import { NextRequest, NextResponse } from "next/server"
+import { db, pool } from "@/lib/db"
+import { commandes, restaurants } from "@/lib/db/schema"
+import { eq, and } from "drizzle-orm"
+import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
+  const cookieStore = await cookies()
+  const token = cookieStore.get("token")?.value
   if (!token) {
-    return new Response("Unauthorized", { status: 401 });
+    return new Response("Unauthorized", { status: 401 })
   }
 
-  let payload: Record<string, unknown>;
+  let payload: Record<string, unknown>
   try {
-    const verified = await jwtVerify(token, JWT_SECRET);
-    payload = verified.payload as Record<string, unknown>;
+    const verified = await jwtVerify(token, JWT_SECRET)
+    payload = verified.payload as any
   } catch (error) {
-    console.error("SSE auth error:", error);
-    return new Response("Unauthorized", { status: 401 });
+    console.error("[stream] Invalid token:", error)
+    return new Response("Unauthorized", { status: 401 })
   }
 
-  const userId = typeof payload?.userId === "string" ? payload.userId : null;
-  if (!userId) {
-    return new Response("Unauthorized", { status: 401 });
+  if ((payload as any).role !== "restaurateur") {
+    return new Response("Forbidden", { status: 403 })
   }
 
-  const [restaurant] = await db
-    .select()
-    .from(restaurants)
-    .where(eq(restaurants.userId, userId))
-    .limit(1);
-
-  if (!restaurant) {
-    return new Response("Forbidden", { status: 403 });
+  const restaurantId = (payload as any).restaurantId as string | undefined
+  if (!restaurantId) {
+    return new Response("Restaurant not found in token", { status: 401 })
   }
 
-  const restaurantId = restaurant.id;
-  const encoder = new TextEncoder();
+  try {
+    // Vérifier que le restaurant existe et est actif
+    const [restaurateur] = await db.select().from(restaurants).where(eq(restaurants.id, restaurantId)).limit(1)
+    if (!restaurateur || !restaurateur.actif) {
+      return new Response("Restaurant inactif", { status: 403 })
+    }
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      const client = await pool.connect();
+    const client = await pool.connect()
 
-      const cleanup = async () => {
-        client.removeListener("notification", onNotification);
-        try {
-          await client.query("UNLISTEN nouvelle_commande");
-        } catch (error) {
-          console.error("UNLISTEN error:", error);
-        }
-        client.release();
-      };
+    // Écouteur de notification PostgreSQL
+    let onNotification: (payload: any) => void | Promise<void> = async () => {}
 
-      const onNotification = async (msg: { channel: string; payload?: string | null }) => {
-        if (msg.channel !== "nouvelle_commande" || !msg.payload) {
-          return;
-        }
+    try {
+      await client.query("LISTEN nouvelle_commande")
 
-        try {
-          const data = JSON.parse(msg.payload) as {
-            restaurantId: string;
-            commandeId: string;
-          };
-
-          if (data.restaurantId !== restaurantId) {
-            return;
+      const stream = new ReadableStream({
+        async start(controller) {
+          // Gestionnaire d'erreur pour la requête de notification
+          const onError = (err: Error) => {
+            console.error("[stream] Notification error:", err)
           }
 
-          const [commande] = await db
-            .select()
-            .from(commandes)
-            .where(eq(commandes.id, data.commandeId))
-            .limit(1);
+          client.on("notification", onNotification)
 
-          if (!commande) {
-            return;
+          const cleanup = async () => {
+            client.removeListener("notification", onNotification)
+            try {
+              await client.query("UNLISTEN nouvelle_commande")
+            } catch (error) {
+              console.error("UNLISTEN error:", error)
+            } finally {
+              // Garder une référence à la fonction pour éviter de fermer deux fois
+              if (!controller._closed) {
+                controller.close()
+              }
+            }
           }
 
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(commande)}\n\n`)
-          );
-        } catch (error) {
-          console.error("SSE notification parse error:", error);
-        }
-      };
+          request.signal.addEventListener("abort", cleanup)
 
-      client.on("notification", onNotification);
-      try {
-        await client.query("LISTEN nouvelle_commande");
-      } catch (error) {
-        console.error("LISTEN error:", error);
-        controller.error(error);
-        await cleanup();
-        return;
-      }
+          const handleNotification = async (payload: any) => {
+            try {
+              // Vérifier que la commande appartient au restaurant connecté
+              const [cmd] = await db.select().from(commandes).where(eq(commandes.id, payload.commandeId)).limit(1)
+              
+              if (!cmd || cmd.restaurantId !== restaurateur.id) {
+                return
+              }
 
-      request.signal.addEventListener("abort", async () => {
-        await cleanup();
-        controller.close();
-      });
-    },
-  });
+              // Envoyer l'événement dans le stream
+              controller.enqueue(new TextEncoder().encode(JSON.stringify({ type: "commande", data: cmd }) + "\n\n"))
+            } catch (error) {
+              console.error("[stream] handleNotification error:", error)
+            }
+          }
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+          onNotification = async (payload: any, ...args: any[]) => {
+            if (payload.channel === "nouvelle_commande") {
+              await handleNotification(payload.payload)
+            }
+          }
+
+        },
+        pull(controller) {},
+        type: ReadableStreamType.byob,
+      }) as any
+
+      const response = new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache,no-transform",
+          Connection: "keep-alive",
+        },
+      })
+
+      return response
+    } finally {
+      client.release()
+    }
+  } catch (error) {
+    console.error("[stream] GET error:", error)
+    return new Response("Internal Server Error", { status: 500 })
+  }
 }
