@@ -77,7 +77,7 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
           Adresse & Contact GPS
         </h1>
         <p className="text-sm text-gray-500 mt-2 font-sans">
-          Ajoutez l'adresse de votre restaurant et vos coordonnées pour que vos futurs clients puissent vous géolocaliser.
+          Ajoutez l&apos;adresse de votre restaurant et vos coordonnées pour que vos futurs clients puissent vous géolocaliser.
         </p>
       </div>
 
@@ -99,11 +99,11 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
                 disabled
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 text-gray-500 rounded-xl text-sm font-sans outline-none appearance-none cursor-not-allowed"
               >
-                <option>🇨🇮 Côte d'Ivoire</option>
+                <option>🇨🇮 Côte d&apos;Ivoire</option>
               </select>
             </div>
             <p className="text-[10px] text-gray-400 mt-1">
-              Plateforme hébergée exclusivement en Côte d'Ivoire.
+              Plateforme hébergée exclusivement en Côte d&apos;Ivoire.
             </p>
           </div>
 
@@ -184,7 +184,7 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
             </label>
             <span className="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5" />
-              Cliquez n'importe où sur la carte pour placer le repère
+              Cliquez n&apos;importe où sur la carte pour placer le repère
             </span>
           </div>
 
@@ -214,7 +214,7 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
         {/* Contact Info Group */}
         <div>
           <h3 className="block text-sm font-semibold text-gray-950 mb-4">
-            Coordonnées de l'établissement
+            Coordonnées de l&apos;établissement
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

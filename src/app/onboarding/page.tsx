@@ -1,14 +1,17 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import Sidebar from "@/components/onboarding/Sidebar";
-import StepGeneral from "@/components/onboarding/StepGeneral";
-import StepAddress from "@/components/onboarding/StepAddress";
-import StepSchedule from "@/components/onboarding/StepSchedule";
-import StepOverview from "@/components/onboarding/StepOverview";
 import DashboardView from "@/components/onboarding/DashboardView";
-import { DaySchedule, RestaurantConfig, SpecialHourException } from "@/components/onboarding/types";
-
+import Sidebar from "@/components/onboarding/Sidebar";
+import StepAddress from "@/components/onboarding/StepAddress";
+import StepGeneral from "@/components/onboarding/StepGeneral";
+import StepOverview from "@/components/onboarding/StepOverview";
+import StepSchedule from "@/components/onboarding/StepSchedule";
+import {
+  DaySchedule,
+  RestaurantConfig,
+  SpecialHourException,
+} from "@/components/onboarding/types";
+import { AnimatePresence, motion } from "motion/react";
+import { useState } from "react";
 
 // Initial configuration default states
 const INITIAL_CONFIG: RestaurantConfig = {
@@ -17,21 +20,21 @@ const INITIAL_CONFIG: RestaurantConfig = {
     description: "",
     logoUrl: null,
     bannerUrl: null,
-    galleryUrls: []
+    galleryUrls: [],
   },
   address: {
-    country: "Côte d'Ivoire",
-    city: "Abidjan",
-    commune: "Marcory",
-    quarter: "Zone 4",
-    fullAddress: "Rue des Jardins, Immeuble 12, Marcory Zone 4, Abidjan, Côte d'Ivoire",
-    latitude: 5.3065,
-    longitude: -4.0133,
-    phone: "+225 07 45 89 22 10",
-    email: "contact@monrestaurant.ci",
-    whatsapp: "+225 07 45 89 22 10",
-    website: "https://www.monrestaurant.ci",
-    facebook: ""
+    country: "",
+    city: "",
+    commune: "",
+    quarter: "",
+    fullAddress: "",
+    latitude: 0,
+    longitude: 0,
+    phone: "",
+    email: "",
+    whatsapp: "",
+    website: "",
+    facebook: "",
   },
   schedule: [
     { day: "Lundi", isOpen: true, openTime: "08:00", closeTime: "22:00" },
@@ -40,11 +43,25 @@ const INITIAL_CONFIG: RestaurantConfig = {
     { day: "Jeudi", isOpen: true, openTime: "08:00", closeTime: "22:00" },
     { day: "Vendredi", isOpen: true, openTime: "08:00", closeTime: "23:00" },
     { day: "Samedi", isOpen: true, openTime: "09:00", closeTime: "23:00" },
-    { day: "Dimanche", isOpen: false, openTime: "09:00", closeTime: "22:00" }
+    { day: "Dimanche", isOpen: false, openTime: "09:00", closeTime: "22:00" },
   ],
   exceptions: [
-    { id: "exc-christmas", date: "2026-12-25", label: "Noël", isOpen: true, openTime: "11:00", closeTime: "16:00" },
-    { id: "exc-newyear", date: "2027-01-01", label: "Jour de l'An", isOpen: false, openTime: "CLOSED", closeTime: "CLOSED" }
+    {
+      id: "exc-christmas",
+      date: "2026-12-25",
+      label: "Noël",
+      isOpen: true,
+      openTime: "11:00",
+      closeTime: "16:00",
+    },
+    {
+      id: "exc-newyear",
+      date: "2027-01-01",
+      label: "Jour de l'An",
+      isOpen: false,
+      openTime: "CLOSED",
+      closeTime: "CLOSED",
+    },
   ],
   socials: {
     facebook: "",
@@ -52,7 +69,7 @@ const INITIAL_CONFIG: RestaurantConfig = {
     whatsapp: "",
     website: "",
     googleBusiness: "",
-    tripadvisor: ""
+    tripadvisor: "",
   },
   settings: {
     category: "bistrot",
@@ -60,8 +77,9 @@ const INITIAL_CONFIG: RestaurantConfig = {
     serviceTypes: ["dine-in", "takeout", "delivery"],
     menuLanguage: "fr",
     taxRate: 18,
-    enableOnlineBooking: true
-  }
+    enableOnlineBooking: true,
+  },
+  menu: [],
 };
 
 const STORAGE_KEY = "restauci_onboarding_config";
@@ -69,34 +87,37 @@ const MASTER_STEP_KEY = "restauci_onboarding_step";
 const DEPLOYED_KEY = "restauci_onboarding_deployed";
 
 export default function App() {
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [config, setConfig] = useState<RestaurantConfig>(INITIAL_CONFIG);
-  const [completedSteps, setCompletedSteps] = useState<boolean[]>([false, false, false, false]);
-  const [isDeployed, setIsDeployed] = useState<boolean>(false);
-
-  // Restore cache configurations
-  useEffect(() => {
+  const [currentStep, setCurrentStep] = useState<number>(() => {
+    if (typeof window === "undefined") return 1;
+    const step = window.localStorage.getItem(MASTER_STEP_KEY);
+    return step ? parseInt(step, 10) : 1;
+  });
+  const [config, setConfig] = useState<RestaurantConfig>(() => {
+    if (typeof window === "undefined") return INITIAL_CONFIG;
     try {
-      const cached = localStorage.getItem(STORAGE_KEY);
-      const step = localStorage.getItem(MASTER_STEP_KEY);
-      const deployed = localStorage.getItem(DEPLOYED_KEY);
-
-      if (cached) {
-        setConfig(JSON.parse(cached));
-      }
-      if (step) {
-        setCurrentStep(parseInt(step));
-      }
-      if (deployed === "true") {
-        setIsDeployed(true);
-      }
+      const cached = window.localStorage.getItem(STORAGE_KEY);
+      return cached ? (JSON.parse(cached) as RestaurantConfig) : INITIAL_CONFIG;
     } catch {
-      console.warn("Storage failed to restore.");
+      return INITIAL_CONFIG;
     }
-  }, []);
+  });
+  const [completedSteps, setCompletedSteps] = useState<boolean[]>([
+    false,
+    false,
+    false,
+    false,
+  ]);
+  const [isDeployed, setIsDeployed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(DEPLOYED_KEY) === "true";
+  });
 
   // Save changes to localStorage
-  const saveToLocal = (updatedConfig: RestaurantConfig, step: number, deployed: boolean) => {
+  const saveToLocal = (
+    updatedConfig: RestaurantConfig,
+    step: number,
+    deployed: boolean,
+  ) => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedConfig));
       localStorage.setItem(MASTER_STEP_KEY, String(step));
@@ -126,12 +147,6 @@ export default function App() {
 
   const handleUpdateExceptions = (newExceptions: SpecialHourException[]) => {
     const updated = { ...config, exceptions: newExceptions };
-    setConfig(updated);
-    saveToLocal(updated, currentStep, isDeployed);
-  };
-
-  const handleUpdateSocials = (fields: Partial<typeof config.socials>) => {
-    const updated = { ...config, socials: { ...config.socials, ...fields } };
     setConfig(updated);
     saveToLocal(updated, currentStep, isDeployed);
   };
@@ -169,7 +184,11 @@ export default function App() {
   };
 
   const handleReset = () => {
-    if (confirm("Voulez-vous réinitialiser toutes vos configurations de restaurant ?")) {
+    if (
+      confirm(
+        "Voulez-vous réinitialiser toutes vos configurations de restaurant ?",
+      )
+    ) {
       setConfig(INITIAL_CONFIG);
       setCurrentStep(1);
       setCompletedSteps([false, false, false, false]);
@@ -197,7 +216,6 @@ export default function App() {
 
   return (
     <div className="w-full min-h-screen bg-gray-50/50 flex flex-col lg:flex-row antialiased text-gray-800">
-      
       {/* Dynamic Left Stepper Sidebar */}
       <Sidebar
         currentStep={currentStep}

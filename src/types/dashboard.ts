@@ -1,13 +1,30 @@
-import type { Commande, Categorie, CreneauHoraire, Plat, Restaurant } from "@/lib/db/types";
+import type {
+  Categorie,
+  Commande,
+  CreneauHoraire,
+  PlatAvecCategorie,
+  Restaurant,
+} from "@/lib/db/types";
 
-// Props pour StatsCards (déjà défini dans lib/db/types.ts mais réexporté ici)
-export interface StatsDashboardProps {
+export type { PlatAvecCategorie };
+
+// Props pour StatsCards
+export interface StatsDashboard {
   commandesAujourdhui: number;
   commandesMois: number;
-  chiffreAffairesMois: number;   // en centimes
+  chiffreAffairesMois: number; // en centimes
   commandesEnCours: number;
   commandesEnPreparation: number;
   commandesPrêtes: number;
+}
+
+export interface CommandeResume extends Omit<
+  Commande,
+  "client" | "paiement" | "livraison"
+> {
+  clientNom?: string;
+  statutLabel: string;
+  type?: string;
 }
 
 // Props pour RecentOrders
@@ -15,15 +32,10 @@ export interface RecentOrdersProps {
   commandes: CommandeResume[];
 }
 
-interface CommandeResume extends Omit<Commande, "client" | "paiement" | "livraison"> {
-  clientNom?: string;
-  statutLabel: string;
-}
-
 // Props pour MenuManager
 export interface MenuManagerProps {
   restaurant: Restaurant;
-  initialPlats: (Plat & { categorie?: Categorie })[];
+  initialPlats: PlatAvecCategorie[];
   categories: Categorie[];
   creneaux: CreneauHoraire[];
   totalPlats: number;
@@ -37,10 +49,10 @@ export interface CommandesPageClientProps {
   total: number;
 }
 
-// Résultat paginé générique (déjà dans lib/db/types.ts)
-export type PageResult<T> = {
+// Résultat paginé générique
+export interface PageResult<T> {
   items: T[];
   total: number;
   page: number;
   totalPages: number;
-};
+}

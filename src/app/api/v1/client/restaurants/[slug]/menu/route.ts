@@ -1,0 +1,1 @@
+export { GET } from "@/app/api/v1/public/restaurants/[slug]/menu/route";

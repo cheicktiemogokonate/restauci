@@ -3,25 +3,37 @@
  * npx tsx db/seed.ts
  */
 
+import { hash } from "bcryptjs";
 import { db } from "./index";
 import {
-  users,
-  restaurants,
   abonnements,
-  creneauxHoraires,
   categories,
-  plats,
   clients,
   commandes,
+  creneauxHoraires,
+  plats,
+  restaurants,
+  users,
 } from "./schema";
-import { hash } from "bcryptjs";
-import { slugify } from "./mutations";
 
 async function seed() {
   console.log("🌱 Démarrage du seed...");
 
-  // ── 1. User restaurateur ─────────────────────────────────────────────────
+  // ── 1. Users (Admin + Restaurateur) ──────────────────────────────────────
   const passwordHash = await hash("password123", 12);
+
+  const [adminUser] = await db
+    .insert(users)
+    .values({
+      nom: "Super Admin",
+      email: "admin@restauci.com",
+      password: passwordHash,
+      telephone: "+225 00 00 00 00",
+      role: "admin",
+      emailVerifie: true,
+    })
+    .returning();
+  console.log("✅ Admin créé:", adminUser.email);
 
   const [user] = await db
     .insert(users)
@@ -51,9 +63,9 @@ async function seed() {
       ville: "Abidjan",
       pays: "Côte d'Ivoire",
       latitude: 5.3599,
-      longitude: -3.9900,
-      fraisLivraison: 150000,   // 1500 FCFA en centimes
-      commandeMinimum: 500000,  // 5000 FCFA
+      longitude: -3.99,
+      fraisLivraison: 150000, // 1500 FCFA en centimes
+      commandeMinimum: 500000, // 5000 FCFA
       modesCommande: ["sur_place", "livraison", "emporter"],
       cuisines: ["Italienne", "Pizza", "Pâtes"],
       actif: true,
@@ -74,7 +86,7 @@ async function seed() {
   });
 
   // ── 4. Créneaux horaires ─────────────────────────────────────────────────
-  const [creneauDej, creneauDiner] = await db
+  await db
     .insert(creneauxHoraires)
     .values([
       {
@@ -90,7 +102,15 @@ async function seed() {
         nom: "Dîner",
         heureOuverture: "18:00",
         heureFermeture: "23:00",
-        joursActifs: ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"],
+        joursActifs: [
+          "lundi",
+          "mardi",
+          "mercredi",
+          "jeudi",
+          "vendredi",
+          "samedi",
+          "dimanche",
+        ],
         actif: true,
       },
     ])
@@ -102,12 +122,12 @@ async function seed() {
     await db
       .insert(categories)
       .values([
-        { restaurantId: restaurant.id, nom: "Pizzas",    ordre: 1 },
-        { restaurantId: restaurant.id, nom: "Pâtes",     ordre: 2 },
-        { restaurantId: restaurant.id, nom: "Burgers",   ordre: 3 },
-        { restaurantId: restaurant.id, nom: "Salades",   ordre: 4 },
-        { restaurantId: restaurant.id, nom: "Desserts",  ordre: 5 },
-        { restaurantId: restaurant.id, nom: "Boissons",  ordre: 6 },
+        { restaurantId: restaurant.id, nom: "Pizzas", ordre: 1 },
+        { restaurantId: restaurant.id, nom: "Pâtes", ordre: 2 },
+        { restaurantId: restaurant.id, nom: "Burgers", ordre: 3 },
+        { restaurantId: restaurant.id, nom: "Salades", ordre: 4 },
+        { restaurantId: restaurant.id, nom: "Desserts", ordre: 5 },
+        { restaurantId: restaurant.id, nom: "Boissons", ordre: 6 },
       ])
       .returning();
   console.log("✅ Catégories créées");
@@ -119,8 +139,9 @@ async function seed() {
       restaurantId: restaurant.id,
       categorieId: catPizza.id,
       nom: "Smokey Supreme Pizza",
-      description: "Sauce tomate, mozzarella, pepperoni, poivrons, olives noires",
-      prix: 1200000,  // 12 000 FCFA
+      description:
+        "Sauce tomate, mozzarella, pepperoni, poivrons, olives noires",
+      prix: 1200000, // 12 000 FCFA
       disponible: true,
       ordre: 1,
       tags: ["Personnalisable"],
@@ -231,8 +252,13 @@ async function seed() {
     nomClient: "Alice Johnson",
     telephoneClient: "+225 01 00 00 00",
     items: [
-      { platId: "seed-pizza", nom: "Smokey Supreme Pizza", prix: 1200000, quantite: 1 },
-      { platId: "seed-salade", nom: "Salade César",         prix: 800000,  quantite: 1 },
+      {
+        platId: "seed-pizza",
+        nom: "Smokey Supreme Pizza",
+        prix: 1200000,
+        quantite: 1,
+      },
+      { platId: "seed-salade", nom: "Salade César", prix: 800000, quantite: 1 },
     ],
     sousTotal: 2000000,
     fraisLivraison: 0,

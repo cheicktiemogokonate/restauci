@@ -3,10 +3,36 @@ import { drizzle } from "drizzle-orm/node-postgres"
 import * as schema from "./schema"
 import { env } from "@/lib/env"
 
+/**
+ * pg v8 treats sslmode=require/prefer/verify-ca as verify-full aliases and warns
+ * about the upcoming pg v9 behavior change. Normalizing avoids the console warning.
+ */
+function normalizeDatabaseUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    const sslmode = parsed.searchParams.get("sslmode")
+
+    if (
+      sslmode === "prefer" ||
+      sslmode === "require" ||
+      sslmode === "verify-ca"
+    ) {
+      parsed.searchParams.set("sslmode", "verify-full")
+    }
+
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
+const connectionString = normalizeDatabaseUrl(env.DATABASE_URL)
+
 const pool = new Pool({
-  connectionString: env.DATABASE_URL,
-  ssl:
-    env.NODE_ENV === "production"
+  connectionString,
+  ssl: connectionString.includes("sslmode=")
+    ? { rejectUnauthorized: false }
+    : env.NODE_ENV === "production"
       ? { rejectUnauthorized: false }
       : undefined,
 })

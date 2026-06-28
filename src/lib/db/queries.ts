@@ -1,21 +1,9 @@
+import { cacheKey, TTL, withCache } from "@/lib/cache";
+import { getOffset, PAGINATION } from "@/lib/config/pagination";
+import { and, asc, count, desc, eq, gte, like, lte, sql } from "drizzle-orm";
 import { db } from "./index";
-import { eq, and, desc, asc, gte, lte, like, count, sql } from "drizzle-orm";
-import {
-  users,
-  restaurants,
-  categories,
-  plats,
-  commandes,
-  creneauxHoraires,
-  clients,
-  paiements,
-  livraisons,
-  livreurs,
-  promotions,
-  avis,
-  notifications,
-  abonnements,
-} from "./schema";
+import { avis, commandes, notifications, plats } from "./schema";
+import type { ModeCommande, StatutCommande } from "./types";
 
 // ============================================================================
 // USERS
@@ -64,9 +52,11 @@ export async function getMyRestaurantFull(userId: string) {
 
 /** Juste le restaurant (sans les sous-données) */
 export async function getMyRestaurant(userId: string) {
-  return db.query.restaurants.findFirst({
-    where: (r, { eq }) => eq(r.userId, userId),
-  });
+  return withCache(cacheKey.restaurantByUser(userId), TTL.RESTAURANT, () =>
+    db.query.restaurants.findFirst({
+      where: (r, { eq }) => eq(r.userId, userId),
+    }),
+  );
 }
 
 export async function getRestaurantById(id: string) {
@@ -77,9 +67,11 @@ export async function getRestaurantById(id: string) {
 }
 
 export async function getRestaurantBySlug(slug: string) {
-  return db.query.restaurants.findFirst({
-    where: (r, { eq }) => eq(r.slug, slug),
-  });
+  return withCache(cacheKey.restaurantPublic(slug), TTL.RESTAURANT_PUBLIC, () =>
+    db.query.restaurants.findFirst({
+      where: (r, { eq }) => eq(r.slug, slug),
+    }),
+  );
 }
 
 // ============================================================================
@@ -87,10 +79,15 @@ export async function getRestaurantBySlug(slug: string) {
 // ============================================================================
 
 export async function getCreneauxRestaurant(restaurantId: string) {
-  return db.query.creneauxHoraires.findMany({
-    where: (c, { eq }) => eq(c.restaurantId, restaurantId),
-    orderBy: (c, { asc }) => [asc(c.nom)],
-  });
+  return withCache(
+    cacheKey.creneauxRestaurant(restaurantId),
+    TTL.CATEGORIES,
+    () =>
+      db.query.creneauxHoraires.findMany({
+        where: (c, { eq }) => eq(c.restaurantId, restaurantId),
+        orderBy: (c, { asc }) => [asc(c.nom)],
+      }),
+  );
 }
 
 // ============================================================================
@@ -98,16 +95,18 @@ export async function getCreneauxRestaurant(restaurantId: string) {
 // ============================================================================
 
 export async function getCategoriesRestaurant(restaurantId: string) {
-  return db.query.categories.findMany({
-    where: (c, { eq }) => eq(c.restaurantId, restaurantId),
-    orderBy: (c, { asc }) => [asc(c.ordre)],
-    with: {
-      creneau: true,
-      plats: {
-        orderBy: (p, { asc }) => [asc(p.ordre)],
+  return withCache(cacheKey.categories(restaurantId), TTL.CATEGORIES, () =>
+    db.query.categories.findMany({
+      where: (c, { eq }) => eq(c.restaurantId, restaurantId),
+      orderBy: (c, { asc }) => [asc(c.ordre)],
+      with: {
+        creneau: true,
+        plats: {
+          orderBy: (p, { asc }) => [asc(p.ordre)],
+        },
       },
-    },
-  });
+    }),
+  );
 }
 
 export async function getCategorieById(id: string, restaurantId: string) {
@@ -137,22 +136,37 @@ export async function getPlats({
   disponible,
   search,
   page = 1,
-  limit = 12,
+  limit = PAGINATION.PLATS_PAR_PAGE,
 }: GetPlatsOptions) {
+  const validLimit = Math.min(limit, PAGINATION.MAX_PAR_PAGE);
+  const offset = getOffset(page, validLimit);
+
   const conditions = [eq(plats.restaurantId, restaurantId)];
 
   if (categorieId) conditions.push(eq(plats.categorieId, categorieId));
-  if (disponible !== undefined) conditions.push(eq(plats.disponible, disponible));
+  if (disponible !== undefined)
+    conditions.push(eq(plats.disponible, disponible));
   if (search) conditions.push(like(plats.nom, `%${search}%`));
 
   const [items, totalResult] = await Promise.all([
-    db.query.plats.findMany({
-      where: and(...conditions),
-      orderBy: [asc(plats.ordre), asc(plats.nom)],
-      offset: (page - 1) * limit,
-      limit,
-      with: { categorie: true },
-    }),
+    withCache(
+      cacheKey.plats(
+        restaurantId,
+        page,
+        categorieId ?? null,
+        disponible ?? null,
+        search ?? "",
+      ),
+      TTL.PLATS,
+      () =>
+        db.query.plats.findMany({
+          where: and(...conditions),
+          orderBy: [asc(plats.ordre), asc(plats.nom)],
+          offset,
+          limit: validLimit,
+          with: { categorie: true },
+        }),
+    ),
     db
       .select({ count: count() })
       .from(plats)
@@ -163,7 +177,8 @@ export async function getPlats({
     items,
     total: totalResult[0].count,
     page,
-    totalPages: Math.ceil(totalResult[0].count / limit),
+    limit: validLimit,
+    totalPages: Math.ceil(totalResult[0].count / validLimit),
   };
 }
 
@@ -181,17 +196,36 @@ export async function getPlatById(id: string, restaurantId: string) {
   });
 }
 
+export async function getSimilarPlats(
+  platId: string,
+  restaurantId: string,
+  categorieId: string,
+  limit = 4,
+) {
+  return db.query.plats.findMany({
+    where: (p, { eq, and, ne }) =>
+      and(
+        eq(p.restaurantId, restaurantId),
+        eq(p.categorieId, categorieId),
+        ne(p.id, platId),
+      ),
+    orderBy: [desc(plats.nombreCommandes), asc(plats.nom)],
+    limit,
+    with: { categorie: true },
+  });
+}
+
 // ============================================================================
 // COMMANDES
 // ============================================================================
 
 export interface GetCommandesOptions {
   restaurantId: string;
-  statut?: string;
-  modeCommande?: string;
+  statut?: StatutCommande;
+  modeCommande?: ModeCommande;
   dateDebut?: Date;
   dateFin?: Date;
-  search?: string;       // recherche sur numero ou nomClient
+  search?: string; // recherche sur numero ou nomClient
   page?: number;
   limit?: number;
 }
@@ -202,27 +236,50 @@ export async function getCommandes({
   modeCommande,
   dateDebut,
   dateFin,
+  search,
   page = 1,
-  limit = 10,
+  limit = PAGINATION.COMMANDES_PAR_PAGE,
 }: GetCommandesOptions) {
+  const validLimit = Math.min(limit, PAGINATION.MAX_PAR_PAGE);
+  const offset = getOffset(page, validLimit);
+
   const conditions = [eq(commandes.restaurantId, restaurantId)];
 
-  if (statut) conditions.push(eq(commandes.statut, statut as any));
-  if (modeCommande) conditions.push(eq(commandes.modeCommande, modeCommande as any));
+  if (statut) conditions.push(eq(commandes.statut, statut));
+  if (modeCommande) conditions.push(eq(commandes.modeCommande, modeCommande));
   if (dateDebut) conditions.push(gte(commandes.createdAt, dateDebut));
   if (dateFin) conditions.push(lte(commandes.createdAt, dateFin));
+  if (search) {
+    const searchPattern = `%${search}%`;
+    conditions.push(
+      sql`${commandes.numero} LIKE ${searchPattern} OR ${commandes.nomClient} LIKE ${searchPattern}`,
+    );
+  }
 
   const [items, totalResult] = await Promise.all([
-    db.query.commandes.findMany({
-      where: and(...conditions),
-      orderBy: [desc(commandes.createdAt)],
-      offset: (page - 1) * limit,
-      limit,
-      with: {
-        paiement: true,
-        livraison: { with: { livreur: true } },
-      },
-    }),
+    withCache(
+      cacheKey.commandes(
+        restaurantId,
+        page,
+        statut,
+        modeCommande,
+        dateDebut?.toISOString(),
+        dateFin?.toISOString(),
+        search ?? "",
+      ),
+      TTL.COMMANDES,
+      () =>
+        db.query.commandes.findMany({
+          where: and(...conditions),
+          orderBy: [desc(commandes.createdAt)],
+          offset,
+          limit: validLimit,
+          with: {
+            paiement: true,
+            livraison: { with: { livreur: true } },
+          },
+        }),
+    ),
     db
       .select({ count: count() })
       .from(commandes)
@@ -233,7 +290,8 @@ export async function getCommandes({
     items,
     total: totalResult[0].count,
     page,
-    totalPages: Math.ceil(totalResult[0].count / limit),
+    limit: validLimit,
+    totalPages: Math.ceil(totalResult[0].count / validLimit),
   };
 }
 
@@ -250,7 +308,10 @@ export async function getCommandeById(id: string, restaurantId: string) {
   });
 }
 
-export async function getCommandeByNumero(numero: string, restaurantId: string) {
+export async function getCommandeByNumero(
+  numero: string,
+  restaurantId: string,
+) {
   return db.query.commandes.findFirst({
     where: (c, { eq, and }) =>
       and(eq(c.numero, numero), eq(c.restaurantId, restaurantId)),
@@ -289,8 +350,8 @@ export async function getClients(restaurantId: string, page = 1, limit = 20) {
     .where(
       and(
         eq(commandes.restaurantId, restaurantId),
-        sql`${commandes.clientId} IS NOT NULL`
-      )
+        sql`${commandes.clientId} IS NOT NULL`,
+      ),
     )
     .groupBy(commandes.clientId, commandes.nomClient, commandes.telephoneClient)
     .orderBy(desc(count(commandes.id)))
@@ -343,7 +404,7 @@ export async function getPromotionsActives(restaurantId: string) {
         eq(p.restaurantId, restaurantId),
         eq(p.actif, true),
         lte(p.dateDebut, now),
-        or(isNull(p.dateFin), gte(p.dateFin, now))
+        or(isNull(p.dateFin), gte(p.dateFin, now)),
       ),
     with: { plat: true, categorie: true },
   });
@@ -356,7 +417,7 @@ export async function getPromotionsActives(restaurantId: string) {
 export async function getAvisRestaurant(
   restaurantId: string,
   page = 1,
-  limit = 10
+  limit = 10,
 ) {
   const [items, totalResult] = await Promise.all([
     db.query.avis.findMany({
@@ -370,9 +431,7 @@ export async function getAvisRestaurant(
     db
       .select({ count: count() })
       .from(avis)
-      .where(
-        and(eq(avis.restaurantId, restaurantId), eq(avis.visible, true))
-      ),
+      .where(and(eq(avis.restaurantId, restaurantId), eq(avis.visible, true))),
   ]);
 
   return {
@@ -409,81 +468,87 @@ export async function countNotificationsNonLues(userId: string) {
 // ============================================================================
 
 export async function getStatsDashboard(restaurantId: string) {
-  const maintenant = new Date();
-  const debutJour = new Date(maintenant);
-  debutJour.setHours(0, 0, 0, 0);
-  const debutSemaine = new Date(maintenant);
-  debutSemaine.setDate(maintenant.getDate() - 7);
-  const debutMois = new Date(maintenant.getFullYear(), maintenant.getMonth(), 1);
+  return withCache(cacheKey.stats(restaurantId), TTL.STATS, async () => {
+    const maintenant = new Date();
+    const debutJour = new Date(maintenant);
+    debutJour.setHours(0, 0, 0, 0);
+    const debutSemaine = new Date(maintenant);
+    debutSemaine.setDate(maintenant.getDate() - 7);
+    const debutMois = new Date(
+      maintenant.getFullYear(),
+      maintenant.getMonth(),
+      1,
+    );
 
-  const [
-    commandesAujourdhui,
-    commandesSemaine,
-    commandesMois,
-    chiffreAffairesMois,
-    commandesEnCours,
-  ] = await Promise.all([
-    // Commandes aujourd'hui
-    db
-      .select({ count: count() })
-      .from(commandes)
-      .where(
-        and(
-          eq(commandes.restaurantId, restaurantId),
-          gte(commandes.createdAt, debutJour)
+    const [
+      commandesAujourdhui,
+      commandesSemaine,
+      commandesMois,
+      chiffreAffairesMois,
+      commandesEnCours,
+    ] = await Promise.all([
+      // Commandes aujourd'hui
+      db
+        .select({ count: count() })
+        .from(commandes)
+        .where(
+          and(
+            eq(commandes.restaurantId, restaurantId),
+            gte(commandes.createdAt, debutJour),
+          ),
+        ),
+      // Commandes 7 derniers jours
+      db
+        .select({ count: count() })
+        .from(commandes)
+        .where(
+          and(
+            eq(commandes.restaurantId, restaurantId),
+            gte(commandes.createdAt, debutSemaine),
+          ),
+        ),
+      // Commandes ce mois
+      db
+        .select({ count: count() })
+        .from(commandes)
+        .where(
+          and(
+            eq(commandes.restaurantId, restaurantId),
+            gte(commandes.createdAt, debutMois),
+          ),
+        ),
+      // CA ce mois (en centimes)
+      db
+        .select({ total: sql<number>`COALESCE(SUM(${commandes.total}), 0)` })
+        .from(commandes)
+        .where(
+          and(
+            eq(commandes.restaurantId, restaurantId),
+            gte(commandes.createdAt, debutMois),
+            eq(commandes.statut, "servie"),
+          ),
+        ),
+      // Commandes en cours (reçues + en préparation + prêtes)
+      db
+        .select({ statut: commandes.statut, count: count() })
+        .from(commandes)
+        .where(
+          and(
+            eq(commandes.restaurantId, restaurantId),
+            sql`${commandes.statut} IN ('recue', 'en_preparation', 'prete')`,
+          ),
         )
-      ),
-    // Commandes 7 derniers jours
-    db
-      .select({ count: count() })
-      .from(commandes)
-      .where(
-        and(
-          eq(commandes.restaurantId, restaurantId),
-          gte(commandes.createdAt, debutSemaine)
-        )
-      ),
-    // Commandes ce mois
-    db
-      .select({ count: count() })
-      .from(commandes)
-      .where(
-        and(
-          eq(commandes.restaurantId, restaurantId),
-          gte(commandes.createdAt, debutMois)
-        )
-      ),
-    // CA ce mois (en centimes)
-    db
-      .select({ total: sql<number>`COALESCE(SUM(${commandes.total}), 0)` })
-      .from(commandes)
-      .where(
-        and(
-          eq(commandes.restaurantId, restaurantId),
-          gte(commandes.createdAt, debutMois),
-          eq(commandes.statut, "servie")
-        )
-      ),
-    // Commandes en cours (reçues + en préparation + prêtes)
-    db
-      .select({ statut: commandes.statut, count: count() })
-      .from(commandes)
-      .where(
-        and(
-          eq(commandes.restaurantId, restaurantId),
-          sql`${commandes.statut} IN ('recue', 'en_preparation', 'prete')`
-        )
-      )
-      .groupBy(commandes.statut),
-  ]);
+        .groupBy(commandes.statut),
+    ]);
 
-  return {
-    commandesAujourdhui: commandesAujourdhui[0].count,
-    commandesSemaine:    commandesSemaine[0].count,
-    commandesMois:       commandesMois[0].count,
-    chiffreAffairesMois: chiffreAffairesMois[0].total,
-    commandesEnCours,
-  };
+    return {
+      commandesAujourdhui: commandesAujourdhui[0].count,
+      commandesSemaine: commandesSemaine[0].count,
+      commandesMois: commandesMois[0].count,
+      chiffreAffairesMois: chiffreAffairesMois[0].total,
+      commandesEnCours,
+    };
+  });
 }
 
 /** Évolution des commandes par jour sur les N derniers jours */
@@ -501,8 +566,8 @@ export async function getCommandesParJour(restaurantId: string, jours = 7) {
     .where(
       and(
         eq(commandes.restaurantId, restaurantId),
-        gte(commandes.createdAt, dateDebut)
-      )
+        gte(commandes.createdAt, dateDebut),
+      ),
     )
     .groupBy(sql`DATE(${commandes.createdAt} AT TIME ZONE 'UTC')`)
     .orderBy(sql`DATE(${commandes.createdAt} AT TIME ZONE 'UTC')`);
@@ -512,10 +577,12 @@ export async function getCommandesParJour(restaurantId: string, jours = 7) {
 
 /** Top plats les plus commandés */
 export async function getTopPlats(restaurantId: string, limit = 5) {
-  return db.query.plats.findMany({
-    where: (p, { eq }) => eq(p.restaurantId, restaurantId),
-    orderBy: (p, { desc }) => [desc(p.nombreCommandes)],
-    limit,
-    with: { categorie: true },
-  });
+  return withCache(cacheKey.topPlats(restaurantId, limit), TTL.PLATS, () =>
+    db.query.plats.findMany({
+      where: (p, { eq }) => eq(p.restaurantId, restaurantId),
+      orderBy: (p, { desc }) => [desc(p.nombreCommandes)],
+      limit,
+      with: { categorie: true },
+    }),
+  );
 }

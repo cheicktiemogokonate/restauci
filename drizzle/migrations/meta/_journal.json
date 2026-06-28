@@ -8,6 +8,20 @@
       "when": 1780056792253,
       "tag": "0000_military_starjammers",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781727222635,
+      "tag": "0001_wealthy_madrox",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781937309655,
+      "tag": "0002_conscious_odin",
+      "breakpoints": true
     }
   ]
 }

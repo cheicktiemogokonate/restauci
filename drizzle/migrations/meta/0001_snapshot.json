@@ -1,0 +1,2944 @@
+{
+  "id": "ba72bc1e-9730-4baa-8c7b-306cae24b64b",
+  "prevId": "586a31b5-4d9a-48f2-af9a-33e130347354",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.abonnements": {
+      "name": "abonnements",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "restaurant_id": {
+          "name": "restaurant_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plan": {
+          "name": "plan",
+          "type": "plan_abonnement",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'gratuit'"
+        },
+        "statut": {
+          "name": "statut",
+          "type": "statut_abonnement",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'essai'"
+        },
+        "date_debut": {
+          "name": "date_debut",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date_fin": {
+          "name": "date_fin",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_plats": {
+          "name": "max_plats",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 20
+        },
+        "max_categories": {
+          "name": "max_categories",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 5
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "abonnements_restaurant_id_restaurants_id_fk": {
+          "name": "abonnements_restaurant_id_restaurants_id_fk",
+          "tableFrom": "abonnements",
+          "tableTo": "restaurants",
+          "columnsFrom": [
+            "restaurant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "abonnements_restaurant_id_unique": {
+          "name": "abonnements_restaurant_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "restaurant_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.avis": {
+      "name": "avis",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "commande_id": {
+          "name": "commande_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "restaurant_id": {
+          "name": "restaurant_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note_nourriture": {
+          "name": "note_nourriture",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note_livraison": {
+          "name": "note_livraison",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note_service": {
+          "name": "note_service",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "commentaire": {
+          "name": "commentaire",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reponse_restaurant": {
+          "name": "reponse_restaurant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "repondu_at": {
+          "name": "repondu_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "visible": {
+          "name": "visible",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "signale": {
+          "name": "signale",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_avis_restaurant": {
+          "name": "idx_avis_restaurant",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_avis_client": {
+          "name": "idx_avis_client",
+          "columns": [
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_avis_commande": {
+          "name": "idx_avis_commande",
+          "columns": [
+            {
+              "expression": "commande_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_avis_restaurant_visible": {
+          "name": "idx_avis_restaurant_visible",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "visible",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_avis_created_at": {
+          "name": "idx_avis_created_at",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "avis_commande_id_commandes_id_fk": {
+          "name": "avis_commande_id_commandes_id_fk",
+          "tableFrom": "avis",
+          "tableTo": "commandes",
+          "columnsFrom": [
+            "commande_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "avis_restaurant_id_restaurants_id_fk": {
+          "name": "avis_restaurant_id_restaurants_id_fk",
+          "tableFrom": "avis",
+          "tableTo": "restaurants",
+          "columnsFrom": [
+            "restaurant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "avis_client_id_clients_id_fk": {
+          "name": "avis_client_id_clients_id_fk",
+          "tableFrom": "avis",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "client_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.categories": {
+      "name": "categories",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "restaurant_id": {
+          "name": "restaurant_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "creneau_id": {
+          "name": "creneau_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_url": {
+          "name": "image_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ordre": {
+          "name": "ordre",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "visible": {
+          "name": "visible",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_categories_restaurant_ordre": {
+          "name": "idx_categories_restaurant_ordre",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ordre",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_categories_restaurant_visible": {
+          "name": "idx_categories_restaurant_visible",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "visible",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "categories_restaurant_id_restaurants_id_fk": {
+          "name": "categories_restaurant_id_restaurants_id_fk",
+          "tableFrom": "categories",
+          "tableTo": "restaurants",
+          "columnsFrom": [
+            "restaurant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "categories_creneau_id_creneaux_horaires_id_fk": {
+          "name": "categories_creneau_id_creneaux_horaires_id_fk",
+          "tableFrom": "categories",
+          "tableTo": "creneaux_horaires",
+          "columnsFrom": [
+            "creneau_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.clients": {
+      "name": "clients",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telephone": {
+          "name": "telephone",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avatar_url": {
+          "name": "avatar_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adresse_defaut": {
+          "name": "adresse_defaut",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "latitude_defaut": {
+          "name": "latitude_defaut",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "longitude_defaut": {
+          "name": "longitude_defaut",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nombre_commandes": {
+          "name": "nombre_commandes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "total_depense": {
+          "name": "total_depense",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "email_verifie": {
+          "name": "email_verifie",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "actif": {
+          "name": "actif",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_clients_telephone": {
+          "name": "idx_clients_telephone",
+          "columns": [
+            {
+              "expression": "telephone",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_clients_email": {
+          "name": "idx_clients_email",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "clients_telephone_unique": {
+          "name": "clients_telephone_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "telephone"
+          ]
+        },
+        "clients_email_unique": {
+          "name": "clients_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.commandes": {
+      "name": "commandes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "numero": {
+          "name": "numero",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "restaurant_id": {
+          "name": "restaurant_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mode_commande": {
+          "name": "mode_commande",
+          "type": "mode_commande",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statut": {
+          "name": "statut",
+          "type": "statut_commande",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'recue'"
+        },
+        "numero_table": {
+          "name": "numero_table",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nom_client": {
+          "name": "nom_client",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telephone_client": {
+          "name": "telephone_client",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adresse_livraison": {
+          "name": "adresse_livraison",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "latitude_livraison": {
+          "name": "latitude_livraison",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "longitude_livraison": {
+          "name": "longitude_livraison",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "distance_km": {
+          "name": "distance_km",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "items": {
+          "name": "items",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sous_total": {
+          "name": "sous_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "frais_livraison": {
+          "name": "frais_livraison",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "remise": {
+          "name": "remise",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "total": {
+          "name": "total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note_client": {
+          "name": "note_client",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note_interne": {
+          "name": "note_interne",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "temps_preparation_estime": {
+          "name": "temps_preparation_estime",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heure_acceptee": {
+          "name": "heure_acceptee",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heure_prete": {
+          "name": "heure_prete",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heure_servie": {
+          "name": "heure_servie",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_commandes_numero": {
+          "name": "idx_commandes_numero",
+          "columns": [
+            {
+              "expression": "numero",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_commandes_restaurant": {
+          "name": "idx_commandes_restaurant",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_commandes_client": {
+          "name": "idx_commandes_client",
+          "columns": [
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_commandes_statut": {
+          "name": "idx_commandes_statut",
+          "columns": [
+            {
+              "expression": "statut",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_commandes_created_at": {
+          "name": "idx_commandes_created_at",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_commandes_restaurant_statut": {
+          "name": "idx_commandes_restaurant_statut",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "statut",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_commandes_restaurant_created_at": {
+          "name": "idx_commandes_restaurant_created_at",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "commandes_restaurant_id_restaurants_id_fk": {
+          "name": "commandes_restaurant_id_restaurants_id_fk",
+          "tableFrom": "commandes",
+          "tableTo": "restaurants",
+          "columnsFrom": [
+            "restaurant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "commandes_client_id_clients_id_fk": {
+          "name": "commandes_client_id_clients_id_fk",
+          "tableFrom": "commandes",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "client_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "commandes_numero_unique": {
+          "name": "commandes_numero_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "numero"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.creneaux_horaires": {
+      "name": "creneaux_horaires",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "restaurant_id": {
+          "name": "restaurant_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "heure_ouverture": {
+          "name": "heure_ouverture",
+          "type": "time(0)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "heure_fermeture": {
+          "name": "heure_fermeture",
+          "type": "time(0)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "jours_actifs": {
+          "name": "jours_actifs",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actif": {
+          "name": "actif",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_creneaux_horaires_restaurant": {
+          "name": "idx_creneaux_horaires_restaurant",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_creneaux_horaires_restaurant_nom": {
+          "name": "idx_creneaux_horaires_restaurant_nom",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "nom",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "creneaux_horaires_restaurant_id_restaurants_id_fk": {
+          "name": "creneaux_horaires_restaurant_id_restaurants_id_fk",
+          "tableFrom": "creneaux_horaires",
+          "tableTo": "restaurants",
+          "columnsFrom": [
+            "restaurant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.livraisons": {
+      "name": "livraisons",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "commande_id": {
+          "name": "commande_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "livreur_id": {
+          "name": "livreur_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "statut": {
+          "name": "statut",
+          "type": "statut_livraison",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'en_attente'"
+        },
+        "adresse": {
+          "name": "adresse",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "distance_km": {
+          "name": "distance_km",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duree_estimee_min": {
+          "name": "duree_estimee_min",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heure_assignee": {
+          "name": "heure_assignee",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heure_depart": {
+          "name": "heure_depart",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heure_livree": {
+          "name": "heure_livree",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note_client": {
+          "name": "note_client",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "commentaire_client": {
+          "name": "commentaire_client",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_livraisons_commande": {
+          "name": "idx_livraisons_commande",
+          "columns": [
+            {
+              "expression": "commande_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_livraisons_livreur": {
+          "name": "idx_livraisons_livreur",
+          "columns": [
+            {
+              "expression": "livreur_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_livraisons_statut": {
+          "name": "idx_livraisons_statut",
+          "columns": [
+            {
+              "expression": "statut",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "livraisons_commande_id_commandes_id_fk": {
+          "name": "livraisons_commande_id_commandes_id_fk",
+          "tableFrom": "livraisons",
+          "tableTo": "commandes",
+          "columnsFrom": [
+            "commande_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "livraisons_livreur_id_livreurs_id_fk": {
+          "name": "livraisons_livreur_id_livreurs_id_fk",
+          "tableFrom": "livraisons",
+          "tableTo": "livreurs",
+          "columnsFrom": [
+            "livreur_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "livraisons_commande_id_unique": {
+          "name": "livraisons_commande_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "commande_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.livreurs": {
+      "name": "livreurs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "restaurant_id": {
+          "name": "restaurant_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telephone": {
+          "name": "telephone",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vehicule": {
+          "name": "vehicule",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "numero_vehicule": {
+          "name": "numero_vehicule",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "en_ligne": {
+          "name": "en_ligne",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "actif": {
+          "name": "actif",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "latitude_actuelle": {
+          "name": "latitude_actuelle",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "longitude_actuelle": {
+          "name": "longitude_actuelle",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "derniere_position": {
+          "name": "derniere_position",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nombre_livraisons": {
+          "name": "nombre_livraisons",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "note_moyenne": {
+          "name": "note_moyenne",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_livreurs_restaurant": {
+          "name": "idx_livreurs_restaurant",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "livreurs_restaurant_id_restaurants_id_fk": {
+          "name": "livreurs_restaurant_id_restaurants_id_fk",
+          "tableFrom": "livreurs",
+          "tableTo": "restaurants",
+          "columnsFrom": [
+            "restaurant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.notifications": {
+      "name": "notifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "type_notification",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "titre": {
+          "name": "titre",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lien_type": {
+          "name": "lien_type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lien_id": {
+          "name": "lien_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lue": {
+          "name": "lue",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "lue_at": {
+          "name": "lue_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_notifications_user": {
+          "name": "idx_notifications_user",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_notifications_client": {
+          "name": "idx_notifications_client",
+          "columns": [
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_notifications_lue": {
+          "name": "idx_notifications_lue",
+          "columns": [
+            {
+              "expression": "lue",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_notifications_user_lue": {
+          "name": "idx_notifications_user_lue",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lue",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_notifications_created_at": {
+          "name": "idx_notifications_created_at",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "notifications_user_id_users_id_fk": {
+          "name": "notifications_user_id_users_id_fk",
+          "tableFrom": "notifications",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "notifications_client_id_clients_id_fk": {
+          "name": "notifications_client_id_clients_id_fk",
+          "tableFrom": "notifications",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "client_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.paiements": {
+      "name": "paiements",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "commande_id": {
+          "name": "commande_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "montant": {
+          "name": "montant",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "methode": {
+          "name": "methode",
+          "type": "methode_paiement",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statut": {
+          "name": "statut",
+          "type": "statut_paiement",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'en_attente'"
+        },
+        "reference_externe": {
+          "name": "reference_externe",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "numero_mobile_money": {
+          "name": "numero_mobile_money",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operateur": {
+          "name": "operateur",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paye_at": {
+          "name": "paye_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_paiements_commande": {
+          "name": "idx_paiements_commande",
+          "columns": [
+            {
+              "expression": "commande_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_paiements_statut": {
+          "name": "idx_paiements_statut",
+          "columns": [
+            {
+              "expression": "statut",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "paiements_commande_id_commandes_id_fk": {
+          "name": "paiements_commande_id_commandes_id_fk",
+          "tableFrom": "paiements",
+          "tableTo": "commandes",
+          "columnsFrom": [
+            "commande_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "paiements_commande_id_unique": {
+          "name": "paiements_commande_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "commande_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.plats": {
+      "name": "plats",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "restaurant_id": {
+          "name": "restaurant_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "categorie_id": {
+          "name": "categorie_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "creneau_id": {
+          "name": "creneau_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prix": {
+          "name": "prix",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "photo_url": {
+          "name": "photo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disponible": {
+          "name": "disponible",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "ordre": {
+          "name": "ordre",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "tags": {
+          "name": "tags",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'{}'"
+        },
+        "allergenes": {
+          "name": "allergenes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'{}'"
+        },
+        "nutrition": {
+          "name": "nutrition",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nombre_commandes": {
+          "name": "nombre_commandes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "note_moyenne": {
+          "name": "note_moyenne",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "nombre_avis": {
+          "name": "nombre_avis",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_plats_restaurant_categorie": {
+          "name": "idx_plats_restaurant_categorie",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "categorie_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_plats_disponible": {
+          "name": "idx_plats_disponible",
+          "columns": [
+            {
+              "expression": "disponible",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_plats_restaurant_disponible": {
+          "name": "idx_plats_restaurant_disponible",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "disponible",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_plats_nom": {
+          "name": "idx_plats_nom",
+          "columns": [
+            {
+              "expression": "nom",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_plats_restaurant_nom": {
+          "name": "idx_plats_restaurant_nom",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "nom",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "plats_restaurant_id_restaurants_id_fk": {
+          "name": "plats_restaurant_id_restaurants_id_fk",
+          "tableFrom": "plats",
+          "tableTo": "restaurants",
+          "columnsFrom": [
+            "restaurant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "plats_categorie_id_categories_id_fk": {
+          "name": "plats_categorie_id_categories_id_fk",
+          "tableFrom": "plats",
+          "tableTo": "categories",
+          "columnsFrom": [
+            "categorie_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "plats_creneau_id_creneaux_horaires_id_fk": {
+          "name": "plats_creneau_id_creneaux_horaires_id_fk",
+          "tableFrom": "plats",
+          "tableTo": "creneaux_horaires",
+          "columnsFrom": [
+            "creneau_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.promotions": {
+      "name": "promotions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "restaurant_id": {
+          "name": "restaurant_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plat_id": {
+          "name": "plat_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "categorie_id": {
+          "name": "categorie_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "type_promotion",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valeur": {
+          "name": "valeur",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "code_promo": {
+          "name": "code_promo",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "montant_min_commande": {
+          "name": "montant_min_commande",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "utilisations_max": {
+          "name": "utilisations_max",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "utilisations_actuelles": {
+          "name": "utilisations_actuelles",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "date_debut": {
+          "name": "date_debut",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date_fin": {
+          "name": "date_fin",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actif": {
+          "name": "actif",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_promotions_restaurant": {
+          "name": "idx_promotions_restaurant",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_promotions_code": {
+          "name": "idx_promotions_code",
+          "columns": [
+            {
+              "expression": "code_promo",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_promotions_dates": {
+          "name": "idx_promotions_dates",
+          "columns": [
+            {
+              "expression": "date_debut",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "date_fin",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_promotions_restaurant_actif": {
+          "name": "idx_promotions_restaurant_actif",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actif",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "promotions_restaurant_id_restaurants_id_fk": {
+          "name": "promotions_restaurant_id_restaurants_id_fk",
+          "tableFrom": "promotions",
+          "tableTo": "restaurants",
+          "columnsFrom": [
+            "restaurant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "promotions_plat_id_plats_id_fk": {
+          "name": "promotions_plat_id_plats_id_fk",
+          "tableFrom": "promotions",
+          "tableTo": "plats",
+          "columnsFrom": [
+            "plat_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "promotions_categorie_id_categories_id_fk": {
+          "name": "promotions_categorie_id_categories_id_fk",
+          "tableFrom": "promotions",
+          "tableTo": "categories",
+          "columnsFrom": [
+            "categorie_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "promotions_code_promo_unique": {
+          "name": "promotions_code_promo_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code_promo"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.push_subscriptions": {
+      "name": "push_subscriptions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "endpoint": {
+          "name": "endpoint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "p256dh": {
+          "name": "p256dh",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "auth": {
+          "name": "auth",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expo_token": {
+          "name": "expo_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_push_subscriptions_user": {
+          "name": "idx_push_subscriptions_user",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_push_subscriptions_type": {
+          "name": "idx_push_subscriptions_type",
+          "columns": [
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_push_subscriptions_endpoint": {
+          "name": "idx_push_subscriptions_endpoint",
+          "columns": [
+            {
+              "expression": "endpoint",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "push_subscriptions_user_id_users_id_fk": {
+          "name": "push_subscriptions_user_id_users_id_fk",
+          "tableFrom": "push_subscriptions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.restaurants": {
+      "name": "restaurants",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telephone": {
+          "name": "telephone",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "site_web": {
+          "name": "site_web",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adresse": {
+          "name": "adresse",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ville": {
+          "name": "ville",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pays": {
+          "name": "pays",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'Côte d''Ivoire'"
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "logo_url": {
+          "name": "logo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "banniere_url": {
+          "name": "banniere_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "frais_livraison": {
+          "name": "frais_livraison",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "commande_minimum": {
+          "name": "commande_minimum",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "modes_commande": {
+          "name": "modes_commande",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"sur_place\"}'"
+        },
+        "cuisines": {
+          "name": "cuisines",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'{}'"
+        },
+        "actif": {
+          "name": "actif",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "en_ligne": {
+          "name": "en_ligne",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "accepte_commandes": {
+          "name": "accepte_commandes",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "temps_preparation_moyen": {
+          "name": "temps_preparation_moyen",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 20
+        },
+        "facebook": {
+          "name": "facebook",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "instagram": {
+          "name": "instagram",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "whatsapp": {
+          "name": "whatsapp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nombre_commandes": {
+          "name": "nombre_commandes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "note_moyenne": {
+          "name": "note_moyenne",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "nombre_avis": {
+          "name": "nombre_avis",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_restaurants_slug": {
+          "name": "idx_restaurants_slug",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_restaurants_user_id": {
+          "name": "idx_restaurants_user_id",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_restaurants_ville": {
+          "name": "idx_restaurants_ville",
+          "columns": [
+            {
+              "expression": "ville",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_restaurants_actif": {
+          "name": "idx_restaurants_actif",
+          "columns": [
+            {
+              "expression": "actif",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_restaurants_ville_actif": {
+          "name": "idx_restaurants_ville_actif",
+          "columns": [
+            {
+              "expression": "ville",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actif",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "restaurants_user_id_users_id_fk": {
+          "name": "restaurants_user_id_users_id_fk",
+          "tableFrom": "restaurants",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "restaurants_user_id_unique": {
+          "name": "restaurants_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id"
+          ]
+        },
+        "restaurants_slug_unique": {
+          "name": "restaurants_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'restaurateur'"
+        },
+        "nom": {
+          "name": "nom",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telephone": {
+          "name": "telephone",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "avatar_url": {
+          "name": "avatar_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email_verifie": {
+          "name": "email_verifie",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "token_verif_email": {
+          "name": "token_verif_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_reset_password": {
+          "name": "token_reset_password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_reset_expire_at": {
+          "name": "token_reset_expire_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dernier_connexion": {
+          "name": "dernier_connexion",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_users_email": {
+          "name": "idx_users_email",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_users_role": {
+          "name": "idx_users_role",
+          "columns": [
+            {
+              "expression": "role",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.methode_paiement": {
+      "name": "methode_paiement",
+      "schema": "public",
+      "values": [
+        "especes",
+        "carte",
+        "mobile_money",
+        "en_ligne"
+      ]
+    },
+    "public.mode_commande": {
+      "name": "mode_commande",
+      "schema": "public",
+      "values": [
+        "sur_place",
+        "livraison",
+        "emporter"
+      ]
+    },
+    "public.plan_abonnement": {
+      "name": "plan_abonnement",
+      "schema": "public",
+      "values": [
+        "gratuit",
+        "starter",
+        "pro",
+        "entreprise"
+      ]
+    },
+    "public.role": {
+      "name": "role",
+      "schema": "public",
+      "values": [
+        "restaurateur",
+        "admin"
+      ]
+    },
+    "public.statut_abonnement": {
+      "name": "statut_abonnement",
+      "schema": "public",
+      "values": [
+        "essai",
+        "actif",
+        "expire",
+        "suspendu"
+      ]
+    },
+    "public.statut_commande": {
+      "name": "statut_commande",
+      "schema": "public",
+      "values": [
+        "recue",
+        "en_preparation",
+        "prete",
+        "servie",
+        "annulee"
+      ]
+    },
+    "public.statut_livraison": {
+      "name": "statut_livraison",
+      "schema": "public",
+      "values": [
+        "en_attente",
+        "assignee",
+        "en_route",
+        "livree",
+        "echouee"
+      ]
+    },
+    "public.statut_paiement": {
+      "name": "statut_paiement",
+      "schema": "public",
+      "values": [
+        "en_attente",
+        "paye",
+        "rembourse",
+        "echoue"
+      ]
+    },
+    "public.type_notification": {
+      "name": "type_notification",
+      "schema": "public",
+      "values": [
+        "nouvelle_commande",
+        "commande_prete",
+        "commande_annulee",
+        "nouveau_avis",
+        "promotion",
+        "systeme"
+      ]
+    },
+    "public.type_promotion": {
+      "name": "type_promotion",
+      "schema": "public",
+      "values": [
+        "pourcentage",
+        "montant_fixe",
+        "offre_1_1",
+        "livraison_gratuite"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

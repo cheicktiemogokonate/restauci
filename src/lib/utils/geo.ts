@@ -1,3 +1,5 @@
+// Geolocation utilities — coordinate types, distance calculation, bounds checking
+
 export type Coordonnees = {
   latitude: number;
   longitude: number;

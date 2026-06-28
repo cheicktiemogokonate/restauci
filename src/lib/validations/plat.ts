@@ -13,3 +13,15 @@ export const platSchema = z.object({
 });
 
 export type PlatInput = z.infer<typeof platSchema>;
+
+export const updatePlatSchema = z.object({
+  platId: z.string().uuid(),
+  nom: z.string().trim().min(1, "Le nom du plat est requis"),
+  description: z.string().trim().optional(),
+  prix: z.string().trim().min(1, "Le prix est requis"),
+  photoUrl: z.union([z.string().url(), z.null()]).optional(),
+  categorieId: z.string().uuid("Catégorie invalide"),
+  disponible: z.boolean(),
+});
+
+export type UpdatePlatInput = z.infer<typeof updatePlatSchema>;

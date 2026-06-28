@@ -37,7 +37,7 @@ export default function Benefits() {
             Optimisez chaque aspect de votre service.
           </h2>
           <p className="text-sm sm:text-base text-brand-dark/80 font-sans leading-relaxed max-w-2xl mx-auto">
-            Nos statistiques prouvent l'apport direct de RestauCI auprès de plus de 800 restaurants partenaires à travers l'Europe.
+            Nos statistiques prouvent l&apos;apport direct de RestauCI auprès de plus de 800 restaurants partenaires à travers l&apos;Europe.
           </p>
         </div>
 

@@ -1,3 +1,6 @@
+// Availability logic for plats and creneaux horaires
+// Determines whether a dish is available based on the restaurant's opening schedule
+
 import type { Categorie, CreneauHoraire, Plat } from "@/types";
 
 const DAYS_SHORT = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];

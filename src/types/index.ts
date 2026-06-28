@@ -40,4 +40,6 @@ export interface JWTPayload {
   userId: string;
   email: string;
   role: "restaurateur" | "admin";
+  nom?: string;
+  avatarUrl?: string;
 }

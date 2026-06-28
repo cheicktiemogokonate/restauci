@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useEffect, useState, useMemo, useId } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import "./CurvedLoop.css";
 
 interface CurvedLoopProps {
@@ -21,7 +21,9 @@ const CurvedLoop = ({
 }: CurvedLoopProps) => {
   const text = useMemo(() => {
     const hasTrailing = /\s|\u00A0$/.test(marqueeText);
-    return (hasTrailing ? marqueeText.replace(/\s+$/, "") : marqueeText) + "\u00A0";
+    return (
+      (hasTrailing ? marqueeText.replace(/\s+$/, "") : marqueeText) + "\u00A0"
+    );
   }, [marqueeText]);
 
   const measureRef = useRef<SVGTextElement | null>(null);
@@ -47,7 +49,8 @@ const CurvedLoop = ({
   const ready = spacing > 0;
 
   useEffect(() => {
-    if (measureRef.current) setSpacing(measureRef.current.getComputedTextLength());
+    if (measureRef.current)
+      setSpacing(measureRef.current.getComputedTextLength());
   }, [text, className]);
 
   useEffect(() => {
@@ -65,7 +68,9 @@ const CurvedLoop = ({
     const step = () => {
       if (!dragRef.current && textPathRef.current) {
         const delta = dirRef.current === "right" ? speed : -speed;
-        const currentOffset = parseFloat(textPathRef.current.getAttribute("startOffset") || "0");
+        const currentOffset = parseFloat(
+          textPathRef.current.getAttribute("startOffset") || "0",
+        );
         let newOffset = currentOffset + delta;
 
         const wrapPoint = spacing;
@@ -95,7 +100,9 @@ const CurvedLoop = ({
     lastXRef.current = e.clientX;
     velRef.current = dx;
 
-    const currentOffset = parseFloat(textPathRef.current.getAttribute("startOffset") || "0");
+    const currentOffset = parseFloat(
+      textPathRef.current.getAttribute("startOffset") || "0",
+    );
     let newOffset = currentOffset + dx;
 
     const wrapPoint = spacing;
@@ -106,13 +113,27 @@ const CurvedLoop = ({
     setOffset(newOffset);
   };
 
+  const [cursorStyle, setCursorStyle] =
+    useState<React.CSSProperties["cursor"]>("auto");
+
+  useEffect(() => {
+    if (!interactive) {
+      setCursorStyle("auto");
+      return;
+    }
+    const updateCursor = () => {
+      setCursorStyle(dragRef.current ? "grabbing" : "grab");
+    };
+    const interval = setInterval(updateCursor, 50);
+    return () => clearInterval(interval);
+  }, [interactive]);
+
   const endDrag = () => {
     if (!interactive) return;
     dragRef.current = false;
     dirRef.current = velRef.current > 0 ? "right" : "left";
+    setCursorStyle("grab");
   };
-
-  const cursorStyle = interactive ? (dragRef.current ? "grabbing" : "grab") : "auto";
 
   return (
     <div
@@ -124,25 +145,40 @@ const CurvedLoop = ({
       onPointerLeave={endDrag}
     >
       <svg className="curved-loop-svg" viewBox="0 0 1440 120">
-        <text ref={measureRef} xmlSpace="preserve" style={{ visibility: "hidden", opacity: 0, pointerEvents: "none" }}>
+        <text
+          ref={measureRef}
+          xmlSpace="preserve"
+          style={{ visibility: "hidden", opacity: 0, pointerEvents: "none" }}
+        >
           {text}
         </text>
         <defs>
-          <path ref={pathRef} id={pathId} d={pathD} fill="none" stroke="transparent" />
+          <path
+            ref={pathRef}
+            id={pathId}
+            d={pathD}
+            fill="none"
+            stroke="transparent"
+          />
         </defs>
         {ready && (
           <>
             {/* Animated underlying guide path that creates a luxury moving current effect */}
-            <path 
-              d={pathD} 
-              fill="none" 
-              stroke="#0b6b49" 
-              strokeWidth="2.5" 
-              strokeDasharray="8, 14" 
-              className="opacity-35 animate-marquee-dash" 
+            <path
+              d={pathD}
+              fill="none"
+              stroke="#0b6b49"
+              strokeWidth="2.5"
+              strokeDasharray="8, 14"
+              className="opacity-35 animate-marquee-dash"
             />
             <text fontWeight="bold" xmlSpace="preserve" className={className}>
-              <textPath ref={textPathRef} href={`#${pathId}`} startOffset={offset + "px"} xmlSpace="preserve">
+              <textPath
+                ref={textPathRef}
+                href={`#${pathId}`}
+                startOffset={offset + "px"}
+                xmlSpace="preserve"
+              >
                 {totalText}
               </textPath>
             </text>

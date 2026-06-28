@@ -1,14 +1,27 @@
-import React, { useState } from "react";
-import { Eye, ShieldCheck, Mail, Phone, Calendar, ArrowRight, CheckCircle, RefreshCw, FileText, Settings, Heart } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle,
+  Eye,
+  Mail,
+  Phone,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
+import { useState } from "react";
 import { RestaurantConfig } from "./types";
 
 interface StepOverviewProps {
   config: RestaurantConfig;
   onDeploy: () => void;
   onPrev: () => void;
+  isDeploying?: boolean;
 }
 
-export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewProps) {
+export default function StepOverview({
+  config,
+  onDeploy,
+  onPrev,
+}: StepOverviewProps) {
   const [deploying, setDeploying] = useState(false);
   const [deployStep, setDeployStep] = useState(0);
 
@@ -17,7 +30,7 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
     "Provisionnement de la base de données PostgreSQL...",
     "Création du sous-domaine https://restauci.mesh/...",
     "Génération du menu numérique responsive...",
-    "Déploiement finalisé avec succès !"
+    "Déploiement finalisé avec succès !",
   ];
 
   const handleLaunchDeployment = () => {
@@ -43,11 +56,11 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
     <div className="flex-1 max-w-4xl p-8 lg:p-12 overflow-y-auto font-sans">
       {/* Deploying Progress state */}
       {deploying ? (
-        <div className="min-h-[500px] flex flex-col items-center justify-center bg-white border border-gray-100 rounded-3xl p-8 shadow-xl text-center">
+        <div className="min-h-125 flex flex-col items-center justify-center bg-white border border-gray-100 rounded-3xl p-8 shadow-xl text-center">
           <div className="relative w-24 h-24 mb-8 flex items-center justify-center">
             {/* Spinning ring */}
             <div className="absolute inset-0 rounded-full border-4 border-emerald-50 border-t-brand-500 animate-spin" />
-            
+
             <svg
               className="w-10 h-10 text-brand-500"
               viewBox="0 0 24 24"
@@ -66,7 +79,7 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
           <h2 className="text-2xl font-bold font-display text-gray-950 tracking-tight">
             Création de votre restaurant...
           </h2>
-          
+
           <div className="max-w-md w-full mt-8 bg-gray-50 border border-gray-100 rounded-2xl p-6 relative overflow-hidden">
             <div className="space-y-4">
               {deploymentSteps.map((stepMessage, idx) => {
@@ -76,7 +89,11 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
                   <div
                     key={idx}
                     className={`flex items-center text-left text-xs font-medium space-x-3 transition-opacity duration-300 ${
-                      isCurrent ? "opacity-100" : isPrevious ? "opacity-40" : "opacity-10"
+                      isCurrent
+                        ? "opacity-100"
+                        : isPrevious
+                          ? "opacity-40"
+                          : "opacity-10"
                     }`}
                   >
                     {isPrevious ? (
@@ -86,7 +103,13 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
                     ) : (
                       <div className="w-4 h-4 rounded-full border border-gray-200 shrink-0" />
                     )}
-                    <span className={isCurrent ? "text-gray-900 font-semibold" : "text-gray-600"}>
+                    <span
+                      className={
+                        isCurrent
+                          ? "text-gray-900 font-semibold"
+                          : "text-gray-600"
+                      }
+                    >
                       {stepMessage}
                     </span>
                   </div>
@@ -98,13 +121,16 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
             <div className="mt-8 h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
               <div
                 className="h-full bg-brand-500 rounded-full transition-all duration-1000"
-                style={{ width: `${((deployStep + 1) / deploymentSteps.length) * 100}%` }}
+                style={{
+                  width: `${((deployStep + 1) / deploymentSteps.length) * 100}%`,
+                }}
               />
             </div>
           </div>
 
           <p className="text-xs text-gray-400 mt-6 max-w-xs leading-relaxed">
-            Veuillez ne pas quitter ou recharger cette page. Vos configurations de base sont en cours de sauvegarde.
+            Veuillez ne pas quitter ou recharger cette page. Vos configurations
+            de base sont en cours de sauvegarde.
           </p>
         </div>
       ) : (
@@ -121,12 +147,12 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
               Aperçu de la configuration
             </h1>
             <p className="text-sm text-gray-500 mt-2">
-              Vérifiez attentivement les informations renseignées. Une fois confirmé, votre tableau de bord SaaS sera entièrement prêt.
+              Vérifiez attentivement les informations renseignées. Une fois
+              confirmé, votre tableau de bord SaaS sera entièrement prêt.
             </p>
           </div>
 
           <div className="space-y-8 bg-white border border-gray-100 rounded-3xl p-6 lg:p-8 shadow-sm">
-            
             {/* Visual Header Identity Card */}
             <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-xs">
               {config.general.bannerUrl ? (
@@ -137,7 +163,7 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+                  <div className="absolute inset-0 bg-linear-to-t from-black/60 via-black/10 to-transparent" />
                   <div className="absolute bottom-4 left-6 flex items-end space-x-4">
                     {/* Logo inside */}
                     <div className="w-16 h-16 bg-white rounded-xl p-1 shadow-md shrink-0 flex items-center justify-center overflow-hidden">
@@ -149,7 +175,13 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
                           className="max-h-full max-w-full object-contain rounded-lg"
                         />
                       ) : (
-                        <svg className="w-8 h-8 text-brand-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <svg
+                          className="w-8 h-8 text-brand-500"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
                           <polyline points="20 12 20 22 4 22 4 12" />
                           <rect x="2" y="7" width="20" height="5" />
                           <line x1="12" y1="22" x2="12" y2="7" />
@@ -168,14 +200,16 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
                 </div>
               ) : (
                 <div className="p-6 bg-gray-50 text-center">
-                  <span className="text-sm text-gray-400">Aucun visuel de couverture configuré.</span>
+                  <span className="text-sm text-gray-400">
+                    Aucun visuel de couverture configuré.
+                  </span>
                 </div>
               )}
 
               {/* General details */}
               <div className="p-5 bg-white border-t border-gray-50">
                 <p className="text-xs text-gray-600 leading-relaxed max-w-2xl italic font-sans">
-                  "{config.general.description || "Aucune description fournie"}"
+                  {config.general.description || "Aucune description fournie"}
                 </p>
               </div>
             </div>
@@ -190,23 +224,37 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
                   </h3>
                   <div className="space-y-2 text-xs font-sans">
                     <div className="flex items-start">
-                      <span className="w-24 text-gray-400 font-medium shrink-0">Pays</span>
-                      <span className="text-gray-900 font-semibold">{config.address.country}</span>
+                      <span className="w-24 text-gray-400 font-medium shrink-0">
+                        Pays
+                      </span>
+                      <span className="text-gray-900 font-semibold">
+                        {config.address.country}
+                      </span>
                     </div>
                     <div className="flex items-start">
-                      <span className="w-24 text-gray-400 font-medium shrink-0">Commune</span>
-                      <span className="text-gray-900 font-semibold">{config.address.commune} ({config.address.quarter || "N/A"})</span>
+                      <span className="w-24 text-gray-400 font-medium shrink-0">
+                        Commune
+                      </span>
+                      <span className="text-gray-900 font-semibold">
+                        {config.address.commune} (
+                        {config.address.quarter || "N/A"})
+                      </span>
                     </div>
                     <div className="flex items-start">
-                      <span className="w-24 text-gray-400 font-medium shrink-0">Adresse</span>
+                      <span className="w-24 text-gray-400 font-medium shrink-0">
+                        Adresse
+                      </span>
                       <span className="text-gray-900 leading-normal font-semibold">
                         {config.address.fullAddress}
                       </span>
                     </div>
                     <div className="flex items-start">
-                      <span className="w-24 text-gray-400 font-medium shrink-0">Coordonnées</span>
+                      <span className="w-24 text-gray-400 font-medium shrink-0">
+                        Coordonnées
+                      </span>
                       <span className="text-gray-900 font-mono text-[11px]">
-                        Lat: {config.address.latitude.toFixed(4)} • Lng: {config.address.longitude.toFixed(4)}
+                        Lat: {config.address.latitude.toFixed(4)} • Lng:{" "}
+                        {config.address.longitude.toFixed(4)}
                       </span>
                     </div>
                   </div>
@@ -219,11 +267,15 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
                   <div className="space-y-2 text-xs font-sans">
                     <div className="flex items-center">
                       <Phone className="w-4 h-4 text-gray-400 mr-2.5" />
-                      <span className="text-gray-900 font-semibold">{config.address.phone || "Non renseigné"}</span>
+                      <span className="text-gray-900 font-semibold">
+                        {config.address.phone || "Non renseigné"}
+                      </span>
                     </div>
                     <div className="flex items-center">
                       <Mail className="w-4 h-4 text-gray-400 mr-2.5" />
-                      <span className="text-gray-900 font-semibold">{config.address.email || "Non renseigné"}</span>
+                      <span className="text-gray-900 font-semibold">
+                        {config.address.email || "Non renseigné"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -233,25 +285,41 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
               <div className="space-y-6">
                 <div>
                   <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 font-display">
-                    Modèle d'établissement
+                    Modèle d&apos;établissement
                   </h3>
                   <div className="space-y-2 text-xs font-sans">
                     <div className="flex items-start">
-                      <span className="w-24 text-gray-400 font-medium shrink-0">Catégorie</span>
-                      <span className="text-gray-900 font-semibold uppercase">{config.settings.category || "Bistrot"}</span>
+                      <span className="w-24 text-gray-400 font-medium shrink-0">
+                        Catégorie
+                      </span>
+                      <span className="text-gray-900 font-semibold uppercase">
+                        {config.settings.category || "Bistrot"}
+                      </span>
                     </div>
                     <div className="flex items-start">
-                      <span className="w-24 text-gray-400 font-medium shrink-0">Devise</span>
-                      <span className="text-gray-900 font-semibold font-mono">{config.settings.currency}</span>
+                      <span className="w-24 text-gray-400 font-medium shrink-0">
+                        Devise
+                      </span>
+                      <span className="text-gray-900 font-semibold font-mono">
+                        {config.settings.currency}
+                      </span>
                     </div>
                     <div className="flex items-start">
-                      <span className="w-24 text-gray-400 font-medium shrink-0">Structure TVA</span>
-                      <span className="text-gray-900 font-semibold font-mono">{config.settings.taxRate}%</span>
+                      <span className="w-24 text-gray-400 font-medium shrink-0">
+                        Structure TVA
+                      </span>
+                      <span className="text-gray-900 font-semibold font-mono">
+                        {config.settings.taxRate}%
+                      </span>
                     </div>
                     <div className="flex items-start">
-                      <span className="w-24 text-gray-400 font-medium shrink-0">Services</span>
+                      <span className="w-24 text-gray-400 font-medium shrink-0">
+                        Services
+                      </span>
                       <span className="text-gray-900 font-semibold">
-                        {config.settings.serviceTypes.join(", ").toUpperCase() || "Sur place"}
+                        {config.settings.serviceTypes
+                          .join(", ")
+                          .toUpperCase() || "Sur place"}
                       </span>
                     </div>
                   </div>
@@ -259,7 +327,7 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
 
                 <div>
                   <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 font-display">
-                    Horaires d'ouverture
+                    Horaires d&apos;ouverture
                   </h3>
                   <div className="flex flex-wrap gap-1.5">
                     {config.schedule.map((row) => (
@@ -271,7 +339,10 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
                             : "bg-gray-50 text-gray-400 border border-gray-100"
                         }`}
                       >
-                        {row.day.substring(0, 3)}. {row.isOpen ? `${row.openTime} - ${row.closeTime}` : "Fermé"}
+                        {row.day.substring(0, 3)}.{" "}
+                        {row.isOpen
+                          ? `${row.openTime} - ${row.closeTime}`
+                          : "Fermé"}
                       </span>
                     ))}
                   </div>
@@ -283,9 +354,13 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
             <div className="p-4 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-xl flex items-center space-x-3 text-xs leading-relaxed">
               <ShieldCheck className="w-6 h-6 text-emerald-600 shrink-0" />
               <div>
-                <span className="font-bold font-display block">Saisie Vérifiée & Conforme</span>
+                <span className="font-bold font-display block">
+                  Saisie Vérifiée & Conforme
+                </span>
                 <p className="text-[11px] text-emerald-700 font-sans mt-0.5">
-                  RestauCI chiffre et sécurise les coordonnées de géolocalisation pour un référencement conforme aux réglementations de l'UEMOA.
+                  RestauCI chiffre et sécurise les coordonnées de
+                  géolocalisation pour un référencement conforme aux
+                  réglementations de l&apos;UEMOA.
                 </p>
               </div>
             </div>
@@ -298,8 +373,18 @@ export default function StepOverview({ config, onDeploy, onPrev }: StepOverviewP
               onClick={onPrev}
               className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl inline-flex items-center space-x-2 transition-all cursor-pointer"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15 19l-7-7 7-7"
+                />
               </svg>
               <span>Précédent</span>
             </button>

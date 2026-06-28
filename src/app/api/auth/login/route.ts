@@ -1,32 +1,56 @@
-import { NextRequest, NextResponse } from "next/server";
+import { comparePassword, setAuthCookie, signToken } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import {
-  comparePassword,
-  signToken,
-  setAuthCookie,
-} from "@/lib/auth";
+import { authLogger } from "@/lib/loggers";
+import { authLimiter, checkRateLimit } from "@/lib/rate-limit";
 import { loginSchema } from "@/lib/validations/auth";
+import { eq } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
 
 // ============================================================================
 // HANDLER
 // ============================================================================
 
 export async function POST(request: NextRequest) {
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0] ??
+    request.headers.get("x-real-ip") ??
+    "anonymous";
+  const rateLimitResponse = await checkRateLimit(authLimiter, ip);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      authLogger.warn(
+        { ip, reason: "invalid json body" },
+        "Login request with invalid JSON",
+      );
+      return NextResponse.json(
+        { error: "Corps de requête invalide — JSON attendu." },
+        { status: 400 },
+      );
+    }
 
     // Valider le schéma
     const validation = loginSchema.safeParse(body);
     if (!validation.success) {
+      authLogger.warn(
+        { ip, reason: "invalid login format" },
+        "Login attempt with invalid format",
+      );
       return NextResponse.json(
         { error: "Identifiants incorrects" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     const { email, password } = validation.data;
+
+    // Log tentative de connexion (sans le mot de passe)
+    authLogger.info({ ip, email }, "Login attempt");
 
     // Chercher l'utilisateur par email (exclure password)
     const user = await db
@@ -43,9 +67,10 @@ export async function POST(request: NextRequest) {
 
     if (user.length === 0) {
       // Email inexistant → message générique pour sécurité
+      authLogger.warn({ ip, email, reason: "user not found" }, "Login failed");
       return NextResponse.json(
         { error: "Identifiants incorrects" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -54,9 +79,13 @@ export async function POST(request: NextRequest) {
 
     if (!passwordValid) {
       // Password faux → message générique pour sécurité
+      authLogger.warn(
+        { ip, email, userId: user[0].id, reason: "invalid password" },
+        "Login failed",
+      );
       return NextResponse.json(
         { error: "Identifiants incorrects" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -75,17 +104,28 @@ export async function POST(request: NextRequest) {
         nom: user[0].nom,
         role: user[0].role,
       },
-      { status: 200 }
+      { status: 200 },
     );
 
     await setAuthCookie(token);
 
+    authLogger.info({ ip, email, userId: user[0].id }, "Login successful");
     return response;
   } catch (error) {
-    console.error("Login error:", error);
+    authLogger.error(
+      {
+        ip,
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack:
+          process.env.NODE_ENV === "development" && error instanceof Error
+            ? error.stack
+            : undefined,
+      },
+      "Login error",
+    );
     return NextResponse.json(
       { error: "Une erreur interne est survenue" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

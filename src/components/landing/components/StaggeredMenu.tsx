@@ -391,7 +391,7 @@ export const StaggeredMenu = ({
       <div ref={preLayersRef} className="sm-prelayers" aria-hidden="true">
         {(() => {
           const raw = colors && colors.length ? colors.slice(0, 4) : ["#16a34a", "#15803d"];
-          let arr = [...raw];
+          const arr = [...raw];
           if (arr.length >= 3) {
             const mid = Math.floor(arr.length / 2);
             arr.splice(mid, 1);

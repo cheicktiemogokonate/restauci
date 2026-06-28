@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.aider*
+
+fix-actif.ts
+fix-cache.ts
+insert-admin.ts

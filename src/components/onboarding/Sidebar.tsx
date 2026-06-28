@@ -1,5 +1,4 @@
-import React from "react";
-import { Check, Store, MapPin, Clock, Eye, HelpCircle } from "lucide-react";
+import { Check, Clock, Eye, HelpCircle, MapPin, Store } from "lucide-react";
 
 interface SidebarProps {
   currentStep: number;
@@ -7,7 +6,11 @@ interface SidebarProps {
   completedSteps: boolean[];
 }
 
-export default function Sidebar({ currentStep, goToStep, completedSteps }: SidebarProps) {
+export default function Sidebar({
+  currentStep,
+  goToStep,
+  completedSteps,
+}: SidebarProps) {
   const steps = [
     {
       number: 1,
@@ -65,13 +68,15 @@ export default function Sidebar({ currentStep, goToStep, completedSteps }: Sideb
           Créer un restaurant
         </h2>
         <p className="text-sm text-gray-500 mt-2 font-sans">
-          Suivez les étapes pour configurer votre restaurant dans notre système de gestion premium.
+          Suivez les étapes pour configurer votre restaurant dans notre système
+          de gestion premium.
         </p>
       </div>
 
       {/* Mobile Active Step Indicator - Custom premium layout only on small screens */}
       {(() => {
-        const activeStep = steps.find((s) => s.number === currentStep) || steps[0];
+        const activeStep =
+          steps.find((s) => s.number === currentStep) || steps[0];
         return (
           <div className="lg:hidden flex items-center justify-between bg-white border border-gray-100 p-4 rounded-2xl shadow-xs mb-3">
             <div className="flex items-center space-x-3">
@@ -97,8 +102,8 @@ export default function Sidebar({ currentStep, goToStep, completedSteps }: Sideb
                     currentStep === step.number
                       ? "w-4 bg-brand-500"
                       : completedSteps[step.number - 1]
-                      ? "w-1.5 bg-emerald-500"
-                      : "w-1.5 bg-gray-200"
+                        ? "w-1.5 bg-emerald-500"
+                        : "w-1.5 bg-gray-200"
                   }`}
                 />
               ))}
@@ -108,9 +113,9 @@ export default function Sidebar({ currentStep, goToStep, completedSteps }: Sideb
       })()}
 
       {/* Vertical Stepper List (Desktop Only) */}
-      <div className="hidden lg:flex lg:flex-col lg:flex-1 lg:space-y-6 relative relative">
+      <div className="hidden lg:flex lg:flex-col lg:flex-1 lg:space-y-6 relative">
         {/* Connecting Vertical Bar */}
-        <div className="absolute left-[17px] top-[14px] bottom-[24px] w-[2px] bg-gray-200 z-0" />
+        <div className="absolute left-4.25 top-3.5 bottom-6 w-0.5 bg-gray-200 z-0" />
 
         {steps.map((step, idx) => {
           const isCompleted = completedSteps[step.number - 1];
@@ -127,7 +132,11 @@ export default function Sidebar({ currentStep, goToStep, completedSteps }: Sideb
                 }
               }}
               className={`relative z-10 flex items-center lg:items-start lg:space-x-4 cursor-pointer group transition-all duration-300 ${
-                isActive ? "opacity-100" : isCompleted ? "opacity-90 hover:opacity-100" : "opacity-60 hover:opacity-85"
+                isActive
+                  ? "opacity-100"
+                  : isCompleted
+                    ? "opacity-90 hover:opacity-100"
+                    : "opacity-60 hover:opacity-85"
               }`}
             >
               {/* Step indicator circle */}
@@ -136,12 +145,12 @@ export default function Sidebar({ currentStep, goToStep, completedSteps }: Sideb
                   isCompleted
                     ? "bg-brand-green text-white shadow-brand-green/20"
                     : isActive
-                    ? "bg-white border-2 border-brand-green text-brand-green ring-4 ring-brand-green/20"
-                    : "bg-white border-2 border-gray-200 text-gray-500"
+                      ? "bg-white border-2 border-brand-green text-brand-green ring-4 ring-brand-green/20"
+                      : "bg-white border-2 border-gray-200 text-gray-500"
                 }`}
               >
                 {isCompleted ? (
-                  <Check className="w-5 h-5 stroke-[3]" />
+                  <Check className="w-5 h-5 stroke-3" />
                 ) : (
                   <span>{step.number}</span>
                 )}
@@ -156,7 +165,7 @@ export default function Sidebar({ currentStep, goToStep, completedSteps }: Sideb
                 >
                   {step.title}
                 </span>
-                
+
                 {/* Responsive or hover description */}
                 <p className="text-xs text-gray-500 mt-1 font-sans leading-relaxed">
                   {step.description}
@@ -165,7 +174,9 @@ export default function Sidebar({ currentStep, goToStep, completedSteps }: Sideb
 
               {/* Float right small status icon */}
               <div className="hidden lg:block pt-1.5 opacity-40 group-hover:opacity-75 transition-opacity">
-                <StepIcon className={`w-4 h-4 ${isActive ? "text-brand-500" : "text-gray-400"}`} />
+                <StepIcon
+                  className={`w-4 h-4 ${isActive ? "text-brand-500" : "text-gray-400"}`}
+                />
               </div>
             </div>
           );

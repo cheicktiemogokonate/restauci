@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
 import { ArrowRight, Utensils } from "lucide-react";
+import { useEffect, useState } from "react";
 import { navigationLinks } from "../data";
 import StaggeredMenu from "./StaggeredMenu";
 
@@ -68,13 +68,13 @@ export default function Navbar() {
           <div className="flex items-center gap-4">
             <div className="hidden md:flex items-center gap-4">
               <a
-                href="#pricing"
+                href="/login"
                 className="text-sm font-semibold text-brand-dark hover:text-brand-green transition-colors duration-250 cursor-pointer"
               >
                 Connexion
               </a>
               <a
-                href="#pricing"
+                href="#cta"
                 className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-brand-green hover:bg-[#0c734e] rounded-xl shadow-xs transition-all duration-200 hover:-translate-y-[1px] active:translate-y-0 cursor-pointer"
               >
                 Essayer gratuitement

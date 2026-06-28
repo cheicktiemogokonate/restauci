@@ -1,5 +1,5 @@
-import React from "react";
-import { Settings, Percent, DollarSign, Languages, Check } from "lucide-react";
+import type { ServiceTypeInput } from "@/lib/actions/onboarding";
+import { Check, DollarSign, Languages, Percent, Settings } from "lucide-react";
 import { RestaurantSettings } from "./types";
 
 interface StepSettingsProps {
@@ -10,16 +10,45 @@ interface StepSettingsProps {
 }
 
 const CATEGORIES_LIST = [
-  { id: "bistrot", name: "Bistrot & Brasserie", desc: "Plats traditionnels cuisinés avec simplicité." },
-  { id: "gastronomic", name: "Restaurant Gastronomique", desc: "Service d'exception, cuisine haute-couture." },
-  { id: "fastfood", name: "Restauration Rapide", desc: "Burgers, tacos, poulet frit, service express." },
-  { id: "bakery", name: "Boulangerie & Pâtisserie", desc: "Viennoiseries fraîches, pains de tradition et douceurs." },
-  { id: "cafe", name: "Coffeeshop & Salon de thé", desc: "Spécialités de cafés, thés gourmands et snacks légers." },
-  { id: "pizzeria", name: "Pizzéria", desc: "Pizzas au feu de bois et spécialités méditerranéennes." }
+  {
+    id: "bistrot",
+    name: "Bistrot & Brasserie",
+    desc: "Plats traditionnels cuisinés avec simplicité.",
+  },
+  {
+    id: "gastronomic",
+    name: "Restaurant Gastronomique",
+    desc: "Service d'exception, cuisine haute-couture.",
+  },
+  {
+    id: "fastfood",
+    name: "Restauration Rapide",
+    desc: "Burgers, tacos, poulet frit, service express.",
+  },
+  {
+    id: "bakery",
+    name: "Boulangerie & Pâtisserie",
+    desc: "Viennoiseries fraîches, pains de tradition et douceurs.",
+  },
+  {
+    id: "cafe",
+    name: "Coffeeshop & Salon de thé",
+    desc: "Spécialités de cafés, thés gourmands et snacks légers.",
+  },
+  {
+    id: "pizzeria",
+    name: "Pizzéria",
+    desc: "Pizzas au feu de bois et spécialités méditerranéennes.",
+  },
 ];
 
-export default function StepSettings({ data, updateData, onNext, onPrev }: StepSettingsProps) {
-  const toggleServiceType = (type: string) => {
+export default function StepSettings({
+  data,
+  updateData,
+  onNext,
+  onPrev,
+}: StepSettingsProps) {
+  const toggleServiceType = (type: ServiceTypeInput) => {
     const current = data.serviceTypes || [];
     const updated = current.includes(type)
       ? current.filter((t) => t !== type)
@@ -41,7 +70,8 @@ export default function StepSettings({ data, updateData, onNext, onPrev }: StepS
           Paramètres du restaurant
         </h1>
         <p className="text-sm text-gray-500 mt-2">
-          Définissez le modèle opérationnel, la devise comptable, et la structure fiscale de votre entreprise.
+          Définissez le modèle opérationnel, la devise comptable, et la
+          structure fiscale de votre entreprise.
         </p>
       </div>
 
@@ -112,7 +142,9 @@ export default function StepSettings({ data, updateData, onNext, onPrev }: StepS
                 type="number"
                 step="any"
                 value={data.taxRate}
-                onChange={(e) => updateData({ taxRate: parseFloat(e.target.value) || 0 })}
+                onChange={(e) =>
+                  updateData({ taxRate: parseFloat(e.target.value) || 0 })
+                }
                 className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 focus:border-brand-500 rounded-xl text-sm transition-all outline-none text-gray-800"
               />
             </div>
@@ -148,27 +180,47 @@ export default function StepSettings({ data, updateData, onNext, onPrev }: StepS
             Types de services offerts *
           </label>
           <div className="space-y-3">
-            {[
-              { id: "dine-in", name: "Sur place (Dine-in)", desc: "Gestion des tables, réservations en ligne, et menu digital." },
-              { id: "takeout", name: "A emporter (Takeaway)", desc: "Click & Collect direct avec paiement intégré." },
-              { id: "delivery", name: "Livraison (Delivery)", desc: "Prise en charge logistique pour les livreurs dédiés." }
-            ].map((srv) => {
-              const isChecked = data.serviceTypes.includes(srv.id);
+            {(
+              [
+                {
+                  id: "dine-in" as ServiceTypeInput,
+                  name: "Sur place (Dine-in)",
+                  desc: "Gestion des tables, réservations en ligne, et menu digital.",
+                },
+                {
+                  id: "takeout" as ServiceTypeInput,
+                  name: "A emporter (Takeaway)",
+                  desc: "Click & Collect direct avec paiement intégré.",
+                },
+                {
+                  id: "delivery" as ServiceTypeInput,
+                  name: "Livraison (Delivery)",
+                  desc: "Prise en charge logistique pour les livreurs dédiés.",
+                },
+              ] as { id: ServiceTypeInput; name: string; desc: string }[]
+            ).map((srv) => {
+              const isChecked = data.serviceTypes.includes(
+                srv.id as ServiceTypeInput,
+              );
               return (
                 <div
                   key={srv.id}
                   onClick={() => toggleServiceType(srv.id)}
                   className={`flex items-start p-3.5 border rounded-xl cursor-pointer transition-all ${
-                    isChecked ? "border-brand-500 bg-brand-50/5" : "border-gray-150 hover:border-gray-200"
+                    isChecked
+                      ? "border-brand-500 bg-brand-50/5"
+                      : "border-gray-150 hover:border-gray-200"
                   }`}
                 >
                   <div className="flex items-center h-5 mr-3">
                     <div
                       className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${
-                        isChecked ? "bg-brand-500 border-brand-500 text-white" : "border-gray-300 bg-white"
+                        isChecked
+                          ? "bg-brand-500 border-brand-500 text-white"
+                          : "border-gray-300 bg-white"
                       }`}
                     >
-                      {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      {isChecked && <Check className="w-3.5 h-3.5 stroke-3" />}
                     </div>
                   </div>
                   <div>
@@ -192,13 +244,16 @@ export default function StepSettings({ data, updateData, onNext, onPrev }: StepS
               Activer le module de réservation en ligne
             </span>
             <span className="text-xs text-gray-500 mt-1 block">
-              Générez automatiquement un lien de réservation de table public pour vos clients.
+              Générez automatiquement un lien de réservation de table public
+              pour vos clients.
             </span>
           </div>
 
           <button
             type="button"
-            onClick={() => updateData({ enableOnlineBooking: !data.enableOnlineBooking })}
+            onClick={() =>
+              updateData({ enableOnlineBooking: !data.enableOnlineBooking })
+            }
             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 outline-none ${
               data.enableOnlineBooking ? "bg-brand-500" : "bg-gray-200"
             }`}
@@ -219,8 +274,18 @@ export default function StepSettings({ data, updateData, onNext, onPrev }: StepS
           onClick={onPrev}
           className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl inline-flex items-center space-x-2 transition-all cursor-pointer"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           <span>Précédent</span>
         </button>
@@ -231,8 +296,18 @@ export default function StepSettings({ data, updateData, onNext, onPrev }: StepS
           className="px-6 py-2.5 bg-brand-green hover:bg-brand-600 text-white text-sm font-semibold rounded-xl inline-flex items-center space-x-2 shadow-md shadow-brand-500/10 cursor-pointer transition-all"
         >
           <span>Suivant</span>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 5l7 7-7 7"
+            />
           </svg>
         </button>
       </div>

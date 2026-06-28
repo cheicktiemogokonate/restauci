@@ -1,13 +1,5 @@
 "use client";
-import React from "react";
-import {
-  Mail,
-  Phone,
-  MapPin,
-  Globe,
-  Share2,
-  Utensils,
-} from "lucide-react";
+import { Globe, Mail, MapPin, Phone, Share2, Utensils } from "lucide-react";
 import { FooterBackgroundGradient, TextHoverEffect } from "./hover-footer";
 // import { FooterBackgroundGradient } from "@/components/ui/hover-footer";
 // import { TextHoverEffect } from "@/components/ui/hover-footer";
@@ -31,7 +23,7 @@ function HoverFooter() {
       links: [
         { label: "Documentation", href: "#" },
         { label: "Guides Resto", href: "#" },
-         {
+        {
           label: "Support Live",
           href: "#",
           pulse: true,
@@ -41,7 +33,7 @@ function HoverFooter() {
     },
   ];
 
-  // Contact info data (Abidjan, Côte d'Ivoire)
+  // Contact info data (Bouake, Côte d'Ivoire)
   const contactInfo = [
     {
       icon: <Mail size={18} className="text-[#22C55E]" />,
@@ -50,12 +42,12 @@ function HoverFooter() {
     },
     {
       icon: <Phone size={18} className="text-[#22C55E]" />,
-      text: "+225 07 08 09 10 11",
-      href: "tel:+2250708091011",
+      text: "+225 07 77 94 57 14",
+      href: "tel:+2250777945714",
     },
     {
       icon: <MapPin size={18} className="text-[#22C55E]" />,
-      text: "Plateau, Abidjan, Côte d'Ivoire",
+      text: "Bouake, Commerce, Côte d'Ivoire",
     },
   ];
 
@@ -64,12 +56,15 @@ function HoverFooter() {
     { icon: <Share2 size={20} />, label: "Facebook", href: "#" },
     { icon: <Share2 size={20} />, label: "Instagram", href: "#" },
     { icon: <Share2 size={20} />, label: "Twitter", href: "#" },
-    { icon: <Share2 size={20} />, label: "GitHub", href: "#" },
-    { icon: <Globe size={20} />, label: "Site", href: "#" },
+    { icon: <Share2 size={20} />, label: "Linkedin", href: "#" },
+    { icon: <Globe size={20} />, label: "Tiktok", href: "#" },
   ];
 
   return (
-    <footer className="bg-[#0F0F11]/95 text-gray-300 relative h-fit rounded-[2.5rem] overflow-hidden m-4 sm:m-8 border border-neutral-800 shadow-2xl">
+    <footer
+      id="footer"
+      className="bg-[#0F0F11]/95 text-gray-300 relative h-fit rounded-[2.5rem] overflow-hidden m-4 sm:m-8 border border-neutral-800 shadow-2xl"
+    >
       <div className="max-w-7xl mx-auto p-8 sm:p-14 z-40 relative">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 md:gap-8 lg:gap-16 pb-12">
           {/* Brand section */}
@@ -83,7 +78,9 @@ function HoverFooter() {
               </span>
             </div>
             <p className="text-sm leading-relaxed text-gray-400">
-              La solution complète et certifiée de gestion de restaurant intelligente en Côte d'Ivoire. Unifiez la salle, les stocks et la cuisine.
+              La solution complète et certifiée de gestion de restaurant
+              intelligente en Côte d&apos;Ivoire. Unifiez la salle, les stocks et la
+              cuisine.
             </p>
           </div>
 
@@ -102,9 +99,9 @@ function HoverFooter() {
                     >
                       {link.label}
                     </a>
-                    {link.pulse && (
+                    {/* {link.pulse && (
                       <span className="absolute top-2 right-[-14px] w-2 h-2 rounded-full bg-[#22C55E] animate-pulse"></span>
-                    )}
+                    )} */}
                   </li>
                 ))}
               </ul>
@@ -138,10 +135,10 @@ function HoverFooter() {
           </div>
         </div>
 
-        <hr className="border-t border-neutral-800 my-8" />
+        <hr className="border-t border-neutral-800 my-8 " />
 
         {/* Footer bottom */}
-        <div className="flex flex-col md:flex-row justify-between items-center text-sm space-y-4 md:space-y-0 text-gray-400">
+        <div className="flex flex-col md:flex-row justify-between items-center text-sm space-y-4 md:space-y-0 text-gray-400 mb-6">
           {/* Social icons */}
           <div className="flex space-x-6">
             {socialLinks.map(({ icon, label, href }) => (
@@ -158,14 +155,17 @@ function HoverFooter() {
 
           {/* Copyright */}
           <p className="text-center md:text-left text-xs text-gray-500">
-            &copy; {years} RestauCI S.A. Tous droits réservés. Conforme à l'article 88 de la loi de finances.
+            &copy; {years} RestauCI Tous droits réservés.
           </p>
         </div>
       </div>
 
       {/* Text hover effect */}
       <div className="lg:flex hidden h-[22rem] sm:h-[30rem] -mt-52 -mb-36 relative select-none pointer-events-auto w-full max-w-full overflow-hidden justify-center items-center">
-        <TextHoverEffect text="RestauCI" className="z-50 w-full max-w-5xl h-auto block mx-auto" />
+        <TextHoverEffect
+          text="RestauCI"
+          className="z-50 w-full max-w-5xl h-auto block mx-auto"
+        />
       </div>
 
       <FooterBackgroundGradient />

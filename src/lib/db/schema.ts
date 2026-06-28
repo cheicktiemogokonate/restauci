@@ -112,6 +112,9 @@ export const users = pgTable(
     tokenResetPassword: text("token_reset_password"),
     tokenResetExpireAt: timestamp("token_reset_expire_at", { withTimezone: true }),
     dernierConnexion: timestamp("dernier_connexion", { withTimezone: true }),
+    suspendu: boolean("suspendu").notNull().default(false),
+    motifSuspension: text("motif_suspension"),
+    suspenduAt: timestamp("suspendu_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -121,6 +124,7 @@ export const users = pgTable(
   },
   (table) => ({
     emailIdx: uniqueIndex("idx_users_email").on(table.email),
+    roleIdx: index("idx_users_role").on(table.role),
   })
 );
 
@@ -173,6 +177,16 @@ export const restaurants = pgTable(
     nombreCommandes: integer("nombre_commandes").notNull().default(0),
     noteMoyenne: real("note_moyenne").default(0),
     nombreAvis: integer("nombre_avis").notNull().default(0),
+    // Validation admin
+    motifRejet: text("motif_rejet"),
+    valideParUserId: varchar("valide_par_user_id", { length: 36 })
+      .references(() => users.id, { onDelete: "set null" }),
+    valideAt: timestamp("valide_at", { withTimezone: true }),
+    // Suspension
+    suspendu: boolean("suspendu").notNull().default(false),
+    motifSuspension: text("motif_suspension"),
+    // Commission
+    tauxCommissionBps: integer("taux_commission_bps").notNull().default(1000),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -184,6 +198,11 @@ export const restaurants = pgTable(
     slugIdx:   uniqueIndex("idx_restaurants_slug").on(table.slug),
     userIdIdx: uniqueIndex("idx_restaurants_user_id").on(table.userId),
     villeIdx:  index("idx_restaurants_ville").on(table.ville),
+    actifIdx:  index("idx_restaurants_actif").on(table.actif),
+    villeActifIdx: index("idx_restaurants_ville_actif").on(
+      table.ville,
+      table.actif
+    ),
   })
 );
 
@@ -220,25 +239,37 @@ export const abonnements = pgTable("abonnements", {
 // CRENEAUX HORAIRES
 // ============================================================================
 
-export const creneauxHoraires = pgTable("creneaux_horaires", {
-  id: varchar("id", { length: 36 })
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  restaurantId: varchar("restaurant_id", { length: 36 })
-    .notNull()
-    .references(() => restaurants.id, { onDelete: "cascade" }),
-  nom: varchar("nom", { length: 255 }).notNull(),   // "Déjeuner", "Dîner"
-  heureOuverture: time("heure_ouverture", { precision: 0 }).notNull(),
-  heureFermeture: time("heure_fermeture", { precision: 0 }).notNull(),
-  joursActifs: text("jours_actifs").array().notNull(), // ["lundi","mardi"]
-  actif: boolean("actif").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const creneauxHoraires = pgTable(
+  "creneaux_horaires",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    restaurantId: varchar("restaurant_id", { length: 36 })
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    nom: varchar("nom", { length: 255 }).notNull(),   // "Déjeuner", "Dîner"
+    heureOuverture: time("heure_ouverture", { precision: 0 }).notNull(),
+    heureFermeture: time("heure_fermeture", { precision: 0 }).notNull(),
+    joursActifs: text("jours_actifs").array().notNull(), // ["lundi","mardi"]
+    actif: boolean("actif").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    restaurantIdx: index("idx_creneaux_horaires_restaurant").on(
+      table.restaurantId
+    ),
+    restaurantNomIdx: index("idx_creneaux_horaires_restaurant_nom").on(
+      table.restaurantId,
+      table.nom
+    ),
+  })
+);
 
 // ============================================================================
 // CATEGORIES DE MENU
@@ -273,6 +304,10 @@ export const categories = pgTable(
     restaurantOrdreIdx: index("idx_categories_restaurant_ordre").on(
       table.restaurantId,
       table.ordre
+    ),
+    restaurantVisibleIdx: index("idx_categories_restaurant_visible").on(
+      table.restaurantId,
+      table.visible
     ),
   })
 );
@@ -330,6 +365,15 @@ export const plats = pgTable(
       table.categorieId
     ),
     disponibleIdx: index("idx_plats_disponible").on(table.disponible),
+    restaurantDisponibleIdx: index("idx_plats_restaurant_disponible").on(
+      table.restaurantId,
+      table.disponible
+    ),
+    nomIdx: index("idx_plats_nom").on(table.nom),
+    restaurantNomIdx: index("idx_plats_restaurant_nom").on(
+      table.restaurantId,
+      table.nom
+    ),
   })
 );
 
@@ -358,6 +402,8 @@ export const clients = pgTable(
     // Auth
     emailVerifie: boolean("email_verifie").notNull().default(false),
     actif: boolean("actif").notNull().default(true),
+    motifSuspension: text("motif_suspension"),
+    suspenduAt: timestamp("suspendu_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -429,6 +475,14 @@ export const commandes = pgTable(
     clientIdx:      index("idx_commandes_client").on(table.clientId),
     statutIdx:      index("idx_commandes_statut").on(table.statut),
     createdAtIdx:   index("idx_commandes_created_at").on(table.createdAt),
+    restaurantStatutIdx: index("idx_commandes_restaurant_statut").on(
+      table.restaurantId,
+      table.statut
+    ),
+    restaurantCreatedAtIdx: index("idx_commandes_restaurant_created_at").on(
+      table.restaurantId,
+      table.createdAt
+    ),
   })
 );
 
@@ -590,6 +644,10 @@ export const promotions = pgTable(
     restaurantIdx: index("idx_promotions_restaurant").on(table.restaurantId),
     codePromoIdx:  index("idx_promotions_code").on(table.codePromo),
     dateIdx:       index("idx_promotions_dates").on(table.dateDebut, table.dateFin),
+    restaurantActifIdx: index("idx_promotions_restaurant_actif").on(
+      table.restaurantId,
+      table.actif
+    ),
   })
 );
 
@@ -636,6 +694,11 @@ export const avis = pgTable(
     restaurantIdx: index("idx_avis_restaurant").on(table.restaurantId),
     clientIdx:     index("idx_avis_client").on(table.clientId),
     commandeIdx:   uniqueIndex("idx_avis_commande").on(table.commandeId), // 1 avis / commande
+    restaurantVisibleIdx: index("idx_avis_restaurant_visible").on(
+      table.restaurantId,
+      table.visible
+    ),
+    createdAtIdx: index("idx_avis_created_at").on(table.createdAt),
   })
 );
 
@@ -673,6 +736,11 @@ export const notifications = pgTable(
     userIdx:    index("idx_notifications_user").on(table.userId),
     clientIdx:  index("idx_notifications_client").on(table.clientId),
     lueIdx:     index("idx_notifications_lue").on(table.lue),
+    userLueIdx: index("idx_notifications_user_lue").on(
+      table.userId,
+      table.lue
+    ),
+    createdAtIdx: index("idx_notifications_created_at").on(table.createdAt),
   })
 );
 
@@ -687,6 +755,130 @@ export interface CommandeItemDB {
   quantite: number;
   note?: string;      // note spéciale pour ce plat
 }
+
+// ============================================================================
+// AUDIT LOG  (traçabilité des actions admin)
+// ============================================================================
+
+export const auditActionEnum = pgEnum("audit_action", [
+  "restaurant_valide",
+  "restaurant_rejete",
+  "restaurant_suspendu",
+  "restaurant_reactive",
+  "user_suspendu",
+  "user_reactive",
+  "client_suspendu",
+  "client_reactive",
+  "commission_modifiee",
+]);
+
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+
+    // Qui a fait l'action
+    adminId: varchar("admin_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "set null" }),
+
+    action: auditActionEnum("action").notNull(),
+
+    // Sur quelle ressource (restaurant, user, client...)
+    ressourceType: varchar("ressource_type", { length: 50 }).notNull(),
+    ressourceId:   varchar("ressource_id", { length: 36 }).notNull(),
+
+    // Détails de l'action (raison, anciennes/nouvelles valeurs)
+    details: jsonb("details").$type<Record<string, unknown>>(),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    adminIdx:      index("idx_audit_log_admin").on(table.adminId),
+    ressourceIdx:  index("idx_audit_log_ressource").on(
+      table.ressourceType,
+      table.ressourceId
+    ),
+    createdAtIdx:  index("idx_audit_log_created_at").on(table.createdAt),
+  })
+);
+
+export const auditLogRelations = relations(auditLog, ({ one }) => ({
+  admin: one(users, {
+    fields:     [auditLog.adminId],
+    references: [users.id],
+  }),
+}));
+
+// ============================================================================
+// COMMISSIONS  (calcul des montants dus par les restaurants)
+// ============================================================================
+
+export const statutCommissionEnum = pgEnum("statut_commission", [
+  "en_attente",   // calculée mais pas encore payée
+  "payee",        // le restaurant a payé (action manuelle admin)
+  "annulee",      // annulée (ex: commande remboursée)
+]);
+
+export const commissions = pgTable(
+  "commissions",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+
+    commandeId: varchar("commande_id", { length: 36 })
+      .notNull()
+      .unique()
+      .references(() => commandes.id, { onDelete: "cascade" }),
+
+    restaurantId: varchar("restaurant_id", { length: 36 })
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+
+    // Montant de la commande au moment du calcul (centimes)
+    montantCommande: integer("montant_commande").notNull(),
+
+    // Taux appliqué (snapshot — même si le taux du resto change après)
+    tauxCommissionBps: integer("taux_commission_bps").notNull(),
+
+    // Montant de la commission (centimes)
+    montantCommission: integer("montant_commission").notNull(),
+
+    statut: statutCommissionEnum("statut").notNull().default("en_attente"),
+
+    payeeAt:   timestamp("payee_at", { withTimezone: true }),
+    payeeParUserId: varchar("payee_par_user_id", { length: 36 })
+      .references(() => users.id, { onDelete: "set null" }),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    restaurantIdx: index("idx_commissions_restaurant").on(table.restaurantId),
+    statutIdx:     index("idx_commissions_statut").on(table.statut),
+    restaurantStatutIdx: index("idx_commissions_restaurant_statut").on(
+      table.restaurantId,
+      table.statut
+    ),
+  })
+);
+
+export const commissionsRelations = relations(commissions, ({ one }) => ({
+  commande: one(commandes, {
+    fields:     [commissions.commandeId],
+    references: [commandes.id],
+  }),
+  restaurant: one(restaurants, {
+    fields:     [commissions.restaurantId],
+    references: [restaurants.id],
+  }),
+}));
 
 // ============================================================================
 // RELATIONS
@@ -856,5 +1048,49 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   client: one(clients, {
     fields: [notifications.clientId],
     references: [clients.id],
+  }),
+}));
+
+// ============================================================================
+// PUSH SUBSCRIPTIONS (Web Push & Expo Push)
+// ============================================================================
+
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    type: varchar("type", { length: 20 })
+      .notNull()
+      .$type<"web" | "expo">(),
+
+    endpoint:   text("endpoint"),
+    p256dh:     text("p256dh"),
+    auth:       text("auth"),
+    expoToken:  text("expo_token"),
+
+    userAgent:  text("user_agent"),
+    createdAt:  timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (table) => ({
+    userIdx:     index("idx_push_subscriptions_user").on(table.userId),
+    typeIdx:     index("idx_push_subscriptions_type").on(table.type),
+    endpointIdx: index("idx_push_subscriptions_endpoint").on(table.endpoint),
+  })
+);
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+  user: one(users, {
+    fields:     [pushSubscriptions.userId],
+    references: [users.id],
   }),
 }));

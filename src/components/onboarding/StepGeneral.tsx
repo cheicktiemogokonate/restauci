@@ -1,11 +1,18 @@
+import {
+  Check,
+  Image as ImageIcon,
+  Sparkles,
+  Store,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import React, { useState } from "react";
-import { Store, Upload, Sparkles, Image as ImageIcon, Trash2, Sliders, Check } from "lucide-react";
 import { GeneralInfo } from "./types";
 
 interface StepGeneralProps {
   data: GeneralInfo;
   updateData: (fields: Partial<GeneralInfo>) => void;
-  updateSettings?: (fields: Partial<any>) => void;
+  updateSettings?: (fields: Partial<Record<string, unknown>>) => void;
   onNext: () => void;
 }
 
@@ -16,76 +23,81 @@ const RESTAURANT_PRESETS = [
     category: "bistrot",
     serviceTypes: ["dine-in", "takeout", "delivery"],
     label: "Maquis Moderne / Braisés",
-    description: "Le maquis moderne gourmet d'Abidjan Zone 4. Célèbre pour nos poulets et poissons braisés au feu de bois, notre attiéké de qualité supérieure et nos kédjenous de dinde authentiques.",
-    logoUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150&auto=format&fit=crop&q=80",
-    bannerUrl: "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&auto=format&fit=crop&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=500&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=500&auto=format&fit=crop&q=80"
-    ]
+    description:
+      "Le maquis moderne gourmet d'Abidjan Zone 4. Célèbre pour nos poulets et poissons braisés au feu de bois, notre attiéké de qualité supérieure et nos kédjenous de dinde authentiques.",
+    logoUrl: "",
+    bannerUrl: "",
+    gallery: [],
   },
   {
     name: "L'Atelier Gourmet",
     category: "bistrot",
     serviceTypes: ["dine-in", "takeout"],
     label: "Bistrot Chic & Salon",
-    description: "Une expérience gastronomique raffinée au Plateau. Notre carte valorise des ingrédients nobles de Côte d'Ivoire, mariant techniques culinaires modernes et excellence locale.",
-    logoUrl: "https://images.unsplash.com/photo-1560624052-449f5ddf0c31?w=150&auto=format&fit=crop&q=80",
-    bannerUrl: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800&auto=format&fit=crop&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=500&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=500&auto=format&fit=crop&q=80"
-    ]
+    description:
+      "Une expérience gastronomique raffinée au Plateau. Notre carte valorise des ingrédients nobles de Côte d'Ivoire, mariant techniques culinaires modernes et excellence locale.",
+    logoUrl: "",
+    bannerUrl: "",
+    gallery: [],
   },
   {
     name: "Abidjan Burger & Chawarma",
     category: "fast-food",
     serviceTypes: ["takeout", "delivery"],
     label: "Fast-Food & Street Food",
-    description: "Le fast-food urbain rapide et de qualité supérieure à Cocody. Burgers gourmets maison, chawarmas généreux sous pain artisanal et frites d'attiéké ou de patate douce.",
-    logoUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=150&auto=format&fit=crop&q=80",
-    bannerUrl: "https://images.unsplash.com/photo-1550547660-d9450f859349?w=800&auto=format&fit=crop&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=500&auto=format&fit=crop&q=80"
-    ]
+    description:
+      "Le fast-food urbain rapide et de qualité supérieure à Cocody. Burgers gourmets maison, chawarmas généreux sous pain artisanal et frites d'attiéké ou de patate douce.",
+    logoUrl: "",
+    bannerUrl: "",
+    gallery: [],
   },
   {
     name: "Douceurs d'Éburnie",
     category: "cafeteria",
     serviceTypes: ["dine-in", "takeout"],
     label: "Salon de Thé & Pâtisserie",
-    description: "Boulangerie-café chaleureuse au Vallon. Brunchs complets le week-end, macarons créatifs au cacao ivoirien d'exception, thés glacés au bissap blanc et citronnelle.",
-    logoUrl: "https://images.unsplash.com/photo-1497515114629-f71d768fd07c?w=150&auto=format&fit=crop&q=80",
-    bannerUrl: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&auto=format&fit=crop&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=500&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=500&auto=format&fit=crop&q=80"
-    ]
-  }
+    description:
+      "Boulangerie-café chaleureuse au Vallon. Brunchs complets le week-end, macarons créatifs au cacao ivoirien d'exception, thés glacés au bissap blanc et citronnelle.",
+    logoUrl: "",
+    bannerUrl: "",
+    gallery: [],
+  },
 ];
 
-export default function StepGeneral({ data, updateData, updateSettings, onNext }: StepGeneralProps) {
+export default function StepGeneral({
+  data,
+  updateData,
+  updateSettings,
+  onNext,
+}: StepGeneralProps) {
   const [logoPreview, setLogoPreview] = useState<string | null>(data.logoUrl);
-  const [bannerPreview, setBannerPreview] = useState<string | null>(data.bannerUrl);
-  const [galleryPreviews, setGalleryPreviews] = useState<string[]>(data.galleryUrls || []);
-  const [descriptionCount, setDescriptionCount] = useState(data.description.length);
-  const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(
+    data.bannerUrl,
+  );
+  const [galleryPreviews, setGalleryPreviews] = useState<string[]>(
+    data.galleryUrls || [],
+  );
+  const [descriptionCount, setDescriptionCount] = useState(
+    data.description.length,
+  );
+  const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
 
-  const applyPreset = (preset: typeof RESTAURANT_PRESETS[0], idx: number) => {
+  const applyPreset = (preset: (typeof RESTAURANT_PRESETS)[0], idx: number) => {
     updateData({
       name: preset.name,
       description: preset.description,
       logoUrl: preset.logoUrl,
       bannerUrl: preset.bannerUrl,
-      galleryUrls: preset.gallery
+      galleryUrls: preset.gallery,
     });
 
     if (updateSettings) {
       updateSettings({
         category: preset.category,
-        serviceTypes: preset.serviceTypes
+        serviceTypes: preset.serviceTypes,
       });
     }
 
@@ -199,19 +211,22 @@ export default function StepGeneral({ data, updateData, updateSettings, onNext }
           Enseigne & Identité visuelle
         </h1>
         <p className="text-sm text-gray-500 mt-2 font-sans">
-          Démarrez instantanément avec l'un de nos prototypes de restaurant optimisés pour le marché ivoirien, ou remplissez votre propre formulaire.
+          Démarrez instantanément avec l&apos;un de nos prototypes de restaurant
+          optimisés pour le marché ivoirien, ou remplissez votre propre
+          formulaire.
         </p>
       </div>
 
       {/* Modern High-Impact Preset Archetypes Grid inside the container */}
       <div className="mb-8">
-        <label className="block text-xs font-bold uppercase tracking-wider text-emerald-600 mb-3 flex items-center space-x-1.5 font-mono">
+        <label className="text-xs font-bold uppercase tracking-wider text-emerald-600 mb-3 flex items-center space-x-1.5 font-mono">
           <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
           <span>Gabarit de départ rapide</span>
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           {RESTAURANT_PRESETS.map((preset, idx) => {
-            const isSelected = selectedPresetIndex === idx || data.name === preset.name;
+            const isSelected =
+              selectedPresetIndex === idx || data.name === preset.name;
             return (
               <button
                 key={idx}
@@ -225,7 +240,7 @@ export default function StepGeneral({ data, updateData, updateSettings, onNext }
               >
                 {isSelected && (
                   <span className="absolute top-2 right-2 bg-emerald-500 text-white rounded-full p-0.5">
-                    <Check className="w-3 h-3 stroke-[3]" />
+                    <Check className="w-3 h-3 stroke-3" />
                   </span>
                 )}
                 <span className="font-semibold text-xs text-gray-900 block truncate">
@@ -254,8 +269,11 @@ export default function StepGeneral({ data, updateData, updateSettings, onNext }
         {/* Input Fields */}
         <div className="grid grid-cols-1 gap-6">
           <div>
-            <label htmlFor="name" className="block text-sm font-semibold text-gray-900 mb-2">
-              Nom de l'établissement *
+            <label
+              htmlFor="name"
+              className="block text-sm font-semibold text-gray-900 mb-2"
+            >
+              Nom de l&apos;établissement *
             </label>
             <input
               type="text"
@@ -272,10 +290,15 @@ export default function StepGeneral({ data, updateData, updateSettings, onNext }
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label htmlFor="description" className="block text-sm font-semibold text-gray-900">
+              <label
+                htmlFor="description"
+                className="block text-sm font-semibold text-gray-900"
+              >
                 Slogan & Description *
               </label>
-              <span className={`text-[10px] font-mono ${descriptionCount > 300 ? 'text-red-500' : 'text-gray-400'}`}>
+              <span
+                className={`text-[10px] font-mono ${descriptionCount > 300 ? "text-red-500" : "text-gray-400"}`}
+              >
                 {descriptionCount} / 300
               </span>
             </div>
@@ -300,7 +323,7 @@ export default function StepGeneral({ data, updateData, updateSettings, onNext }
           {/* Logo Dropzone */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Logo de l'enseigne *
+              Logo de l&apos;enseigne *
             </label>
             <div className="relative border-2 border-dashed border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 transition-colors h-40 group">
               {logoPreview ? (
@@ -395,12 +418,18 @@ export default function StepGeneral({ data, updateData, updateSettings, onNext }
         {/* Gallery Photos (Optional) */}
         <div>
           <label className="block text-sm font-semibold text-gray-900 mb-2">
-            Galerie photos additionnelle <span className="text-gray-400 text-xs font-normal">(Optionnel)</span>
+            Galerie photos additionnelle{" "}
+            <span className="text-gray-400 text-xs font-normal">
+              (Optionnel)
+            </span>
           </label>
           <div className="border border-gray-100 bg-gray-50/30 rounded-xl p-4">
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 mb-2">
               {galleryPreviews.map((url, idx) => (
-                <div key={idx} className="relative aspect-video rounded-lg overflow-hidden group border border-gray-100 shadow-xs">
+                <div
+                  key={idx}
+                  className="relative aspect-video rounded-lg overflow-hidden group border border-gray-100 shadow-xs"
+                >
                   <img
                     src={url}
                     alt={`Galerie ${idx + 1}`}
@@ -444,8 +473,18 @@ export default function StepGeneral({ data, updateData, updateSettings, onNext }
           className="px-6 py-3 bg-brand-green text-white text-sm font-semibold rounded-xl inline-flex items-center space-x-2 shadow-sm cursor-pointer transition-all active:scale-[0.98]"
         >
           <span>Suivant, Localisation</span>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 5l7 7-7 7"
+            />
           </svg>
         </button>
       </div>

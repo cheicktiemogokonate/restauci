@@ -1,6 +1,6 @@
 import type { StatutCommande, ModeCommande } from "@/lib/db/types";
 
-// Labels affichés dans l'UI (déjà défini dans lib/db/types.ts)
+// Labels affichés dans l'UI
 export const STATUT_LABELS: Record<StatutCommande, string> = {
   recue:           "Reçue",
   en_preparation:  "En préparation",
@@ -9,7 +9,7 @@ export const STATUT_LABELS: Record<StatutCommande, string> = {
   annulee:         "Annulée",
 };
 
-// Classes CSS Tailwind par statut (déjà défini dans lib/db/types.ts)
+// Classes CSS Tailwind par statut
 export const STATUT_COLORS: Record<StatutCommande, string> = {
   recue:           "bg-blue-100 text-blue-700",
   en_preparation:  "bg-amber-100 text-amber-700",

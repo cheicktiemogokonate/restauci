@@ -1,5 +1,5 @@
+import { Calendar, Clock, HelpCircle, Plus, Trash2 } from "lucide-react";
 import React, { useState } from "react";
-import { Clock, Plus, Trash2, HelpCircle, Calendar } from "lucide-react";
 import { DaySchedule, SpecialHourException } from "./types";
 
 interface StepScheduleProps {
@@ -32,7 +32,11 @@ export default function StepSchedule({
     updateSchedule(updated);
   };
 
-  const handleChangeTime = (index: number, field: "openTime" | "closeTime", value: string) => {
+  const handleChangeTime = (
+    index: number,
+    field: "openTime" | "closeTime",
+    value: string,
+  ) => {
     const updated = [...schedule];
     updated[index][field] = value;
     updateSchedule(updated);
@@ -93,7 +97,9 @@ export default function StepSchedule({
           Horaires & Jours de service
         </h1>
         <p className="text-sm text-gray-500 mt-2 font-sans">
-          Définissez les heures d'ouverture quotidiennes de votre établissement. Vous pouvez également configurer des fermetures exceptionnelles (jours fériés, événements).
+          Définissez les heures d'ouverture quotidiennes de votre établissement.
+          Vous pouvez également configurer des fermetures exceptionnelles (jours
+          fériés, événements).
         </p>
       </div>
 
@@ -112,7 +118,9 @@ export default function StepSchedule({
               <div
                 key={row.day}
                 className={`px-6 py-4 grid grid-cols-12 gap-4 items-center transition-all ${
-                  row.isOpen ? "bg-white" : "bg-gray-55/30 opacity-70 text-gray-400 bg-gray-50/20"
+                  row.isOpen
+                    ? "bg-white"
+                    : "bg-gray-55/30 opacity-70 text-gray-400 bg-gray-50/20"
                 }`}
               >
                 {/* Day label */}
@@ -143,7 +151,9 @@ export default function StepSchedule({
                     <div className="relative">
                       <select
                         value={row.openTime}
-                        onChange={(e) => handleChangeTime(index, "openTime", e.target.value)}
+                        onChange={(e) =>
+                          handleChangeTime(index, "openTime", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-gray-200 text-gray-800 rounded-xl text-sm font-mono outline-none focus:border-brand-500 font-medium select-none"
                       >
                         {Array.from({ length: 24 }).map((_, h) => {
@@ -173,7 +183,9 @@ export default function StepSchedule({
                     <div className="relative">
                       <select
                         value={row.closeTime}
-                        onChange={(e) => handleChangeTime(index, "closeTime", e.target.value)}
+                        onChange={(e) =>
+                          handleChangeTime(index, "closeTime", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-gray-200 text-gray-800 rounded-xl text-sm font-mono outline-none focus:border-brand-500 font-medium select-none"
                       >
                         {Array.from({ length: 24 }).map((_, h) => {
@@ -206,10 +218,14 @@ export default function StepSchedule({
           <div className="flex justify-between items-center mb-6">
             <div>
               <h3 className="text-sm font-bold text-gray-900 font-display">
-                Horaires spéciaux <span className="text-gray-450 font-normal text-xs">(Optionnel)</span>
+                Horaires spéciaux{" "}
+                <span className="text-gray-450 font-normal text-xs">
+                  (Optionnel)
+                </span>
               </h3>
               <p className="text-xs text-gray-500 mt-1 font-sans">
-                Ajoutez des horaires spécifiques pour les jours fériés ou des événements particuliers.
+                Ajoutez des horaires spécifiques pour les jours fériés ou des
+                événements particuliers.
               </p>
             </div>
             <button
@@ -269,7 +285,9 @@ export default function StepSchedule({
           ) : (
             <div className="p-8 border border-dashed border-gray-200 rounded-xl text-center">
               <Calendar className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-xs text-gray-400">Aucune exception ajoutée pour l'instant.</p>
+              <p className="text-xs text-gray-400">
+                Aucune exception ajoutée pour l'instant.
+              </p>
             </div>
           )}
         </div>
@@ -278,9 +296,14 @@ export default function StepSchedule({
         <div className="p-4 bg-emerald-50/50 border border-brand-100/30 rounded-xl flex items-start space-x-3">
           <HelpCircle className="w-5 h-5 text-brand-500 shrink-0 mt-0.5" />
           <div>
-            <span className="text-xs font-bold text-gray-900 font-display block">Astuce</span>
+            <span className="text-xs font-bold text-gray-900 font-display block">
+              Astuce
+            </span>
             <p className="text-xs text-gray-600 mt-1 font-sans">
-              Vous pourrez configurer des pauses méridiennes (fermeture l'après-midi, double plage d'ouverture) ainsi que des fermetures annuelles ultérieurement depuis le tableau de bord de votre restaurant.
+              Vous pourrez configurer des pauses méridiennes (fermeture
+              l'après-midi, double plage d'ouverture) ainsi que des fermetures
+              annuelles ultérieurement depuis le tableau de bord de votre
+              restaurant.
             </p>
           </div>
         </div>
@@ -291,7 +314,9 @@ export default function StepSchedule({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs font-sans">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
             <div className="px-6 py-4 bg-brand-500 text-white flex items-center justify-between">
-              <h3 className="font-bold text-base font-display">Nouvelle Exception</h3>
+              <h3 className="font-bold text-base font-display">
+                Nouvelle Exception
+              </h3>
               <button
                 type="button"
                 onClick={() => setShowExceptionModal(false)}
@@ -337,7 +362,10 @@ export default function StepSchedule({
                   onChange={() => setExcIsOpen(!excIsOpen)}
                   className="w-4 h-4 text-brand-500 border-gray-300 rounded focus:ring-brand-500"
                 />
-                <label htmlFor="exc_open" className="text-xs font-semibold text-gray-700 cursor-pointer">
+                <label
+                  htmlFor="exc_open"
+                  className="text-xs font-semibold text-gray-700 cursor-pointer"
+                >
                   Le restaurant sera exceptionnellement ouvert ce jour
                 </label>
               </div>
@@ -345,7 +373,9 @@ export default function StepSchedule({
               {excIsOpen && (
                 <div className="grid grid-cols-2 gap-4 pt-2">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Heure d'ouverture</label>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Heure d'ouverture
+                    </label>
                     <input
                       type="time"
                       value={excOpen}
@@ -354,7 +384,9 @@ export default function StepSchedule({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Heure de fermeture</label>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Heure de fermeture
+                    </label>
                     <input
                       type="time"
                       value={excClose}
@@ -392,8 +424,18 @@ export default function StepSchedule({
           onClick={onPrev}
           className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl inline-flex items-center space-x-2 transition-all cursor-pointer"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           <span>Précédent</span>
         </button>
@@ -404,8 +446,18 @@ export default function StepSchedule({
           className="px-6 py-3 bg-brand-green hover:bg-brand-600 text-white text-sm font-semibold rounded-xl inline-flex items-center space-x-2 shadow-sm cursor-pointer transition-all active:scale-[0.98]"
         >
           <span>Suivant, Aperçu</span>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 5l7 7-7 7"
+            />
           </svg>
         </button>
       </div>

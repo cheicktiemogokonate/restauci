@@ -1,16 +1,23 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { CommandesListSkeleton } from "@/components/dashboard/commandes/skeletons";
 
-export default function LoadingCommandesPage() {
+/**
+ * Affiché automatiquement par Next.js pendant la navigation vers /restaurateur/commandes.
+ */
+export default function CommandesLoading() {
   return (
-    <div className="px-4 py-6 sm:px-6 lg:px-8">
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-1/3 rounded-full" />
-        <div className="grid gap-4 md:grid-cols-2">
-          {[...Array(2)].map((_, index) => (
-            <Skeleton key={index} className="h-72 rounded-[32px]" />
+    <div className="flex flex-col min-h-full flex-1 overflow-hidden">
+      <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-background mt-4">
+        {/* Barre de filtres simulée */}
+        <div className="flex items-center gap-2 mb-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-9 w-24 rounded-lg bg-gray-200 animate-pulse"
+            />
           ))}
         </div>
-      </div>
+        <CommandesListSkeleton />
+      </main>
     </div>
   );
 }

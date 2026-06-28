@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface MagnetProps {
   children: React.ReactNode;
@@ -30,14 +30,15 @@ const Magnet = ({
 
   useEffect(() => {
     if (disabled) {
-      setPosition({ x: 0, y: 0 });
+      Promise.resolve().then(() => setPosition({ x: 0, y: 0 }));
       return;
     }
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!magnetRef.current) return;
 
-      const { left, top, width, height } = magnetRef.current.getBoundingClientRect();
+      const { left, top, width, height } =
+        magnetRef.current.getBoundingClientRect();
       const centerX = left + width / 2;
       const centerY = top + height / 2;
 

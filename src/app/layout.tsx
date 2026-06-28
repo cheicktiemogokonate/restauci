@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import Providers from "@/components/Providers";
 
 const inter = Inter({
@@ -27,9 +29,13 @@ export default function RootLayout({
     <html
       lang="fr"
       className={`${inter.variable} ${manrope.variable} h-full antialiased scroll-smooth`}
+      data-scroll-behavior="smooth"
     >
       <body className="min-h-full flex flex-col font-sans bg-[#FAFBFA] text-slate-900">
         <Providers>{children}</Providers>
+        {/* Mesure des Core Web Vitals en production Vercel */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

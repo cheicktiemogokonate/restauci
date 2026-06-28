@@ -1,25 +1,28 @@
 "use client";
 import { motion, type Transition } from "motion/react";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface FromProps {
   filter: string;
   opacity: number;
   y: number;
-  [key: string]: any;
+  [key: string]: string | number;
 }
 
 interface ToProps {
   filter: string;
   opacity: number;
   y: number;
-  [key: string]: any;
+  [key: string]: string | number;
 }
 
 const buildKeyframes = (from: FromProps, steps: ToProps[]) => {
-  const keys = new Set([...Object.keys(from), ...steps.flatMap((s) => Object.keys(s))]);
+  const keys = new Set([
+    ...Object.keys(from),
+    ...steps.flatMap((s) => Object.keys(s)),
+  ]);
 
-  const keyframes: Record<string, any[]> = {};
+  const keyframes: Record<string, (string | number)[]> = {};
   keys.forEach((k) => {
     keyframes[k] = [from[k], ...steps.map((s) => s[k])];
   });
@@ -72,7 +75,7 @@ const BlurText = ({
           }
         }
       },
-      { threshold, rootMargin }
+      { threshold, rootMargin },
     );
     observer.observe(ref.current);
     return () => observer.disconnect();
@@ -83,7 +86,7 @@ const BlurText = ({
       direction === "top"
         ? { filter: "blur(10px)", opacity: 0, y: -50 }
         : { filter: "blur(10px)", opacity: 0, y: 50 },
-    [direction]
+    [direction],
   );
 
   const defaultTo = useMemo<ToProps[]>(
@@ -95,7 +98,7 @@ const BlurText = ({
       },
       { filter: "blur(0px)", opacity: 1, y: 0 },
     ],
-    [direction]
+    [direction],
   );
 
   const fromSnapshot = animationFrom ?? defaultFrom;
@@ -103,10 +106,16 @@ const BlurText = ({
 
   const stepCount = toSnapshots.length + 1;
   const totalDuration = stepDuration * (stepCount - 1);
-  const times = Array.from({ length: stepCount }, (_, i) => (stepCount === 1 ? 0 : i / (stepCount - 1)));
+  const times = Array.from({ length: stepCount }, (_, i) =>
+    stepCount === 1 ? 0 : i / (stepCount - 1),
+  );
 
   return (
-    <Component ref={ref} className={`${className} flex flex-wrap`} style={{ display: "flex", flexWrap: "wrap" }}>
+    <Component
+      ref={ref}
+      className={`${className} flex flex-wrap`}
+      style={{ display: "flex", flexWrap: "wrap" }}
+    >
       {elements.map((segment, index) => {
         const animateKeyframes = buildKeyframes(fromSnapshot, toSnapshots);
 
@@ -124,7 +133,9 @@ const BlurText = ({
             initial={fromSnapshot as any}
             animate={inView ? (animateKeyframes as any) : (fromSnapshot as any)}
             transition={spanTransition}
-            onAnimationComplete={index === elements.length - 1 ? onAnimationComplete : undefined}
+            onAnimationComplete={
+              index === elements.length - 1 ? onAnimationComplete : undefined
+            }
           >
             {segment === " " ? "\u00A0" : segment}
             {animateBy === "words" && index < elements.length - 1 && "\u00A0"}

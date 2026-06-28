@@ -1,11 +1,12 @@
-import type { Config } from "tailwindcss"
+import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 const config = {
   darkMode: ["class", ".dark"],
   content: [
-    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     container: {
@@ -34,7 +35,7 @@ const config = {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-4px)" },
         },
-        "glow": {
+        glow: {
           "0%, 100%": { boxShadow: "0 0 20px rgba(59, 130, 246, 0.5)" },
           "50%": { boxShadow: "0 0 30px rgba(59, 130, 246, 0.8)" },
         },
@@ -51,7 +52,7 @@ const config = {
         "fade-in": "fade-in 0.6s ease-out",
         "slide-in-right": "slide-in-right 0.6s ease-out",
         "bounce-subtle": "bounce-subtle 2s ease-in-out infinite",
-        "glow": "glow 2s ease-in-out infinite",
+        glow: "glow 2s ease-in-out infinite",
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
@@ -90,12 +91,12 @@ const config = {
           foreground: "hsl(var(--card-foreground))",
         },
         brand: {
-          50: '#fff7ed',
-          100: '#ffedd5',
-          200: '#fed7aa',
-          500: '#f97316',
-          600: '#ea580c',
-          900: '#7c2d12',
+          50: "#fff7ed",
+          100: "#ffedd5",
+          200: "#fed7aa",
+          500: "#f97316",
+          600: "#ea580c",
+          900: "#7c2d12",
         },
       },
       borderRadius: {
@@ -105,7 +106,7 @@ const config = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
-} satisfies Config
+  plugins: [tailwindcssAnimate],
+} satisfies Config;
 
-export default config
+export default config;

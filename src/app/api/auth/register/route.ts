@@ -1,35 +1,63 @@
-import { NextRequest, NextResponse } from "next/server";
+import { hashPassword, setAuthCookie, signToken } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import {
-  hashPassword,
-  signToken,
-  setAuthCookie,
-} from "@/lib/auth";
+import { authLogger } from "@/lib/loggers";
+import { authLimiter, checkRateLimit } from "@/lib/rate-limit";
 import { registerSchema } from "@/lib/validations/auth";
+import { eq } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
 
 // ============================================================================
 // HANDLER
 // ============================================================================
 
 export async function POST(request: NextRequest) {
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0] ??
+    request.headers.get("x-real-ip") ??
+    "anonymous";
+  const rateLimitResponse = await checkRateLimit(authLimiter, ip);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      authLogger.warn(
+        { ip, reason: "invalid json body" },
+        "Registration request with invalid JSON",
+      );
+      return NextResponse.json(
+        { error: "Corps de requête invalide — JSON attendu." },
+        { status: 400 },
+      );
+    }
 
     // Valider le schéma
     const validation = registerSchema.safeParse(body);
     if (!validation.success) {
+      authLogger.warn(
+        {
+          ip,
+          reason: "invalid registration format",
+          errors: validation.error.flatten().fieldErrors,
+        },
+        "Registration attempt with invalid format",
+      );
       return NextResponse.json(
         {
           error: "Données invalides",
           details: validation.error.flatten().fieldErrors,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const { email, password, nom, telephone, role } = validation.data;
+
+    // Log tentative d'inscription (sans le mot de passe)
+    authLogger.info({ ip, email, nom, role }, "Registration attempt");
 
     // Vérifier que l'email n'existe pas
     const existingUser = await db
@@ -39,9 +67,13 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (existingUser.length > 0) {
+      authLogger.warn(
+        { ip, email, reason: "email already exists" },
+        "Registration failed",
+      );
       return NextResponse.json(
         { error: "Un utilisateur avec cet email existe déjà" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -67,9 +99,13 @@ export async function POST(request: NextRequest) {
       });
 
     if (!newUser[0]) {
+      authLogger.error(
+        { ip, email, reason: "user creation failed" },
+        "Registration failed",
+      );
       return NextResponse.json(
         { error: "Erreur lors de la création de l'utilisateur" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -88,17 +124,31 @@ export async function POST(request: NextRequest) {
         nom: newUser[0].nom,
         role: newUser[0].role,
       },
-      { status: 201 }
+      { status: 201 },
     );
 
     await setAuthCookie(token);
 
+    authLogger.info(
+      { ip, email, userId: newUser[0].id },
+      "Registration successful",
+    );
     return response;
   } catch (error) {
-    console.error("Register error:", error);
+    authLogger.error(
+      {
+        ip,
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack:
+          process.env.NODE_ENV === "development" && error instanceof Error
+            ? error.stack
+            : undefined,
+      },
+      "Registration error",
+    );
     return NextResponse.json(
       { error: "Une erreur interne est survenue" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

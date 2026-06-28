@@ -46,13 +46,23 @@ export interface AddressContact {
   facebook: string;
 }
 
+import type { ServiceTypeInput } from "@/lib/actions/onboarding";
+
 export interface RestaurantSettings {
   category: string;
   currency: string;
-  serviceTypes: string[]; // 'dine-in', 'takeout', 'delivery'
+  serviceTypes: ServiceTypeInput[]; // 'dine-in', 'takeout', 'delivery', etc.
   menuLanguage: string;
   taxRate: number;
   enableOnlineBooking: boolean;
+}
+
+export interface MenuItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
 }
 
 export interface RestaurantConfig {
@@ -62,4 +72,5 @@ export interface RestaurantConfig {
   exceptions: SpecialHourException[];
   socials: SocialLinks;
   settings: RestaurantSettings;
+  menu: MenuItem[];
 }

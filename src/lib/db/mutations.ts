@@ -1,5 +1,9 @@
 import { db } from "./index";
 import { eq, and, sql } from "drizzle-orm";
+import { invalidateRestaurantCache } from "@/lib/cache";
+import { sendNotification } from "@/lib/notifications";
+import { redis } from "@/lib/cache/redis";
+import { calculerCommissionCommande } from "./mutations-admin";
 import {
   users,
   restaurants,
@@ -181,15 +185,20 @@ export async function updateRestaurant(
     .set({ ...data, updatedAt: new Date() })
     .where(eq(restaurants.id, id))
     .returning();
+
+  await invalidateRestaurantCache(id);
   return restaurant;
 }
 
 /** Bascule en ligne / hors ligne */
 export async function toggleEnLigne(id: string, enLigne: boolean) {
-  return db
+  const result = await db
     .update(restaurants)
     .set({ enLigne, updatedAt: new Date() })
     .where(eq(restaurants.id, id));
+
+  await invalidateRestaurantCache(id);
+  return result;
 }
 
 // ============================================================================
@@ -210,6 +219,8 @@ export async function createCreneau(input: CreateCreneauInput) {
     .insert(creneauxHoraires)
     .values({ ...input, actif: input.actif ?? true })
     .returning();
+
+  await invalidateRestaurantCache(input.restaurantId);
   return creneau;
 }
 
@@ -228,11 +239,13 @@ export async function updateCreneau(
       )
     )
     .returning();
+
+  await invalidateRestaurantCache(restaurantId);
   return creneau;
 }
 
 export async function deleteCreneau(id: string, restaurantId: string) {
-  return db
+  const result = await db
     .delete(creneauxHoraires)
     .where(
       and(
@@ -240,6 +253,9 @@ export async function deleteCreneau(id: string, restaurantId: string) {
         eq(creneauxHoraires.restaurantId, restaurantId)
       )
     );
+
+  await invalidateRestaurantCache(restaurantId);
+  return result;
 }
 
 // ============================================================================
@@ -260,6 +276,8 @@ export async function createCategorie(input: CreateCategorieInput) {
     .insert(categories)
     .values({ ...input, ordre: input.ordre ?? 0 })
     .returning();
+
+  await invalidateRestaurantCache(input.restaurantId);
   return categorie;
 }
 
@@ -278,12 +296,14 @@ export async function updateCategorie(
       )
     )
     .returning();
+
+  await invalidateRestaurantCache(restaurantId);
   return categorie;
 }
 
 export async function deleteCategorie(id: string, restaurantId: string) {
   // Note: onDelete "restrict" sur plats → erreur si plats existent encore
-  return db
+  const result = await db
     .delete(categories)
     .where(
       and(
@@ -291,6 +311,9 @@ export async function deleteCategorie(id: string, restaurantId: string) {
         eq(categories.restaurantId, restaurantId)
       )
     );
+
+  await invalidateRestaurantCache(restaurantId);
+  return result;
 }
 
 /** Réordonne plusieurs catégories en une seule transaction */
@@ -298,7 +321,7 @@ export async function reordonnerCategories(
   restaurantId: string,
   ordres: { id: string; ordre: number }[]
 ) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     for (const { id, ordre } of ordres) {
       await tx
         .update(categories)
@@ -311,6 +334,9 @@ export async function reordonnerCategories(
         );
     }
   });
+
+  await invalidateRestaurantCache(restaurantId);
+  return result;
 }
 
 // ============================================================================
@@ -348,6 +374,8 @@ export async function createPlat(input: CreatePlatInput) {
       allergenes: input.allergenes ?? [],
     })
     .returning();
+
+  await invalidateRestaurantCache(input.restaurantId);
   return plat;
 }
 
@@ -366,6 +394,8 @@ export async function updatePlat(
       )
     )
     .returning();
+
+  await invalidateRestaurantCache(restaurantId);
   return plat;
 }
 
@@ -384,11 +414,13 @@ export async function toggleDisponibilitePlat(
       )
     )
     .returning();
+
+  await invalidateRestaurantCache(restaurantId);
   return plat;
 }
 
 export async function deletePlat(id: string, restaurantId: string) {
-  return db
+  const result = await db
     .delete(plats)
     .where(
       and(
@@ -396,6 +428,9 @@ export async function deletePlat(id: string, restaurantId: string) {
         eq(plats.restaurantId, restaurantId)
       )
     );
+
+  await invalidateRestaurantCache(restaurantId);
+  return result;
 }
 
 /** Réordonne plusieurs plats en une seule transaction */
@@ -403,7 +438,7 @@ export async function reordonnerPlats(
   restaurantId: string,
   ordres: { id: string; ordre: number }[]
 ) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     for (const { id, ordre } of ordres) {
       await tx
         .update(plats)
@@ -416,6 +451,9 @@ export async function reordonnerPlats(
         );
     }
   });
+
+  await invalidateRestaurantCache(restaurantId);
+  return result;
 }
 
 // ============================================================================
@@ -482,16 +520,37 @@ export async function createCommande(input: CreateCommandeInput) {
   }
 
   // Notification au restaurateur
-  await createNotificationUser({
-    userId: await getUserIdFromRestaurant(input.restaurantId),
+  const restaurateurUserId = await getUserIdFromRestaurant(input.restaurantId);
+  
+  // Notification via le service unifie (ne bloque pas si ca echoue)
+  sendNotification({
+    userId: restaurateurUserId,
+    restaurantId: input.restaurantId,
     type: "nouvelle_commande",
     titre: "Nouvelle commande !",
     message: `Commande ${numero} de ${input.nomClient} — ${formatPrix(input.total)}`,
     lienType: "commande",
     lienId: commande.id,
-  });
+    data: {
+      numero,
+      total: input.total,
+      modeCommande: input.modeCommande,
+    },
+   }).catch((err) => {
+     // Log mais ne bloque pas — la commande est creee meme si la notif echoue
+     console.error("[createCommande] Notification error:", err);
+   });
 
-  return commande;
+   // Notifier le client en temps réel via SSE (statut initial)
+   const queueKeyClient = `restauci:sse:client:queue:${commande.id}`;
+   await redis.rpush(queueKeyClient, JSON.stringify({
+     type: "statut",
+     data: { statut: "recue", commandeId: commande.id, timestamp: new Date().toISOString() },
+   }));
+   await redis.expire(queueKeyClient, 300); // expire dans 5 min
+
+   await invalidateRestaurantCache(input.restaurantId);
+   return commande;
 }
 
 export async function updateStatutCommande(
@@ -516,6 +575,44 @@ export async function updateStatutCommande(
       )
     )
     .returning();
+
+  // Notifier le restaurateur du changement de statut
+  sendNotification({
+    userId: await getUserIdFromRestaurant(restaurantId),
+    restaurantId,
+    type: statut === "annulee" ? "commande_annulee" : "commande_prete",
+    titre:
+      statut === "annulee"
+        ? "Commande annulée"
+        : statut === "en_preparation"
+          ? "Commande en préparation"
+          : statut === "prete"
+            ? "Commande prête"
+            : "Commande servie",
+    message: `La commande #${commande.numero} est maintenant ${statut.replace("_", " ")}.`,
+    lienType: "commande",
+    lienId: id,
+    data: { statut, numero: commande.numero, total: commande.total },
+   }).catch((err) => {
+     console.error("[updateStatutCommande] Notification error:", err);
+   });
+
+   // Notifier le client en temps réel via SSE (changement de statut)
+   const queueKeyClient = `restauci:sse:client:queue:${id}`;
+   await redis.rpush(queueKeyClient, JSON.stringify({
+     type: "statut",
+     data: { statut, commandeId: id, timestamp: new Date().toISOString() },
+   }));
+   await redis.expire(queueKeyClient, 300); // expire dans 5 min
+
+   await invalidateRestaurantCache(restaurantId);
+
+   // Calcul de la commission si la commande est servie
+   if (statut === "servie") {
+     await calculerCommissionCommande(id).catch((err) => {
+       console.error("[updateStatutCommande] Erreur calcul commission:", err);
+     });
+   }
 
   return commande;
 }

@@ -29,7 +29,7 @@ class Pixel {
     y: number,
     color: string,
     speed: number,
-    delay: number
+    delay: number,
   ) {
     this.width = canvas.width;
     this.height = canvas.height;
@@ -58,7 +58,12 @@ class Pixel {
   draw() {
     const centerOffset = this.maxSizeInteger * 0.5 - this.size * 0.5;
     this.ctx.fillStyle = this.color;
-    this.ctx.fillRect(this.x + centerOffset, this.y + centerOffset, this.size, this.size);
+    this.ctx.fillRect(
+      this.x + centerOffset,
+      this.y + centerOffset,
+      this.size,
+      this.size,
+    );
   }
 
   appear() {
@@ -183,11 +188,14 @@ export default function PixelCard({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pixelsRef = useRef<Pixel[]>([]);
   const animationRef = useRef<number | null>(null);
-  const timePreviousRef = useRef(performance.now());
+  const timePreviousRef = useRef<number>(0);
   const reducedMotion = useRef(false);
 
   useEffect(() => {
-    reducedMotion.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    timePreviousRef.current = performance.now();
+    reducedMotion.current = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
   }, []);
 
   const variantCfg = VARIANTS[variant] || VARIANTS.default;
@@ -212,10 +220,11 @@ export default function PixelCard({
 
     const colorsArray = finalColors.split(",");
     const pxs: Pixel[] = [];
-    const step = parseInt(finalGap as any, 10) || 5;
+    const step = parseInt(finalGap as unknown as string, 10) || 5;
     for (let x = 0; x < width; x += step) {
       for (let y = 0; y < height; y += step) {
-        const color = colorsArray[Math.floor(Math.random() * colorsArray.length)];
+        const color =
+          colorsArray[Math.floor(Math.random() * colorsArray.length)];
 
         const dx = x - width / 2;
         const dy = y - height / 2;
@@ -230,8 +239,8 @@ export default function PixelCard({
             y,
             color,
             getEffectiveSpeed(finalSpeed, reducedMotion.current),
-            delay
-          )
+            delay,
+          ),
         );
       }
     }
@@ -314,9 +323,7 @@ export default function PixelCard({
       style={style}
     >
       <canvas className="pixel-canvas" ref={canvasRef} />
-      <div className="pixel-card-inner">
-        {children}
-      </div>
+      <div className="pixel-card-inner">{children}</div>
     </div>
   );
 }

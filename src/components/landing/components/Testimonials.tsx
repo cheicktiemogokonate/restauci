@@ -1,11 +1,10 @@
-import React from "react";
 import { Quote, Star } from "lucide-react";
 import { testimonialData } from "../data";
 import BackgroundDecoration from "./BackgroundDecoration";
 import LogoLoop from "./LogoLoop";
 
 interface TestimonialCardProps {
-  testimonial: typeof testimonialData[0];
+  testimonial: (typeof testimonialData)[0];
 }
 
 function TestimonialCard({ testimonial }: TestimonialCardProps) {
@@ -23,7 +22,7 @@ function TestimonialCard({ testimonial }: TestimonialCardProps) {
         </div>
 
         <h4 className="font-display font-extrabold text-[13px] sm:text-[14px] text-brand-dark leading-snug mb-2">
-          "{testimonial.title}"
+          &quot;{testimonial.title}&quot;
         </h4>
 
         <p className="text-xs sm:text-sm text-brand-dark/75 leading-relaxed font-sans mb-6">
@@ -33,10 +32,12 @@ function TestimonialCard({ testimonial }: TestimonialCardProps) {
 
       {/* Author metadata */}
       <div className="flex items-center gap-3.5 pt-4 border-t border-gray-50 mt-auto">
-        <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-100">
-          <img 
-            src={testimonial.avatar} 
+        <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-gray-100 border border-gray-100">
+          <img
+            src={testimonial.avatar}
             alt={testimonial.name}
+            width={100}
+            height={100}
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
           />
@@ -46,7 +47,10 @@ function TestimonialCard({ testimonial }: TestimonialCardProps) {
             {testimonial.name}
           </h5>
           <p className="text-[10px] text-gray-400 font-semibold">
-            {testimonial.role} • <strong className="text-brand-green font-bold">{testimonial.restaurant}</strong>
+            {testimonial.role} •{" "}
+            <strong className="text-brand-green font-bold">
+              {testimonial.restaurant}
+            </strong>
           </p>
         </div>
       </div>
@@ -55,53 +59,66 @@ function TestimonialCard({ testimonial }: TestimonialCardProps) {
 }
 
 export default function Testimonials() {
-  const col1 = testimonialData.filter((_, idx) => idx % 3 === 0).map((t) => ({
-    node: <TestimonialCard testimonial={t} />,
-    title: t.name,
-  }));
+  const col1 = testimonialData
+    .filter((_, idx) => idx % 3 === 0)
+    .map((t) => ({
+      node: <TestimonialCard testimonial={t} />,
+      title: t.name,
+    }));
 
-  const col2 = testimonialData.filter((_, idx) => idx % 3 === 1).map((t) => ({
-    node: <TestimonialCard testimonial={t} />,
-    title: t.name,
-  }));
+  const col2 = testimonialData
+    .filter((_, idx) => idx % 3 === 1)
+    .map((t) => ({
+      node: <TestimonialCard testimonial={t} />,
+      title: t.name,
+    }));
 
-  const col3 = testimonialData.filter((_, idx) => idx % 3 === 2).map((t) => ({
-    node: <TestimonialCard testimonial={t} />,
-    title: t.name,
-  }));
+  const col3 = testimonialData
+    .filter((_, idx) => idx % 3 === 2)
+    .map((t) => ({
+      node: <TestimonialCard testimonial={t} />,
+      title: t.name,
+    }));
 
   return (
-    <section id="testimonials" className="py-24 bg-[#FAFBFA] relative overflow-hidden">
-      
+    <section
+      id="testimonials"
+      className="py-24 bg-[#FAFBFA] relative overflow-hidden"
+    >
       {/* Absolute decor grids & premium radial glows */}
-      <div 
+      <div
         className="absolute top-[10%] right-[-5%] w-[450px] h-[450px] pointer-events-none -z-10"
-        style={{ background: "radial-gradient(circle, rgba(34,197,94,0.08) 0%, transparent 70%)" }}
+        style={{
+          background:
+            "radial-gradient(circle, rgba(34,197,94,0.08) 0%, transparent 70%)",
+        }}
       />
-      <div 
-        className="absolute bottom-[5%] left-[-10%] w-[500px] h-[500px] pointer-events-none -z-10"
-        style={{ background: "radial-gradient(circle, rgba(34,197,94,0.06) 0%, transparent 70%)" }}
+      <div
+        className="absolute bottom-[5%] left-[-10%] w-125 h-125 pointer-events-none -z-10"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(34,197,94,0.06) 0%, transparent 70%)",
+        }}
       />
 
       {/* Food-themed line illustrations */}
-      <BackgroundDecoration 
-        src="/backgrounds/tomato-outline.svg" 
+      <BackgroundDecoration
+        src="/backgrounds/tomato-outline.svg"
         className="absolute top-[15%] left-[-120px] opacity-25"
         size={320}
       />
-      <BackgroundDecoration 
-        src="/backgrounds/herbs-outline.svg" 
-        className="absolute bottom-[20%] right-[-100px] opacity-30"
+      <BackgroundDecoration
+        src="/backgrounds/herbs-outline.svg"
+        className="absolute bottom-[20%] -right-25 opacity-30"
         size={350}
       />
-      <BackgroundDecoration 
-        src="/backgrounds/mushroom-outline.svg" 
+      <BackgroundDecoration
+        src="/backgrounds/mushroom-outline.svg"
         className="absolute bottom-[5%] left-[-90px] opacity-20"
         size={280}
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        
         {/* Caption Panel */}
         <div className="text-center max-w-3xl mx-auto mb-16">
           <span className="text-xs font-bold text-brand-green uppercase tracking-widest block mb-3 font-sans">
@@ -111,7 +128,9 @@ export default function Testimonials() {
             Ce que disent nos restaurateurs partenaires.
           </h2>
           <p className="text-sm sm:text-base text-brand-dark/70 font-sans leading-relaxed max-w-2xl mx-auto">
-            Découvrez les retours authentiques de chefs de cuisine, de gérants de fast-food et de propriétaires de boulangerie qui ont digitalisé leurs ventes avec RestauCI.
+            Découvrez les retours authentiques de chefs de cuisine, de gérants
+            de fast-food et de propriétaires de boulangerie qui ont digitalisé
+            leurs ventes avec RestauCI.
           </p>
         </div>
 
@@ -162,7 +181,6 @@ export default function Testimonials() {
             />
           </div>
         </div>
-
       </div>
     </section>
   );
