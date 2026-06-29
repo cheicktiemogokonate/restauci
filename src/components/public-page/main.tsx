@@ -13,6 +13,7 @@ import Navbar from "./navbar";
 import PracticalDetails from "./practical-details";
 import ReserveModal from "./reserve-modal";
 import ReviewsSection from "./reviews-section";
+import { PanierFlottant } from "../client-app/panier-flottant";
 
 interface RestaurantPageClientProps {
   restaurant: Restaurant;
@@ -84,6 +85,7 @@ export default function RestaurantPageClient({
           isOpen={isMenuOpen}
           onClose={handleCloseMenu}
           dishes={dishes}
+          restaurant={restaurant}
         />
 
         {/* Reserve Modal */}
@@ -94,6 +96,8 @@ export default function RestaurantPageClient({
           restaurant={restaurant}
         />
       </main>
+
+      <PanierFlottant />
 
       {/* Footer layout containing Interactive Local map & details */}
       <Footer restaurant={restaurant} />

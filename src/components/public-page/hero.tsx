@@ -123,12 +123,12 @@ export default function Hero({
             </button>
 
             {/* Reserve table white/beige button */}
-            <button
+            {/* <button
               onClick={onOpenReserve}
               className="bg-amber-50/95 text-gray-950 px-7 py-3.5 rounded-full text-xs sm:text-sm font-bold shadow-lg hover:bg-white active:scale-[0.98] transition duration-200 cursor-pointer"
             >
               Réserver une table
-            </button>
+            </button> */}
 
             {/* Circular phone action button */}
             <div className="relative">

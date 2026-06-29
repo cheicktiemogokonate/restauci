@@ -66,11 +66,11 @@ export default function PanierPage() {
     requireAuth(() => {
       router.push(
         `/panier/confirmer?mode=${modeCommande}` +
-          (adresse
-            ? `&adresse=${encodeURIComponent(JSON.stringify(adresse))}`
-            : "") +
-          (numeroTable ? `&table=${encodeURIComponent(numeroTable)}` : "") +
-          (noteClient ? `&note=${encodeURIComponent(noteClient)}` : ""),
+        (adresse
+          ? `&adresse=${encodeURIComponent(JSON.stringify(adresse))}`
+          : "") +
+        (numeroTable ? `&table=${encodeURIComponent(numeroTable)}` : "") +
+        (noteClient ? `&note=${encodeURIComponent(noteClient)}` : ""),
       );
     });
   };
@@ -116,11 +116,10 @@ export default function PanierPage() {
                   key={mode}
                   type="button"
                   onClick={() => setModeCommande(mode)}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                    modeCommande === mode
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${modeCommande === mode
                       ? "bg-green-700 text-white"
                       : "bg-gray-100 text-gray-600"
-                  }`}
+                    }`}
                 >
                   {mode === "livraison"
                     ? "Livraison"
@@ -240,7 +239,7 @@ export default function PanierPage() {
           <div className="border-t border-gray-100 pt-2 flex justify-between">
             <span className="text-sm font-bold text-gray-900">Total</span>
             <span className="text-base font-bold text-green-700">
-              {formatPrix(sousTotal)}
+              {formatPrix(total)}
             </span>
           </div>
         </div>

@@ -3,18 +3,22 @@ import { Coffee, Info, Leaf, Search, Utensils, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { Dish } from "../types";
+import { usePanierStore } from "@/lib/client-app/stores/panier-store";
+import { Restaurant } from "@/types";
 
 interface MenuModalProps {
   isOpen: boolean;
   onClose: () => void;
   dishes: Dish[];
+  restaurant: Restaurant;
 }
 
-export default function MenuModal({ isOpen, onClose, dishes }: MenuModalProps) {
+export default function MenuModal({ isOpen, onClose, dishes, restaurant }: MenuModalProps) {
   const [selectedCategory, setSelectedCategory] = useState<
     "all" | "plats" | "boissons" | "desserts"
   >("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const ajouterItem = usePanierStore((s) => s.ajouterItem);
 
   const filteredDishes = dishes.filter((dish) => {
     const matchesCategory =
@@ -161,6 +165,24 @@ export default function MenuModal({ isOpen, onClose, dishes }: MenuModalProps) {
                                 ? "Rafraîchissant"
                                 : "Gourmand"}
                           </span>
+                        </div>
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            onClick={() => {
+                              ajouterItem(
+                                { id: restaurant.id, nom: restaurant.nom, slug: restaurant.slug },
+                                {
+                                  platId: dish.id,
+                                  nom: dish.name,
+                                  prix: dish.price,
+                                  photoUrl: dish.image,
+                                }
+                              );
+                            }}
+                            className="bg-[#0b663b] text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-[#074728] transition active:scale-95"
+                          >
+                            Ajouter
+                          </button>
                         </div>
                       </div>
                     </div>
