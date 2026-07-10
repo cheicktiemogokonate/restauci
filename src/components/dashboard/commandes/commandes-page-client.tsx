@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useCommandesStream } from "@/hooks/use-commandes-stream";
 import type { Commande } from "@/types";
+import { SseEvent } from "@/types/commandes";
 import { parseISO, format } from "date-fns";
 import { SlidersHorizontal } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -72,9 +73,9 @@ export default function CommandesPageClient({
   const selectedDate = useMemo(() => parseISO(selectedDateStr), [selectedDateStr]);
 
   // Gestionnaire d'événements SSE — ajoute les nouvelles commandes en temps réel
-  const handleSseEvent = (type: string, data: unknown) => {
-    if (type === "nouvelle_commande" && data && typeof data === "object") {
-      const commande = data as Commande;
+  const handleSseEvent = (event: SseEvent) => {
+    if (event.type === "nouvelle_commande") {
+      const commande = event.data;
       playNotificationSound();
       setCommandes((prev) => {
         const exists = prev.some((c) => c.id === commande.id);

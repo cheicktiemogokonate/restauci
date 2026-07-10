@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { SseEvent } from "@/types/commandes";
 
 const MAX_RETRIES = 5;
 const BASE_RETRY_DELAY = 1000;
@@ -8,7 +9,7 @@ const MAX_RETRY_DELAY = 30000;
 
 export function useCommandesStream(
   restaurantId: string,
-  onEvent: (type: string, data: unknown) => void,
+  onEvent: (event: SseEvent) => void,
   onError?: (error: Event | string) => void,
   onOpen?: () => void,
   enabled: boolean = true
@@ -57,7 +58,7 @@ export function useCommandesStream(
       const handleNamedEvent = (type: string) => (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data as string);
-          onEventRef.current(type, data);
+          onEventRef.current({ type: type as SseEvent["type"], data });
         } catch {
           console.warn(`[SSE] Erreur parsing message pour ${type}`);
         }

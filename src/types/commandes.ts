@@ -1,4 +1,36 @@
-import type { StatutCommande, ModeCommande } from "@/lib/db/types";
+import type { StatutCommande, ModeCommande, Commande } from "@/lib/db/types";
+
+// Payload SSE pour un changement de statut (envoyé à l'app client)
+export interface SseStatutPayload {
+  statut: StatutCommande;
+  commandeId: string;
+  timestamp: string;
+}
+
+// Payload SSE pour une notification push (titre/message, ex: commande_prete)
+export interface SseNotificationPayload {
+  titre: string;
+  message: string;
+  lienId?: string;
+  lienType?: string;
+}
+
+// Map exhaustive des types d'événements SSE et leur payload.
+// Utilisée par le hook useCommandesStream et le consommateur.
+export interface SseEventMap {
+  nouvelle_commande: Commande;
+  statut: SseStatutPayload;
+  commande_prete: SseNotificationPayload;
+  commande_annulee: SseNotificationPayload;
+  nouveau_avis: SseNotificationPayload;
+  promotion: SseNotificationPayload;
+  systeme: SseNotificationPayload;
+  message: unknown;
+}
+
+// Type union de tous les événements SSE, discriminated par `type`.
+export type SseEvent =
+  { [K in keyof SseEventMap]: { type: K; data: SseEventMap[K] } }[keyof SseEventMap];
 
 // Labels affichés dans l'UI
 export const STATUT_LABELS: Record<StatutCommande, string> = {
