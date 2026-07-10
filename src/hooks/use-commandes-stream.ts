@@ -51,14 +51,12 @@ export function useCommandesStream(
         retryCountRef.current = 0;
         setRetryCount(0);
         onOpenRef.current?.();
-        console.log("[SSE] Connexion ouverte");
       });
 
       // Écouter tous les types d'événements nommés envoyés par le serveur
       const handleNamedEvent = (type: string) => (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data as string);
-          console.log(`[SSE] Événement reçu: ${type}`, data);
           onEventRef.current(type, data);
         } catch {
           console.warn(`[SSE] Erreur parsing message pour ${type}`);

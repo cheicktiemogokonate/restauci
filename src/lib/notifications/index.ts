@@ -2,10 +2,10 @@
 // Les modules web-push et expo-server-sdk sont charges dynamiquement
 // pour eviter les erreurs lors du build Next.js
 
-import { redis } from "@/lib/cache/redis";
 import { db } from "@/lib/db";
 import { notifications, pushSubscriptions } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
+import { pushSseEvent } from "@/lib/realtime/sse-push";
 import { and, eq } from "drizzle-orm";
 
 const log = createLogger("notifications");
@@ -88,24 +88,6 @@ export async function sendNotification(
       data: { type, lienId, lienType, ...data },
     }),
   ]);
-}
-
-// ——— SSE Helper ———————————————————
-
-async function pushSseEvent(
-  restaurantId: string,
-  type: string,
-  data: Record<string, unknown>,
-): Promise<void> {
-  const key = `restauci:sse:queue:${restaurantId}`;
-  const event = JSON.stringify({ type, data, timestamp: Date.now() });
-
-  try {
-    await redis.rpush(key, event);
-    await redis.expire(key, 300);
-  } catch (err) {
-    log.error({ err, restaurantId }, "Erreur push SSE event");
-  }
 }
 
 // ——— Web Push ———————————————————

@@ -2,7 +2,8 @@ import { db, pool } from "@/lib/db";
 import { commandes, plats, restaurants } from "@/lib/db/schema";
 import { commandeLogger } from "@/lib/loggers";
 import { checkRateLimit, commandeLimiter } from "@/lib/rate-limit";
-import { redis } from "@/lib/cache/redis";
+import { buildNouvelleCommandePayload } from "@/lib/realtime/sse-payloads";
+import { pushSseEvent } from "@/lib/realtime/sse-push";
 import { haversineDistance } from "@/lib/utils/geo";
 import { commandeSchema } from "@/lib/validations/commande";
 import { eq } from "drizzle-orm";
@@ -224,12 +225,11 @@ export async function POST(request: NextRequest) {
     // Pousser l'événement dans la file Redis SSE du restaurant
     // pour que le dashboard le reçoive en temps réel
     try {
-      const sseKey = `restauci:sse:queue:${data.restaurantId}`;
-      await redis.rpush(
-        sseKey,
-        JSON.stringify({ type: "nouvelle_commande", data: inserted, timestamp: Date.now() })
+      await pushSseEvent(
+        data.restaurantId,
+        "nouvelle_commande",
+        buildNouvelleCommandePayload(inserted),
       );
-      await redis.expire(sseKey, 300);
     } catch (redisErr) {
       commandeLogger.warn({ redisErr }, "Erreur push SSE Redis — commande créée quand même");
     }
