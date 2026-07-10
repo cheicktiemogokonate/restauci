@@ -21,27 +21,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { updateCommandeStatus } from "@/lib/actions/commandes";
-import type { Commande } from "@/types";
+import { STATUT_LABELS, STATUT_TRANSITIONS } from "@/types/commandes";
+import type { StatutCommande } from "@/lib/db/types";
 
-type Statut = Commande["statut"];
-
-// Basé sur le flux réel : recue -> en_preparation -> prete -> servie,
-// annulee possible à tout moment sauf une fois servie.
-const STATUS_FLOW: Record<Statut, Statut[]> = {
-  recue: ["en_preparation", "annulee"],
-  en_preparation: ["prete", "annulee"],
-  prete: ["servie", "annulee"],
-  servie: [],
-  annulee: [],
-};
-
-const STATUS_LABELS: Record<Statut, string> = {
-  recue: "Reçue",
-  en_preparation: "En préparation",
-  prete: "Prête",
-  servie: "Servie",
-  annulee: "Annulée",
-};
+type Statut = StatutCommande;
 
 interface OrderStatusMenuProps {
   commandeId: string;
@@ -55,7 +38,7 @@ export function OrderStatusMenu({
   const [isPending, startTransition] = useTransition();
   const [pendingStatus, setPendingStatus] = useState<Statut | null>(null);
 
-  const nextOptions = STATUS_FLOW[currentStatus] ?? [];
+  const nextOptions = STATUT_TRANSITIONS[currentStatus] ?? [];
   if (nextOptions.length === 0) return null;
 
   const handleSelect = (statut: Statut) => {
@@ -105,7 +88,7 @@ export function OrderStatusMenu({
                 option === "annulee" ? "text-red-600 focus:text-red-600" : ""
               }
             >
-              {STATUS_LABELS[option]}
+              {STATUT_LABELS[option]}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>

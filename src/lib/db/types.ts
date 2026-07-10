@@ -149,15 +149,6 @@ export type CommandesParJour = {
   total: number;
 };
 
-/** Statuts des commandes avec labels UI */
-export const STATUT_COMMANDE_LABELS: Record<StatutCommande, string> = {
-  recue:          "Reçue",
-  en_preparation: "En préparation",
-  prete:          "Prête",
-  servie:         "Servie",
-  annulee:        "Annulée",
-};
-
 export const STATUT_COMMANDE_COLORS: Record<StatutCommande, string> = {
   recue:          "bg-blue-100 text-blue-700",
   en_preparation: "bg-amber-100 text-amber-700",

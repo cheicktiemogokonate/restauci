@@ -1,4 +1,5 @@
 import type { Commande } from "@/types";
+import { STATUT_TRANSITIONS } from "@/types/commandes";
 import type { Order, OrderArticle } from "./order-card";
 import type { OrderStatus } from "./order-filters";
 
@@ -82,14 +83,5 @@ export function getOrderFilterCounts(commandes: Commande[]) {
 }
 
 export function getNextStatutOnCheckout(statut: Commande["statut"]): Commande["statut"] | null {
-  switch (statut) {
-    case "recue":
-      return "en_preparation";
-    case "en_preparation":
-      return "prete";
-    case "prete":
-      return "servie";
-    default:
-      return null;
-  }
+  return STATUT_TRANSITIONS[statut]?.[0] ?? null;
 }

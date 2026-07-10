@@ -24,10 +24,13 @@ export const MODE_LABELS: Record<ModeCommande, string> = {
   emporter:   "À emporter",
 };
 
+// Source unique de vérité pour les transitions de statut.
+// `prete` peut aller vers `annulee` : une commande prête mais non réclamée
+// peut légitimement être annulée (erreur client, doublon, etc.).
 export const STATUT_TRANSITIONS: Record<StatutCommande, StatutCommande[]> = {
   recue: ["en_preparation", "annulee"],
   en_preparation: ["prete", "annulee"],
-  prete: ["servie"],
+  prete: ["servie", "annulee"],
   servie: [],
   annulee: [],
 };
