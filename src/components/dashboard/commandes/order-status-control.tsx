@@ -1,4 +1,4 @@
-// components/dashboard/commandes/order-status-menu.tsx
+// components/dashboard/commandes/order-status-control.tsx
 "use client";
 
 import { useState, useTransition } from "react";
@@ -111,7 +111,7 @@ export function OrderStatusMenu({
               onClick={handleConfirmCancel}
               className="bg-red-600 hover:bg-red-700"
             >
-              Confirmer l'annulation
+              Confirmer l&apos;annulation
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -22,6 +22,7 @@ import { OrderFilters } from "./order-filters";
 // Son de notification double-bip via Web Audio API
 const playNotificationSound = () => {
   if (typeof window === "undefined") return;
+  if (document.visibilityState !== "visible") return;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;

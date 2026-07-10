@@ -212,7 +212,7 @@ export function commandeToDetailsView(
 
   return {
     id: commande.id,
-    displayId: commande.numero.startsWith("#") ? commande.numero : commande.numero,
+    displayId: commande.numero,
     rawStatus: commande.statut,
     status: mapStatutToDetailsStatus(commande.statut),
     date: formatDate(created),

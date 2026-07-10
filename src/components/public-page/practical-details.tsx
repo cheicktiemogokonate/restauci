@@ -8,12 +8,9 @@ import {
   MapPin,
   Phone,
   Mail,
-  Globe,
-  ExternalLink,
 } from "lucide-react";
 import { Restaurant } from "@/types";
 import { CreneauHoraire } from "@/lib/db/types";
-import Link from "next/link";
 
 interface PracticalDetailsProps {
   onOpenReserve: () => void;
@@ -50,7 +47,7 @@ export default function PracticalDetails({
                   <Clock className="h-5 w-5" />
                 </div>
                 <h3 className="font-bold text-gray-900 text-sm">
-                  Horaires d'ouverture
+Horaires d&apos;ouverture
                 </h3>
               </div>
 
@@ -156,34 +153,6 @@ export default function PracticalDetails({
                   <span className="truncate">{restaurant.email}</span>
                 </div>
               )}
-              {/* Lien vers la page du restaurant sur la plateforme */}
-              <div className="flex items-center gap-2.5">
-                <div className="h-5 w-5 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-                  <Globe className="h-3 w-3" />
-                </div>
-                <Link
-                  href={`/restaurant/${restaurant.slug}`}
-                  className="truncate text-[#0b663b] hover:underline font-semibold"
-                  target="_blank"
-                >
-                  {`${process.env.NEXT_PUBLIC_APP_URL ?? ""}/restaurant/${restaurant.slug}`}
-                </Link>
-              </div>
-              {/* {restaurant.siteWeb && (
-                <div className="flex items-center gap-2.5">
-                  <div className="h-5 w-5 rounded-md bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
-                    <ExternalLink className="h-3 w-3" />
-                  </div>
-                  <a
-                    href={restaurant.siteWeb}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="truncate hover:underline"
-                  >
-                    {restaurant.siteWeb}
-                  </a>
-                </div>
-              )} */}
             </div>
           </div>
 
