@@ -28,6 +28,7 @@ export interface TrackingStep {
 export interface CommandeDetailsView {
   id: string;
   displayId: string;
+  rawStatus: Commande["statut"];
   status: OrderDetailsHeaderProps["status"];
   date: string;
   time: string;
@@ -122,9 +123,7 @@ export function mapModeToOrderType(
 }
 
 function buildTracking(commande: Commande, created: Date): TrackingStep[] {
-  const date = formatShortDate(created);
-  const time = formatTime(created);
-  const { statut, modeCommande } = commande;
+  const { statut, modeCommande, updatedAt, heureAcceptee, heurePrete, heureServie } = commande;
   const isLivraison = modeCommande === "livraison";
 
   const labels = isLivraison
@@ -154,11 +153,27 @@ function buildTracking(commande: Commande, created: Date): TrackingStep[] {
       statut !== "annulee" && statut !== "servie" && index === currentIdx;
     const showDate = completed || current;
 
+    let stepDate = created;
+    if (index === 0) {
+      stepDate = created;
+    } else if (index === 1 && heureAcceptee) {
+      stepDate = new Date(heureAcceptee);
+    } else if (index === 2 && heurePrete) {
+      stepDate = new Date(heurePrete);
+    } else if (index === labels.length - 1 && heureServie) {
+      stepDate = new Date(heureServie);
+    } else if (current) {
+      stepDate = new Date(updatedAt);
+    } else if (completed && index === 3 && isLivraison && heurePrete) {
+      // Fallback pour "En livraison" si complété
+      stepDate = new Date(heurePrete);
+    }
+
     return {
       id: String(index + 1),
       label,
-      date: showDate ? date : "",
-      time: showDate ? time : "",
+      date: showDate ? formatShortDate(stepDate) : "",
+      time: showDate ? formatTime(stepDate) : "",
       completed,
       current,
     };
@@ -198,6 +213,7 @@ export function commandeToDetailsView(
   return {
     id: commande.id,
     displayId: commande.numero.startsWith("#") ? commande.numero : commande.numero,
+    rawStatus: commande.statut,
     status: mapStatutToDetailsStatus(commande.statut),
     date: formatDate(created),
     time: formatTime(created),

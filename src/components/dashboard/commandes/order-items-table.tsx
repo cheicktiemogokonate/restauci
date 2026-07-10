@@ -28,7 +28,7 @@ export function OrderItemsTable({
   total,
 }: OrderItemsTableProps) {
   return (
-    <Card className="border border-border/60 shadow-sm rounded-2xl overflow-hidden h-full flex flex-col">
+    <Card className="border border-border/60 shadow-sm rounded-2xl overflow-hidden flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between pb-2 pt-6">
         <CardTitle className="text-lg font-bold">Articles commandés</CardTitle>
         <Button

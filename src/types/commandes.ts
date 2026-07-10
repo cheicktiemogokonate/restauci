@@ -23,3 +23,11 @@ export const MODE_LABELS: Record<ModeCommande, string> = {
   livraison:  "Livraison",
   emporter:   "À emporter",
 };
+
+export const STATUT_TRANSITIONS: Record<StatutCommande, StatutCommande[]> = {
+  recue: ["en_preparation", "annulee"],
+  en_preparation: ["prete", "annulee"],
+  prete: ["servie"],
+  servie: [],
+  annulee: [],
+};

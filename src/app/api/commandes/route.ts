@@ -2,6 +2,7 @@ import { db, pool } from "@/lib/db";
 import { commandes, plats, restaurants } from "@/lib/db/schema";
 import { commandeLogger } from "@/lib/loggers";
 import { checkRateLimit, commandeLimiter } from "@/lib/rate-limit";
+import { redis } from "@/lib/cache/redis";
 import { haversineDistance } from "@/lib/utils/geo";
 import { commandeSchema } from "@/lib/validations/commande";
 import { eq } from "drizzle-orm";
@@ -218,7 +219,20 @@ export async function POST(request: NextRequest) {
         fraisLivraison,
         total,
       })
-      .returning({ id: commandes.id, numero: commandes.numero });
+      .returning();
+
+    // Pousser l'événement dans la file Redis SSE du restaurant
+    // pour que le dashboard le reçoive en temps réel
+    try {
+      const sseKey = `restauci:sse:queue:${data.restaurantId}`;
+      await redis.rpush(
+        sseKey,
+        JSON.stringify({ type: "nouvelle_commande", data: inserted, timestamp: Date.now() })
+      );
+      await redis.expire(sseKey, 300);
+    } catch (redisErr) {
+      commandeLogger.warn({ redisErr }, "Erreur push SSE Redis — commande créée quand même");
+    }
 
     const pgClient = await pool.connect();
     try {

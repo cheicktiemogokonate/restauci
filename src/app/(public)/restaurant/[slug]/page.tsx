@@ -93,9 +93,14 @@ export default async function RestaurantPage({
   );
 
   // Fetch opening hours for availability checking
-  const creneauxList = await db.query.creneauxHoraires.findMany({
-    where: (c, { eq }) => eq(c.restaurantId, restaurant.id),
-  });
+  let creneauxList: Awaited<ReturnType<typeof db.query.creneauxHoraires.findMany>> = [];
+  try {
+    creneauxList = await db.query.creneauxHoraires.findMany({
+      where: (c, { eq }) => eq(c.restaurantId, restaurant.id),
+    });
+  } catch (error) {
+    console.error("Failed to fetch creneauxHoraires:", error);
+  }
 
   // Filter plats based on availability (time/day)
   const availablePlats = platsList.filter((plat) => {
@@ -149,6 +154,7 @@ export default async function RestaurantPage({
         restaurant={restaurant}
         categoriesWithPlats={categoriesWithPlats}
         dishes={dishes}
+        creneauxList={JSON.parse(JSON.stringify(creneauxList))}
       />
     </>
   );

@@ -4,6 +4,7 @@
 import { Categorie, Plat, Restaurant } from "@/types";
 import { useState } from "react";
 import { Reservation } from "../types";
+import { CreneauHoraire } from "@/lib/db/types";
 import AboutUs from "./about-us";
 import Footer from "./footer";
 import GallerySection from "./gallery-section";
@@ -27,12 +28,14 @@ interface RestaurantPageClientProps {
     category: "plats" | "boissons" | "desserts";
     isPopular?: boolean;
   }[];
+  creneauxList: CreneauHoraire[];
 }
 
 export default function RestaurantPageClient({
   restaurant,
   categoriesWithPlats,
   dishes,
+  creneauxList,
 }: RestaurantPageClientProps) {
   // State for modal controls (these need to be client-side)
   const [isReserveOpen, setIsReserveOpen] = useState(false);
@@ -72,7 +75,7 @@ export default function RestaurantPageClient({
         <AboutUs restaurant={restaurant} />
 
         {/* Informations pratiques details cards */}
-        <PracticalDetails onOpenReserve={handleOpenReserve} />
+        <PracticalDetails onOpenReserve={handleOpenReserve} restaurant={restaurant} creneauxList={creneauxList} />
 
         {/* Gallery & Popular menu dishes */}
         <GallerySection onOpenMenu={handleOpenMenu} dishes={dishes} />

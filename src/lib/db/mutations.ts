@@ -549,6 +549,30 @@ export async function createCommande(input: CreateCommandeInput) {
    }));
    await redis.expire(queueKeyClient, 300); // expire dans 5 min
 
+   // Notifier le restaurateur en temps réel via SSE (nouvelle commande sur le dashboard)
+   const queueKeyRestaurant = `restauci:sse:queue:${input.restaurantId}`;
+   await redis.rpush(queueKeyRestaurant, JSON.stringify({
+     type: "nouvelle_commande",
+     data: {
+        id: commande.id,
+        numero: commande.numero,
+        statut: commande.statut,
+        total: commande.total,
+        fraisLivraison: commande.fraisLivraison,
+        sousTotal: commande.sousTotal,
+        items: input.items.map(item => ({
+          platId: item.platId,
+          nom: item.nom,
+          prix: item.prix,
+          quantite: item.quantite
+        })),
+        modeCommande: commande.modeCommande,
+        createdAt: commande.createdAt,
+     },
+     timestamp: new Date().toISOString()
+   }));
+   await redis.expire(queueKeyRestaurant, 300); // expire dans 5 min
+
    await invalidateRestaurantCache(input.restaurantId);
    return commande;
 }

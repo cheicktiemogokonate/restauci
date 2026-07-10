@@ -36,7 +36,7 @@ export function OrderTracking({ steps }: OrderTrackingProps) {
           {steps.map((step, index) => (
             <div key={step.id} className="flex gap-4 pb-8 last:pb-0">
               {/* Time Info */}
-              <div className="w-21.25 shrink-0 pt-0.5 text-left">
+              <div className="w-24 shrink-0 pt-0.5 text-left">
                 {(step.completed || step.current) && (
                   <p className="text-[12px] text-muted-foreground leading-tight">
                     {step.date}

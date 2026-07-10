@@ -5,16 +5,26 @@ import {
   Check,
   ChefHat,
   Clock,
-  CreditCard,
-  Smartphone,
+  MapPin,
+  Phone,
+  Mail,
+  Globe,
+  ExternalLink,
 } from "lucide-react";
+import { Restaurant } from "@/types";
+import { CreneauHoraire } from "@/lib/db/types";
+import Link from "next/link";
 
 interface PracticalDetailsProps {
   onOpenReserve: () => void;
+  restaurant: Restaurant;
+  creneauxList: CreneauHoraire[];
 }
 
 export default function PracticalDetails({
   onOpenReserve,
+  restaurant,
+  creneauxList,
 }: PracticalDetailsProps) {
   return (
     <section className="py-20 bg-gray-50/60 border-y border-gray-100/50">
@@ -40,25 +50,26 @@ export default function PracticalDetails({
                   <Clock className="h-5 w-5" />
                 </div>
                 <h3 className="font-bold text-gray-900 text-sm">
-                  Horaires d&apos;ouverture
+                  Horaires d'ouverture
                 </h3>
               </div>
 
               <div className="space-y-3.5 text-xs text-gray-600 font-medium">
-                <div className="flex justify-between items-center pb-2 border-b border-gray-50">
-                  <span className="text-gray-400">Lundi - Vendredi</span>
-                  <span className="font-bold text-gray-800">10:00 - 22:30</span>
-                </div>
-                <div className="flex justify-between items-center pb-2 border-b border-gray-50">
-                  <span className="text-gray-400">Samedi</span>
-                  <span className="font-bold text-gray-800 animate-pulse-slow">
-                    10:00 - 23:30
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Dimanche</span>
-                  <span className="font-bold text-gray-800">10:00 - 16:00</span>
-                </div>
+                {creneauxList && creneauxList.length > 0 ? (
+                  creneauxList.filter(c => c.actif).map((creneau, i) => (
+                    <div key={i} className="flex justify-between items-center pb-2 border-b border-gray-50 last:border-0">
+                      <span className="text-gray-400 capitalize">{creneau.nom} ({creneau.joursActifs.join(", ")})</span>
+                      <span className="font-bold text-gray-800">
+                        {creneau.heureOuverture.substring(0, 5)} - {creneau.heureFermeture.substring(0, 5)}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-50">
+                    <span className="text-gray-400">Tous les jours</span>
+                    <span className="font-bold text-gray-800">Voir avec le restaurant</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -80,79 +91,99 @@ export default function PracticalDetails({
             </div>
 
             <div className="space-y-3 text-xs text-gray-600 font-medium">
+              {restaurant.modesCommande?.includes("sur_place") && (
+                <div className="flex items-center gap-2.5">
+                  <div className="h-5 w-5 rounded-md bg-[#0b663b]/10 text-[#0b663b] flex items-center justify-center">
+                    <Check className="h-3 w-3 stroke-3" />
+                  </div>
+                  <span>Sur place (salle ou terrasse)</span>
+                </div>
+              )}
+              {restaurant.modesCommande?.includes("emporter") && (
+                <div className="flex items-center gap-2.5">
+                  <div className="h-5 w-5 rounded-md bg-[#0b663b]/10 text-[#0b663b] flex items-center justify-center">
+                    <Check className="h-3 w-3 stroke-3" />
+                  </div>
+                  <span>À emporter, service rapide</span>
+                </div>
+              )}
+              {restaurant.modesCommande?.includes("livraison") && (
+                <div className="flex items-center gap-2.5">
+                  <div className="h-5 w-5 rounded-md bg-[#0b663b]/10 text-[#0b663b] flex items-center justify-center">
+                    <Check className="h-3 w-3 stroke-3" />
+                  </div>
+                  <span>Livraison à domicile</span>
+                </div>
+              )}
               <div className="flex items-center gap-2.5">
                 <div className="h-5 w-5 rounded-md bg-[#0b663b]/10 text-[#0b663b] flex items-center justify-center">
                   <Check className="h-3 w-3 stroke-3" />
                 </div>
-                <span>Sur place (salle ou terrasse)</span>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="h-5 w-5 rounded-md bg-[#0b663b]/10 text-[#0b663b] flex items-center justify-center">
-                  <Check className="h-3 w-3 stroke-3" />
-                </div>
-                <span>À emporter, service rapide</span>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="h-5 w-5 rounded-md bg-[#0b663b]/10 text-[#0b663b] flex items-center justify-center">
-                  <Check className="h-3 w-3 stroke-3" />
-                </div>
-                <span>Livraison à domicile (Abidjan)</span>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="h-5 w-5 rounded-md bg-[#0b663b]/10 text-[#0b663b] flex items-center justify-center">
-                  <Check className="h-3 w-3 stroke-3" />
-                </div>
-                <span>Réservation de tables incluse</span>
+                <span>Réservation de tables</span>
               </div>
             </div>
           </div>
 
-          {/* Card 3: Modes de paiement */}
+          {/* Card 3: Contact & Infos */}
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-5">
               <div className="bg-[#0b663b]/10 text-[#0b663b] p-2.5 rounded-2xl">
-                <CreditCard className="h-5 w-5" />
+                <Phone className="h-5 w-5" />
               </div>
               <h3 className="font-bold text-gray-900 text-sm">
-                Modes de paiement
+                Contact & Accès
               </h3>
             </div>
 
             <div className="space-y-3 text-xs text-gray-600 font-medium">
-              <div className="flex items-center gap-2.5">
-                <div className="h-5 w-5 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                  <Check className="h-3 w-3" />
+              <div className="flex items-start gap-2.5">
+                <div className="h-5 w-5 mt-0.5 rounded-md bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+                  <MapPin className="h-3 w-3" />
                 </div>
-                <span>Espèces / Cash</span>
+                <span className="leading-relaxed">{restaurant.adresse}</span>
               </div>
               <div className="flex items-center gap-2.5">
-                <div className="h-5 w-5 rounded-md bg-[#0b663b]/10 text-[#0b663b] flex items-center justify-center">
-                  <CreditCard className="h-3 w-3" />
+                <div className="h-5 w-5 rounded-md bg-[#0b663b]/10 text-[#0b663b] flex items-center justify-center shrink-0">
+                  <Phone className="h-3 w-3" />
                 </div>
-                <span>Carte bancaire (Visa, Mastercard)</span>
+                <span>{restaurant.telephone}</span>
               </div>
+              {restaurant.email && (
+                <div className="flex items-center gap-2.5">
+                  <div className="h-5 w-5 rounded-md bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+                    <Mail className="h-3 w-3" />
+                  </div>
+                  <span className="truncate">{restaurant.email}</span>
+                </div>
+              )}
+              {/* Lien vers la page du restaurant sur la plateforme */}
               <div className="flex items-center gap-2.5">
-                <div className="h-5 w-5 rounded-md bg-orange-50 text-orange-600 flex items-center justify-center">
-                  <Smartphone className="h-3 w-3" />
+                <div className="h-5 w-5 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Globe className="h-3 w-3" />
                 </div>
-                <span className="flex items-center gap-1">
-                  Orange Money{" "}
-                  <span className="text-[9px] bg-orange-100 text-orange-800 font-bold px-1 py-0.5 rounded uppercase">
-                    OM
-                  </span>
-                </span>
+                <Link
+                  href={`/restaurant/${restaurant.slug}`}
+                  className="truncate text-[#0b663b] hover:underline font-semibold"
+                  target="_blank"
+                >
+                  {`${process.env.NEXT_PUBLIC_APP_URL ?? ""}/restaurant/${restaurant.slug}`}
+                </Link>
               </div>
-              <div className="flex items-center gap-2.5">
-                <div className="h-5 w-5 rounded-md bg-sky-50 text-sky-600 flex items-center justify-center">
-                  <Smartphone className="h-3 w-3" />
+              {/* {restaurant.siteWeb && (
+                <div className="flex items-center gap-2.5">
+                  <div className="h-5 w-5 rounded-md bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+                    <ExternalLink className="h-3 w-3" />
+                  </div>
+                  <a
+                    href={restaurant.siteWeb}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="truncate hover:underline"
+                  >
+                    {restaurant.siteWeb}
+                  </a>
                 </div>
-                <span className="flex items-center gap-1">
-                  Wave & Moov Money{" "}
-                  <span className="text-[9px] bg-sky-100 text-sky-800 font-bold px-1 py-0.5 rounded uppercase">
-                    Wave
-                  </span>
-                </span>
-              </div>
+              )} */}
             </div>
           </div>
 

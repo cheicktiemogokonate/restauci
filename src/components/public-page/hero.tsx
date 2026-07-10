@@ -19,10 +19,27 @@ export default function Hero({
   const [copied, setCopied] = useState(false);
   const [phoneVisible, setPhoneVisible] = useState(false);
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
+  const handleShare = async () => {
+    const url = window.location.href;
+    const shareData = {
+      title: restaurant.nom,
+      text: `Découvrez ${restaurant.nom} sur RestauCI !`,
+      url,
+    };
+
+    if (navigator.share && navigator.canShare?.(shareData)) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch {
+        // user cancelled or error – fall through to clipboard
+      }
+    }
+
+    // Fallback: copy to clipboard
+    await navigator.clipboard.writeText(url);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   const handleCall = () => {
@@ -127,7 +144,7 @@ export default function Hero({
               onClick={onOpenReserve}
               className="bg-amber-50/95 text-gray-950 px-7 py-3.5 rounded-full text-xs sm:text-sm font-bold shadow-lg hover:bg-white active:scale-[0.98] transition duration-200 cursor-pointer"
             >
-              Réserver une table
+              Réserver une table 
             </button> */}
 
             {/* Circular phone action button */}

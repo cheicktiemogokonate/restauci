@@ -32,7 +32,7 @@ export default function PracticalInfo({ restaurant }: PracticalInfoProps) {
             </div>
             <div>
               <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                Ouvert aujourd&apos;hui
+                Ouvert aujourd'hui
               </h4>
               <p className="text-sm font-bold text-gray-900 mt-1">
                 {restaurant.enLigne ? "En service" : "Fermé actuellement"}
