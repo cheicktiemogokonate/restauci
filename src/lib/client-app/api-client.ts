@@ -58,7 +58,7 @@ async function apiFetch<T>(
   return json ?? { success: false, error: "Réponse invalide du serveur" };
 }
 
-async function tryRefreshToken(): Promise<boolean> {
+export async function tryRefreshToken(): Promise<boolean> {
   const { refreshToken } = useAuthStore.getState();
   if (!refreshToken) return false;
 
