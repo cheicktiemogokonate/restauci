@@ -24,11 +24,6 @@ export type {
 
 // Types métier spécifiques à l'UI (non présents dans lib/db/types)
 
-export interface Coordonnees {
-  latitude: number;
-  longitude: number;
-}
-
 export interface PanierItem {
   platId: string;
   nom: string;
