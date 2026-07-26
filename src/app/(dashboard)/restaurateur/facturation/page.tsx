@@ -1,21 +1,27 @@
-import React from "react";
-import { getRestaurateurSession } from "@/lib/auth/get-restaurateur-session";
-import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
-import { 
-  subscriptionPlans,
-  subscriptionRequests, 
-  restaurants 
-} from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { RestaurateurSubscriptionButton } from "@/components/restaurateur/restaurateur-subscription-button";
 import { Badge } from "@/components/ui/badge";
-import { formatPrix } from "@/lib/utils/format";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { getRestaurateurSession } from "@/lib/auth/get-restaurateur-session";
+import { db } from "@/lib/db";
+import {
+  restaurants,
+  subscriptionPlans,
+  subscriptionRequests,
+} from "@/lib/db/schema";
 import { getEffectivePlan } from "@/lib/subscription-plans";
+import { formatPrix } from "@/lib/utils/format";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { RestaurateurSubscriptionButton } from "@/components/restaurateur/restaurateur-subscription-button";
+import { and, desc, eq } from "drizzle-orm";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Facturation et Abonnement | Adon",
@@ -23,7 +29,7 @@ export const metadata = {
 
 export default async function FacturationPage() {
   const { session } = await getRestaurateurSession();
-  
+
   if (!session || session.role !== "restaurateur") {
     redirect("/auth/login");
   }
@@ -48,9 +54,9 @@ export default async function FacturationPage() {
   const pendingRequest = await db.query.subscriptionRequests.findFirst({
     where: and(
       eq(subscriptionRequests.restaurantId, restaurantData.id),
-      eq(subscriptionRequests.statut, "en_attente")
+      eq(subscriptionRequests.statut, "en_attente"),
     ),
-    orderBy: desc(subscriptionRequests.createdAt)
+    orderBy: desc(subscriptionRequests.createdAt),
   });
 
   // 3. Catalogue des offres
@@ -60,11 +66,14 @@ export default async function FacturationPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 container mx-auto p-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Facturation & Abonnement</h1>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Facturation & Abonnement
+        </h1>
         <p className="text-muted-foreground">
-          Gérez votre formule d'abonnement et visualisez l'historique de vos factures.
+          Gérez votre formule d'abonnement et visualisez l'historique de vos
+          factures.
         </p>
       </div>
 
@@ -72,32 +81,42 @@ export default async function FacturationPage() {
         <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-semibold text-amber-900">Demande en cours de traitement</h3>
+            <h3 className="font-semibold text-amber-900">
+              Demande en cours de traitement
+            </h3>
             <p className="text-sm mt-1">
-              Vous avez demandé à souscrire à l'offre <span className="font-medium capitalize">{pendingRequest.planCode.replace('_', ' ')}</span>. 
-              Votre demande est en attente de validation. Une fois le règlement reçu, votre nouvelle période s'activera.
+              Vous avez demandé à souscrire à l'offre{" "}
+              <span className="font-medium capitalize">
+                {pendingRequest.planCode.replace("_", " ")}
+              </span>
+              . Votre demande est en attente de validation. Une fois le
+              règlement reçu, votre nouvelle période s'activera.
             </p>
           </div>
         </div>
       )}
 
       {!restaurantData.actif && !restaurantData.suspendu && (
-         <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-xl p-4 flex items-start gap-3">
-           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-           <div>
-             <h3 className="font-semibold text-blue-900">En attente d'activation</h3>
-             <p className="text-sm mt-1">
-               Votre restaurant est en cours de validation par notre équipe.
-             </p>
-           </div>
-         </div>
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-blue-900">
+              En attente d'activation
+            </h3>
+            <p className="text-sm mt-1">
+              Votre restaurant est en cours de validation par notre équipe.
+            </p>
+          </div>
+        </div>
       )}
 
       {/* Offre actuelle */}
       <Card>
         <CardHeader>
           <CardTitle>Mon offre actuelle</CardTitle>
-          <CardDescription>Les détails de votre abonnement en cours.</CardDescription>
+          <CardDescription>
+            Les détails de votre abonnement en cours.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
@@ -105,25 +124,45 @@ export default async function FacturationPage() {
               {effectivePlan.plan?.nom || "Non défini"}
             </div>
             {effectivePlan.period?.statut === "active" && (
-              <Badge variant="default" className="bg-emerald-500 hover:bg-emerald-600">
+              <Badge
+                variant="default"
+                className="bg-emerald-500 hover:bg-emerald-600"
+              >
                 <CheckCircle2 className="w-3 h-3 mr-1" /> Actif
               </Badge>
             )}
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             <div className="space-y-1">
-              <span className="text-sm text-muted-foreground">Taux de commission appliqué</span>
-              <p className="text-lg font-medium">{((effectivePlan.period?.tauxCommissionBpsFige ?? effectivePlan.plan?.tauxCommissionBps ?? 0) / 100).toFixed(1)}%</p>
+              <span className="text-sm text-muted-foreground">
+                Taux de commission appliqué
+              </span>
+              <p className="text-lg font-medium">
+                {(
+                  (effectivePlan.period?.tauxCommissionBpsFige ??
+                    effectivePlan.plan?.tauxCommissionBps ??
+                    0) / 100
+                ).toFixed(1)}
+                %
+              </p>
             </div>
             {effectivePlan.period?.dateEcheance ? (
               <div className="space-y-1">
-                <span className="text-sm text-muted-foreground">Prochaine échéance</span>
-                <p className="text-lg font-medium">{format(effectivePlan.period.dateEcheance, 'dd MMMM yyyy', { locale: fr })}</p>
+                <span className="text-sm text-muted-foreground">
+                  Prochaine échéance
+                </span>
+                <p className="text-lg font-medium">
+                  {format(effectivePlan.period.dateEcheance, "dd MMMM yyyy", {
+                    locale: fr,
+                  })}
+                </p>
               </div>
             ) : (
               <div className="space-y-1">
-                <span className="text-sm text-muted-foreground">Prochaine échéance</span>
+                <span className="text-sm text-muted-foreground">
+                  Prochaine échéance
+                </span>
                 <p className="text-lg font-medium">Sans engagement</p>
               </div>
             )}
@@ -140,42 +179,63 @@ export default async function FacturationPage() {
             const isPending = pendingRequest?.planCode === plan.code;
 
             return (
-              <Card key={plan.id} className={`flex flex-col relative ${isCurrent ? 'border-primary ring-1 ring-primary/20' : ''}`}>
+              <Card
+                key={plan.id}
+                className={`flex flex-col relative ${isCurrent ? "border-primary ring-1 ring-primary/20" : ""}`}
+              >
                 {isCurrent && (
-                  <div className="absolute top-0 right-0 transform translate-x-2 -translate-y-2">
+                  <div className="absolute top-3 right-3 transform translate-x-2 -translate-y-2">
                     <Badge className="bg-primary text-primary-foreground shadow-sm">
                       Offre Actuelle
                     </Badge>
                   </div>
                 )}
                 <CardHeader>
-                  <CardTitle className="capitalize text-xl">{plan.nom}</CardTitle>
-                  <CardDescription className="min-h-[40px]">{plan.description}</CardDescription>
+                  <CardTitle className="capitalize text-xl">
+                    {plan.nom}
+                  </CardTitle>
+                  <CardDescription className="min-h-10">
+                    {plan.description}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 space-y-4">
                   <div className="text-3xl font-bold">
                     {formatPrix(plan.prixAnnuelFcfa)}
-                    <span className="text-sm font-normal text-muted-foreground"> / an</span>
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {" "}
+                      / an
+                    </span>
                   </div>
-                  
+
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      <span>Commission de {(plan.tauxCommissionBps / 100).toFixed(1)}%</span>
+                      <span>
+                        Commission de{" "}
+                        {(plan.tauxCommissionBps / 100).toFixed(1)}%
+                      </span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      <span>{plan.maxPlats === null ? 'Plats illimités' : `Jusqu'à ${plan.maxPlats} plats`}</span>
+                      <span>
+                        {plan.maxPlats === null
+                          ? "Plats illimités"
+                          : `Jusqu'à ${plan.maxPlats} plats`}
+                      </span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      <span>{plan.maxCategories === null ? 'Catégories illimitées' : `Jusqu'à ${plan.maxCategories} catégories`}</span>
+                      <span>
+                        {plan.maxCategories === null
+                          ? "Catégories illimitées"
+                          : `Jusqu'à ${plan.maxCategories} catégories`}
+                      </span>
                     </li>
                   </ul>
                 </CardContent>
                 <CardFooter>
-                  <RestaurateurSubscriptionButton 
-                    planCode={plan.code} 
+                  <RestaurateurSubscriptionButton
+                    planCode={plan.code}
                     isCurrent={isCurrent}
                     isPending={isPending}
                     hasAnyPending={!!pendingRequest}
