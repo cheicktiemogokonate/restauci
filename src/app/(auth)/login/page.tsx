@@ -4,7 +4,7 @@ import { LoginVisual } from "@/components/auth/login-visual-panel";
 import { RestaurateurLoginForm } from "@/components/auth/restaurateur-login-form";
 
 export const metadata: Metadata = {
-  title: "Connexion — RestauCI",
+  title: "Connexion restaurateur",
 };
 
 export default function LoginPage() {

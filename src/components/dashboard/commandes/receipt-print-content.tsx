@@ -22,8 +22,6 @@ export function ReceiptPrintContent({ order }: ReceiptPrintContentProps) {
     order.items.flatMap((item) => (item.notes ? [item.notes] : [])).join(" ") ||
     "Aucune note";
 
-  const qrUrl = `https://${order.delivery.restaurantName.replace(/\s+/g, "").toLowerCase()}.ci`;
-
   return (
     <>
       <style>{`

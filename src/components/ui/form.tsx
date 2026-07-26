@@ -18,10 +18,11 @@ function Form<TFormValues extends FieldValues>(
     form: UseFormReturn<TFormValues>
   }
 ) {
-  const { className, form, ...rest } = props
+  const { className, form, ...rest } = props;
+  void form;
   return (
     <form noValidate className={cn("space-y-4", className)} {...rest} />
-  )
+  );
 }
 
 function FormField<

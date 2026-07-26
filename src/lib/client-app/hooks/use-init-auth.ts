@@ -10,12 +10,12 @@ import { tryRefreshToken } from "../api-client";
  * au chargement de l'app pour restaurer la session.
  */
 export function useInitAuth() {
-  const refreshToken = useAuthStore((s) => s.refreshToken);
-  const [isReady, setIsReady] = useState(() => !refreshToken);
+  const shouldRestoreSession = useAuthStore((s) => s.isAuthenticated);
+  const [isReady, setIsReady] = useState(() => !shouldRestoreSession);
   const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
-    if (!refreshToken) {
+    if (!shouldRestoreSession) {
       return;
     }
 
@@ -28,7 +28,7 @@ export function useInitAuth() {
     };
 
     refreshSession();
-  }, [refreshToken, logout]);
+  }, [shouldRestoreSession, logout]);
 
   return { isReady };
 }

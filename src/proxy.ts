@@ -7,7 +7,27 @@ import { NextResponse, type NextRequest } from "next/server";
 const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET);
 
 // Routes publiques (pas d'authentification requise)
-const ROUTES_PUBLIQUES = ["/", "/login", "/register", "/restaurant/*", "/client/*"];
+const ROUTES_PUBLIQUES = [
+  "/",
+  "/login",
+  "/register",
+  "/restaurant/*",
+  "/client/*",
+  // L'espace consommateur utilise sa propre authentification Bearer.
+  // Ces pages doivent donc pouvoir charger avant que le garde client-side
+  // vérifie le jeton stocké par l'application.
+  "/panier",
+  "/panier/*",
+  "/commandes",
+  "/commandes/*",
+  "/profil",
+  "/conditions-generales",
+  "/confidentialite",
+  "/cookies",
+  "/mentions-legales",
+  "/robots.txt",
+  "/sitemap.xml",
+];
 const API_PUBLIQUES = [
   "/api/auth/login",
   "/api/auth/register",

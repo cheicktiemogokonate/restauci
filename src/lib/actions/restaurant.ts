@@ -1,13 +1,62 @@
 "use server";
 
 import { getRestaurateurSession } from "@/lib/auth/get-restaurateur-session";
-import { updateRestaurant } from "@/lib/db/mutations";
+import {
+  createCreneau,
+  deleteCreneau,
+  updateCreneau,
+  updateRestaurant,
+} from "@/lib/db/mutations";
 import { createLogger } from "@/lib/logger";
 import { restaurantUpdateSchema } from "@/lib/validations/restaurant";
 import { revalidatePath } from "next/cache";
 import { invalidateRestaurantCache } from "@/lib/cache";
+import { geocoder } from "@/lib/geo";
+import { z } from "zod";
 
 const log = createLogger("actions-restaurant");
+
+const openingHoursSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    nom: z.string().trim().min(2, "Donnez un nom à ce créneau.").max(255),
+    heureOuverture: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Heure d'ouverture invalide."),
+    heureFermeture: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Heure de fermeture invalide."),
+    joursActifs: z.array(z.enum(["lun", "mar", "mer", "jeu", "ven", "sam", "dim"])).min(1, "Choisissez au moins un jour."),
+    actif: z.boolean(),
+  });
+
+export type OpeningHoursInput = z.infer<typeof openingHoursSchema>;
+
+const restaurantGeocodingSchema = z.object({
+  adresse: z.string().trim().min(3, "Saisissez au moins 3 caractères d'adresse.").max(500),
+  ville: z.string().trim().max(120).optional(),
+  pays: z.string().trim().max(120).optional(),
+});
+
+export async function geocodeRestaurantAddressAction(input: {
+  adresse: string;
+  ville?: string;
+  pays?: string;
+}) {
+  await getRestaurateurSession();
+  const parsed = restaurantGeocodingSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Adresse invalide." };
+  }
+
+  const query = [parsed.data.adresse, parsed.data.ville, parsed.data.pays]
+    .filter(Boolean)
+    .join(", ");
+
+  const result = await geocoder(query);
+  if (!result) {
+    return { error: "Adresse introuvable. Ajustez-la ou placez le marqueur sur la carte." };
+  }
+
+  return { success: true, result };
+}
 
 export async function updateRestaurantAction(
   _: unknown,
@@ -51,8 +100,12 @@ export async function updateRestaurantAction(
     }
   }
 
-  raw.accepteCommandes = formData.get("accepteCommandes") === "on";
-  raw.enLigne = formData.get("enLigne") === "on";
+  if (formData.has("accepteCommandes")) {
+    raw.accepteCommandes = formData.get("accepteCommandes") === "on";
+  }
+  if (formData.has("enLigne")) {
+    raw.enLigne = formData.get("enLigne") === "on";
+  }
 
   const parsed = restaurantUpdateSchema.safeParse(raw);
 
@@ -75,4 +128,119 @@ export async function updateRestaurantAction(
   revalidatePath("/restaurateur");
 
   return { success: true };
+}
+
+export async function setRestaurantOnlineAction(enLigne: boolean) {
+  const { restaurant } = await getRestaurateurSession();
+
+  if (typeof enLigne !== "boolean") {
+    return { error: "État du restaurant invalide." };
+  }
+
+  try {
+    await updateRestaurant(restaurant.id, {
+      enLigne,
+      // Un restaurant hors ligne ne doit jamais recevoir de commande.
+      // Le retour en ligne restaure un service immédiatement utilisable.
+      accepteCommandes: enLigne,
+    });
+    await invalidateRestaurantCache(restaurant.id, restaurant.slug);
+  } catch (error) {
+    log.error(
+      { error, restaurantId: restaurant.id, enLigne },
+      "setRestaurantOnlineAction error",
+    );
+    return { error: "Impossible de modifier l'état du service." };
+  }
+
+  revalidatePath("/restaurateur/profil");
+  revalidatePath("/restaurateur");
+  return { success: true, enLigne, accepteCommandes: enLigne };
+}
+
+export async function setRestaurantOrderAcceptanceAction(
+  accepteCommandes: boolean,
+) {
+  const { restaurant } = await getRestaurateurSession();
+
+  if (typeof accepteCommandes !== "boolean") {
+    return { error: "État des commandes invalide." };
+  }
+  if (!restaurant.enLigne && accepteCommandes) {
+    return { error: "Remettez le restaurant en ligne avant d'accepter des commandes." };
+  }
+
+  try {
+    await updateRestaurant(restaurant.id, { accepteCommandes });
+    await invalidateRestaurantCache(restaurant.id, restaurant.slug);
+  } catch (error) {
+    log.error(
+      { error, restaurantId: restaurant.id, accepteCommandes },
+      "setRestaurantOrderAcceptanceAction error",
+    );
+    return { error: "Impossible de modifier l'acceptation des commandes." };
+  }
+
+  revalidatePath("/restaurateur/profil");
+  revalidatePath("/restaurateur");
+  return { success: true, accepteCommandes };
+}
+
+export async function saveOpeningHoursAction(input: OpeningHoursInput) {
+  const { restaurant } = await getRestaurateurSession();
+  const parsed = openingHoursSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Créneau invalide." };
+  }
+
+  try {
+    const { id, ...data } = parsed.data;
+    const creneau = id
+      ? await updateCreneau(id, restaurant.id, data)
+      : await createCreneau({ restaurantId: restaurant.id, ...data });
+
+    if (!creneau) return { error: "Créneau introuvable." };
+
+    await invalidateRestaurantCache(restaurant.id, restaurant.slug);
+    revalidatePath("/restaurateur/profil");
+    return { success: true, creneau };
+  } catch (error) {
+    log.error({ error, restaurantId: restaurant.id }, "saveOpeningHoursAction error");
+    return { error: "Impossible d'enregistrer ce créneau." };
+  }
+}
+
+export async function toggleOpeningHoursAction(id: string, actif: boolean) {
+  const { restaurant } = await getRestaurateurSession();
+  if (!id || typeof actif !== "boolean") return { error: "État du créneau invalide." };
+
+  try {
+    const creneau = await updateCreneau(id, restaurant.id, { actif });
+    if (!creneau) return { error: "Créneau introuvable." };
+
+    await invalidateRestaurantCache(restaurant.id, restaurant.slug);
+    revalidatePath("/restaurateur/profil");
+    return { success: true };
+  } catch (error) {
+    log.error({ error, restaurantId: restaurant.id, creneauId: id }, "toggleOpeningHoursAction error");
+    return { error: "Impossible de modifier ce créneau." };
+  }
+}
+
+export async function deleteOpeningHoursAction(id: string) {
+  const { restaurant } = await getRestaurateurSession();
+  if (!id) return { error: "Créneau introuvable." };
+
+  try {
+    const deletedCreneaux = await deleteCreneau(id, restaurant.id);
+    if (deletedCreneaux.length === 0) return { error: "Créneau introuvable." };
+
+    await invalidateRestaurantCache(restaurant.id, restaurant.slug);
+    revalidatePath("/restaurateur/profil");
+    return { success: true };
+  } catch (error) {
+    log.error({ error, restaurantId: restaurant.id, creneauId: id }, "deleteOpeningHoursAction error");
+    return { error: "Impossible de supprimer ce créneau." };
+  }
 }

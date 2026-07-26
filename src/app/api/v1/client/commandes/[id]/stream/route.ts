@@ -1,10 +1,7 @@
+import { getClientSession } from "@/lib/api/auth-client";
 import { apiResponse } from "@/lib/api/response";
-import { verifyToken } from "@/lib/auth";
-import { redis } from "@/lib/cache/redis";
 import { db } from "@/lib/db";
-import { commandes } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
-import { and, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 
 const log = createLogger("v1-client-commande-stream");
@@ -16,152 +13,108 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const routeParams = await params;
+  const { session, error } = await getClientSession(request);
+  if (error) return error;
 
-  // Extract token from Authorization header or query param
-  const authHeader = request.headers.get("authorization");
-  const { searchParams } = new URL(request.url);
-  const tokenFromQuery = searchParams.get("token");
+  const { id } = await params;
+  const clientId = (await session).clientId;
+  const readCommande = () =>
+    db.query.commandes.findFirst({
+      where: (commande, { and, eq }) =>
+        and(eq(commande.id, id), eq(commande.clientId, clientId)),
+      columns: { id: true, statut: true, updatedAt: true },
+    });
 
-  let token = null;
-  if (authHeader?.startsWith("Bearer ")) {
-    token = authHeader.slice(7);
-  } else if (tokenFromQuery) {
-    token = tokenFromQuery;
-  }
+  const commande = await readCommande();
+  if (!commande) return apiResponse.notFound("Commande");
 
-  if (!token) {
-    return apiResponse.error(
-      "Token d'authentification manquant",
-      "UNAUTHORIZED",
-      { status: 401 },
-    );
-  }
+  const encoder = new TextEncoder();
+  let isClosed = false;
+  let lastVersion = commande.updatedAt.toISOString();
 
-  try {
-    // Verify token
-    const payload = await verifyToken(token);
-    if (!payload?.clientId || payload.type !== "client") {
-      return apiResponse.error("Token invalide", "UNAUTHORIZED", {
-        status: 401,
-      });
-    }
+  const stream = new ReadableStream({
+    start(controller) {
+      const close = () => {
+        if (isClosed) return;
+        isClosed = true;
+        controller.close();
+      };
+      const send = (event: string, data: unknown) => {
+        if (isClosed) return;
+        try {
+          controller.enqueue(
+            encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+          );
+        } catch {
+          isClosed = true;
+        }
+      };
 
-    const clientId = payload.clientId as string;
+      send("statut", { statut: commande.statut, commandeId: commande.id });
+      if (commande.statut === "servie" || commande.statut === "annulee") {
+        send("fin", { message: "Commande terminée" });
+        close();
+        return;
+      }
 
-    // Vérifier que la commande appartient au client
-    const [commande] = await db
-      .select({ id: commandes.id, statut: commandes.statut })
-      .from(commandes)
-      .where(
-        and(eq(commandes.id, routeParams.id), eq(commandes.clientId, clientId)),
-      )
-      .limit(1);
-
-    if (!commande) {
-      return apiResponse.notFound("Commande");
-    }
-
-    // Si la commande est terminée → pas de stream
-    if (["servie", "annulee"].includes(commande.statut)) {
-      return apiResponse.success({ message: "Commande terminée" });
-    }
-
-    const encoder = new TextEncoder();
-    let isClosed = false;
-    const queueKey = `restauci:sse:client:queue:${routeParams.id}`;
-
-    const stream = new ReadableStream({
-      async start(controller) {
-        const send = (event: string, data: unknown) => {
-          if (isClosed) return;
-          try {
-            controller.enqueue(
-              encoder.encode(
-                `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
-              ),
-            );
-          } catch {
-            isClosed = true;
-          }
-        };
-
-        // Envoyer le statut actuel immédiatement
-        send("statut", { statut: commande.statut, commandeId: commande.id });
-
-        // Ping toutes les 30s
-        const pingInterval = setInterval(() => {
-          send("ping", { timestamp: Date.now() });
-        }, 30_000);
-
-        // Poll Redis pour les mises à jour de statut
-        const pollInterval = setInterval(async () => {
-          if (isClosed) {
-            clearInterval(pollInterval);
-            return;
-          }
-          try {
-            const event = await redis.lpop<string>(queueKey);
-            if (event) {
-              const parsed = JSON.parse(event);
-              send(parsed.type, parsed.data);
-
-              // Fermer si la commande est terminée
-              if (
-                parsed.type === "statut" &&
-                ["servie", "annulee"].includes(parsed.data?.statut)
-              ) {
-                send("fin", { message: "Commande terminée" });
-                clearInterval(pollInterval);
-                clearInterval(pingInterval);
-                controller.close();
-                isClosed = true;
-              }
-            }
-          } catch (pollErr) {
-            log.error(
-              { err: pollErr, commandeId: routeParams.id, clientId },
-              "Erreur de poll Redis SSE commande",
-            );
-          }
-        }, 1500);
-
-        // Timeout après 5 min
-        const timeout = setTimeout(
-          () => {
+      const pingInterval = setInterval(
+        () => send("ping", { timestamp: Date.now() }),
+        25_000,
+      );
+      const pollInterval = setInterval(async () => {
+        if (isClosed) return;
+        try {
+          const current = await readCommande();
+          if (!current) {
+            send("fin", { message: "Commande introuvable" });
             clearInterval(pingInterval);
             clearInterval(pollInterval);
-            if (!isClosed) {
-              send("close", { reconnect: true });
-              controller.close();
-              isClosed = true;
-            }
-          },
-          5 * 60 * 1000,
-        );
+            close();
+            return;
+          }
+          const version = current.updatedAt.toISOString();
+          if (version !== lastVersion) {
+            lastVersion = version;
+            send("statut", {
+              statut: current.statut,
+              commandeId: current.id,
+            });
+          }
+          if (current.statut === "servie" || current.statut === "annulee") {
+            send("fin", { message: "Commande terminée" });
+            clearInterval(pingInterval);
+            clearInterval(pollInterval);
+            close();
+          }
+        } catch (err) {
+          log.error(
+            { err, commandeId: id, clientId },
+            "Erreur de lecture du suivi commande",
+          );
+        }
+      }, 2_000);
+      const timeout = setTimeout(() => {
+        clearInterval(pingInterval);
+        clearInterval(pollInterval);
+        send("close", { reconnect: true });
+        close();
+      }, 5 * 60 * 1_000);
 
-        request.signal.addEventListener("abort", () => {
-          isClosed = true;
-          clearInterval(pingInterval);
-          clearInterval(pollInterval);
-          clearTimeout(timeout);
-        });
-      },
-    });
+      request.signal.addEventListener("abort", () => {
+        isClosed = true;
+        clearInterval(pingInterval);
+        clearInterval(pollInterval);
+        clearTimeout(timeout);
+      });
+    },
+  });
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    });
-  } catch (err) {
-    log.error(
-      { err, commandeId: routeParams.id },
-      "Erreur initialisation stream SSE commande",
-    );
-    return apiResponse.internalError();
-  }
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

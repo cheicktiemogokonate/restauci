@@ -1,4 +1,5 @@
 import { Check, Info } from "lucide-react";
+import Image from "next/image";
 import type { CategorieOption, PlatWizardData } from "./types";
 
 interface StepApercuProps {
@@ -21,11 +22,13 @@ export default function StepApercu({ formData, categories }: StepApercuProps) {
       <div className="bg-linear-to-r from-[#036B3A]/10 to-[#036B3A]/5 border border-[#036B3A]/20 rounded-xl p-6">
         <div className="flex gap-5">
           {formData.image ? (
-            <img
+            <Image
               src={formData.image}
               alt={formData.nom}
               referrerPolicy="no-referrer"
               className="w-24 h-24 rounded-xl object-cover shrink-0"
+              width={96}
+              height={96}
             />
           ) : (
             <div className="w-24 h-24 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">

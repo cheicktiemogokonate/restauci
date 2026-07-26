@@ -1,9 +1,11 @@
 import { getCurrentUser } from "@/lib/auth";
-import { db, pool } from "@/lib/db";
+import { db } from "@/lib/db";
+import { updateStatutCommande } from "@/lib/db/mutations";
 import { getMyRestaurant } from "@/lib/db/queries";
 import { commandes } from "@/lib/db/schema";
 import { commandeLogger } from "@/lib/loggers";
 import { commandeStatutSchema } from "@/lib/validations/commande";
+import { canRestaurateurSetCommandeStatus } from "@/types/commandes";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -112,33 +114,59 @@ export async function PATCH(
       );
     }
 
-    const [updatedCommande] = await db
-      .update(commandes)
-      .set({ statut: validation.data.statut, updatedAt: new Date() })
-      .where(eq(commandes.id, commandeId))
-      .returning();
-
-    const pgClient = await pool.connect();
-    try {
-      await pgClient.query("SELECT pg_notify($1, $2)", [
-        "nouvelle_commande",
-        JSON.stringify({ restaurantId: restaurant.id, commandeId }),
-      ]);
-    } catch (notifyError) {
-      commandeLogger.error(
+    if (!canRestaurateurSetCommandeStatus(
+      existingCommande.modeCommande,
+      validation.data.statut,
+    )) {
+      return NextResponse.json(
         {
-          ip,
-          commandeId,
           error:
-            notifyError instanceof Error
-              ? notifyError.message
-              : "Unknown error",
+            "Une livraison est clôturée après confirmation de remise ou de livraison, pas depuis cette action.",
         },
-        "pg_notify error during status update",
+        { status: 422 },
       );
-    } finally {
-      pgClient.release();
     }
+
+    // Chemin métier unique : la mutation applique une transition atomique,
+    // les horodatages, l'invalidation du cache et les événements temps réel.
+    const updatedCommande = await updateStatutCommande(
+      commandeId,
+      restaurant.id,
+      validation.data.statut,
+    );
+
+    if (!updatedCommande) {
+      return NextResponse.json(
+        {
+          error:
+            "Cette commande a déjà été mise à jour. Actualisez la liste avant de réessayer.",
+        },
+        { status: 409 },
+      );
+    }
+
+    // 🔗 pg_notify supprimé (mort — Redis via sendNotification/pushSseEvent gère déjà cet événement, voir mutations.ts createCommande)
+    // const pgClient = await pool.connect();
+    // try {
+    //   await pgClient.query("SELECT pg_notify($1, $2)", [
+    //     "nouvelle_commande",
+    //     JSON.stringify({ restaurantId: restaurant.id, commandeId }),
+    //   ]);
+    // } catch (notifyError) {
+    //   commandeLogger.error(
+    //     {
+    //       ip,
+    //       commandeId,
+    //       error:
+    //         notifyError instanceof Error
+    //           ? notifyError.message
+    //           : "Unknown error",
+    //     },
+    //     "pg_notify error during status update",
+    //   );
+    // } finally {
+    //   pgClient.release();
+    // }
 
     commandeLogger.info(
       { ip, commandeId: updatedCommande.id, statut: updatedCommande.statut },

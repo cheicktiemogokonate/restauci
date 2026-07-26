@@ -62,7 +62,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: #0b663b;
+  --primary: #14532d;
   --primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -73,7 +73,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: #0b663b66;
+  --ring: #14532d66;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -97,7 +97,7 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: #0b663b;
+  --primary: #14532d;
   --primary-foreground: #ffffff;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -108,7 +108,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: #0b663b80;
+  --ring: #14532d80;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -147,7 +147,7 @@
   --font-display: var(--font-heading);
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-brand-green: #0f8a5f;
+  --color-brand-green: var(--primary);
   --color-brand-dark: #1f2937;
   --color-brand-accent: #22c55e;
   --color-brand-bg: #fafbfa;
@@ -156,7 +156,7 @@
 }
 
 :root {
-  --button-ripple-color: rgba(15, 138, 95, 0.15);
+  --button-ripple-color: rgba(20, 83, 45, 0.15);
 }
 
 .dark {

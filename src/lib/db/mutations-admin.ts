@@ -1,14 +1,24 @@
 import { db }   from "./index";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import {
   restaurants,
   users,
   clients,
   commandes,
   commissions,
+  auditLog,
+ commissionSettlements,
 } from "./schema";
-import { logAuditAction } from "@/lib/audit";
 import { invalidateCache, cacheKey } from "@/lib/cache";
+import { normalizeSettlementInput } from "@/lib/config/admin-workflows";
+
+
+export class AdminTransitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdminTransitionError";
+  }
+}
 
 // ============================================================================
 // VALIDATION / REJET DE RESTAURANT
@@ -18,23 +28,38 @@ export async function validerRestaurant(
   restaurantId: string,
   adminId:      string
 ) {
-  const [restaurant] = await db
-    .update(restaurants)
-    .set({
-      actif:           true,
-      valideParUserId: adminId,
-      valideAt:        new Date(),
-      motifRejet:      null,
-      updatedAt:       new Date(),
-    })
-    .where(eq(restaurants.id, restaurantId))
-    .returning();
+  const restaurant = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(restaurants)
+      .set({
+        actif: true,
+        valideParUserId: adminId,
+        valideAt: new Date(),
+        motifRejet: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(restaurants.id, restaurantId),
+          eq(restaurants.actif, false),
+          eq(restaurants.suspendu, false),
+        ),
+      )
+      .returning();
 
-  await logAuditAction({
-    adminId,
-    action:        "restaurant_valide",
-    ressourceType: "restaurant",
-    ressourceId:   restaurantId,
+    if (!updated) {
+      throw new AdminTransitionError(
+        "Seul un restaurant en attente peut être validé.",
+      );
+    }
+
+    await tx.insert(auditLog).values({
+      adminId,
+      action: "restaurant_valide",
+      ressourceType: "restaurant",
+      ressourceId: restaurantId,
+    });
+    return updated;
   });
 
   await invalidateCache(cacheKey.restaurant(restaurantId));
@@ -47,23 +72,37 @@ export async function rejeterRestaurant(
   adminId:      string,
   motif:        string
 ) {
-  const [restaurant] = await db
-    .update(restaurants)
-    .set({
-      actif:      false,
-      motifRejet: motif,
-      updatedAt:  new Date(),
-    })
-    .where(eq(restaurants.id, restaurantId))
-    .returning();
+  const restaurant = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(restaurants)
+      .set({ actif: false, motifRejet: motif, updatedAt: new Date() })
+      .where(
+        and(
+          eq(restaurants.id, restaurantId),
+          eq(restaurants.actif, false),
+          eq(restaurants.suspendu, false),
+          isNull(restaurants.motifRejet),
+        ),
+      )
+      .returning();
 
-  await logAuditAction({
-    adminId,
-    action:        "restaurant_rejete",
-    ressourceType: "restaurant",
-    ressourceId:   restaurantId,
-    details:       { motif },
+    if (!updated) {
+      throw new AdminTransitionError(
+        "Seul un restaurant en attente peut être rejeté.",
+      );
+    }
+
+    await tx.insert(auditLog).values({
+      adminId,
+      action: "restaurant_rejete",
+      ressourceType: "restaurant",
+      ressourceId: restaurantId,
+      details: { motif },
+    });
+    return updated;
   });
+
+  await invalidateCache(cacheKey.restaurant(restaurantId));
 
   return restaurant;
 }
@@ -77,24 +116,39 @@ export async function suspendreRestaurant(
   adminId:      string,
   motif:        string
 ) {
-  const [restaurant] = await db
-    .update(restaurants)
-    .set({
-      suspendu:         true,
-      motifSuspension:  motif,
-      enLigne:          false,  // forcer hors ligne
-      accepteCommandes: false,  // bloquer les nouvelles commandes
-      updatedAt:        new Date(),
-    })
-    .where(eq(restaurants.id, restaurantId))
-    .returning();
+  const restaurant = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(restaurants)
+      .set({
+        suspendu: true,
+        motifSuspension: motif,
+        enLigne: false,
+        accepteCommandes: false,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(restaurants.id, restaurantId),
+          eq(restaurants.actif, true),
+          eq(restaurants.suspendu, false),
+        ),
+      )
+      .returning();
 
-  await logAuditAction({
-    adminId,
-    action:        "restaurant_suspendu",
-    ressourceType: "restaurant",
-    ressourceId:   restaurantId,
-    details:       { motif },
+    if (!updated) {
+      throw new AdminTransitionError(
+        "Seul un restaurant actif peut être suspendu.",
+      );
+    }
+
+    await tx.insert(auditLog).values({
+      adminId,
+      action: "restaurant_suspendu",
+      ressourceType: "restaurant",
+      ressourceId: restaurantId,
+      details: { motif },
+    });
+    return updated;
   });
 
   await invalidateCache(cacheKey.restaurant(restaurantId));
@@ -106,59 +160,35 @@ export async function reactiverRestaurant(
   restaurantId: string,
   adminId:      string
 ) {
-  const [restaurant] = await db
-    .update(restaurants)
-    .set({
-      suspendu:        false,
-      motifSuspension: null,
-      updatedAt:       new Date(),
-    })
-    .where(eq(restaurants.id, restaurantId))
-    .returning();
+  const restaurant = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(restaurants)
+      .set({ suspendu: false, motifSuspension: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(restaurants.id, restaurantId),
+          eq(restaurants.actif, true),
+          eq(restaurants.suspendu, true),
+        ),
+      )
+      .returning();
 
-  await logAuditAction({
-    adminId,
-    action:        "restaurant_reactive",
-    ressourceType: "restaurant",
-    ressourceId:   restaurantId,
+    if (!updated) {
+      throw new AdminTransitionError(
+        "Seul un restaurant suspendu peut être réactivé.",
+      );
+    }
+
+    await tx.insert(auditLog).values({
+      adminId,
+      action: "restaurant_reactive",
+      ressourceType: "restaurant",
+      ressourceId: restaurantId,
+    });
+    return updated;
   });
 
   await invalidateCache(cacheKey.restaurant(restaurantId));
-
-  return restaurant;
-}
-
-// ============================================================================
-// MODIFIER LE TAUX DE COMMISSION
-// ============================================================================
-
-export async function modifierTauxCommission(
-  restaurantId:  string,
-  adminId:       string,
-  nouveauTauxBps: number
-) {
-  const [ancien] = await db
-    .select({ tauxCommissionBps: restaurants.tauxCommissionBps })
-    .from(restaurants)
-    .where(eq(restaurants.id, restaurantId))
-    .limit(1);
-
-  const [restaurant] = await db
-    .update(restaurants)
-    .set({ tauxCommissionBps: nouveauTauxBps, updatedAt: new Date() })
-    .where(eq(restaurants.id, restaurantId))
-    .returning();
-
-  await logAuditAction({
-    adminId,
-    action:        "commission_modifiee",
-    ressourceType: "restaurant",
-    ressourceId:   restaurantId,
-    details: {
-      ancienTauxBps:   ancien?.tauxCommissionBps,
-      nouveauTauxBps,
-    },
-  });
 
   return restaurant;
 }
@@ -172,45 +202,75 @@ export async function suspendreUser(
   adminId: string,
   motif:   string
 ) {
-  const [user] = await db
-    .update(users)
-    .set({
-      suspendu:        true,
-      motifSuspension: motif,
-      suspenduAt:      new Date(),
-      updatedAt:       new Date(),
-    })
-    .where(eq(users.id, userId))
-    .returning();
+  const user = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(users)
+      .set({
+        suspendu: true,
+        motifSuspension: motif,
+        suspenduAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(users.id, userId),
+          eq(users.role, "restaurateur"),
+          eq(users.suspendu, false),
+        ),
+      )
+      .returning();
 
-  await logAuditAction({
-    adminId,
-    action:        "user_suspendu",
-    ressourceType: "user",
-    ressourceId:   userId,
-    details:       { motif },
+    if (!updated) {
+      throw new AdminTransitionError(
+        "Seul un restaurateur actif peut être suspendu.",
+      );
+    }
+
+    await tx.insert(auditLog).values({
+      adminId,
+      action: "user_suspendu",
+      ressourceType: "user",
+      ressourceId: userId,
+      details: { motif },
+    });
+    return updated;
   });
 
   return user;
 }
 
 export async function reactiverUser(userId: string, adminId: string) {
-  const [user] = await db
-    .update(users)
-    .set({
-      suspendu:        false,
-      motifSuspension: null,
-      suspenduAt:      null,
-      updatedAt:       new Date(),
-    })
-    .where(eq(users.id, userId))
-    .returning();
+  const user = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(users)
+      .set({
+        suspendu: false,
+        motifSuspension: null,
+        suspenduAt: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(users.id, userId),
+          eq(users.role, "restaurateur"),
+          eq(users.suspendu, true),
+        ),
+      )
+      .returning();
 
-  await logAuditAction({
-    adminId,
-    action:        "user_reactive",
-    ressourceType: "user",
-    ressourceId:   userId,
+    if (!updated) {
+      throw new AdminTransitionError(
+        "Seul un restaurateur suspendu peut être réactivé.",
+      );
+    }
+
+    await tx.insert(auditLog).values({
+      adminId,
+      action: "user_reactive",
+      ressourceType: "user",
+      ressourceId: userId,
+    });
+    return updated;
   });
 
   return user;
@@ -221,45 +281,63 @@ export async function suspendreClient(
   adminId:  string,
   motif:    string
 ) {
-  const [client] = await db
-    .update(clients)
-    .set({
-      actif:           false,
-      motifSuspension: motif,
-      suspenduAt:      new Date(),
-      updatedAt:       new Date(),
-    })
-    .where(eq(clients.id, clientId))
-    .returning();
+  const client = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(clients)
+      .set({
+        actif: false,
+        motifSuspension: motif,
+        suspenduAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(clients.id, clientId), eq(clients.actif, true)))
+      .returning();
 
-  await logAuditAction({
-    adminId,
-    action:        "client_suspendu",
-    ressourceType: "client",
-    ressourceId:   clientId,
-    details:       { motif },
+    if (!updated) {
+      throw new AdminTransitionError(
+        "Seul un client actif peut être suspendu.",
+      );
+    }
+
+    await tx.insert(auditLog).values({
+      adminId,
+      action: "client_suspendu",
+      ressourceType: "client",
+      ressourceId: clientId,
+      details: { motif },
+    });
+    return updated;
   });
 
   return client;
 }
 
 export async function reactiverClient(clientId: string, adminId: string) {
-  const [client] = await db
-    .update(clients)
-    .set({
-      actif:           true,
-      motifSuspension: null,
-      suspenduAt:      null,
-      updatedAt:       new Date(),
-    })
-    .where(eq(clients.id, clientId))
-    .returning();
+  const client = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(clients)
+      .set({
+        actif: true,
+        motifSuspension: null,
+        suspenduAt: null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(clients.id, clientId), eq(clients.actif, false)))
+      .returning();
 
-  await logAuditAction({
-    adminId,
-    action:        "client_reactive",
-    ressourceType: "client",
-    ressourceId:   clientId,
+    if (!updated) {
+      throw new AdminTransitionError(
+        "Seul un client suspendu peut être réactivé.",
+      );
+    }
+
+    await tx.insert(auditLog).values({
+      adminId,
+      action: "client_reactive",
+      ressourceType: "client",
+      ressourceId: clientId,
+    });
+    return updated;
   });
 
   return client;
@@ -268,6 +346,8 @@ export async function reactiverClient(clientId: string, adminId: string) {
 // ============================================================================
 // CALCUL DES COMMISSIONS
 // ============================================================================
+
+import { getCommissionRateBps } from "@/lib/subscription-plans";
 
 /**
  * Calcule et enregistre la commission d'une commande.
@@ -286,13 +366,7 @@ export async function calculerCommissionCommande(commandeId: string) {
 
   if (!commande) return null;
 
-  const [restaurant] = await db
-    .select({ tauxCommissionBps: restaurants.tauxCommissionBps })
-    .from(restaurants)
-    .where(eq(restaurants.id, commande.restaurantId))
-    .limit(1);
-
-  const tauxBps = restaurant?.tauxCommissionBps ?? 1000; // 10% par défaut
+  const tauxBps = await getCommissionRateBps(commande.restaurantId);
   const montantCommission = Math.round((commande.total * tauxBps) / 10000);
 
   const [commission] = await db
@@ -310,30 +384,83 @@ export async function calculerCommissionCommande(commandeId: string) {
   return commission;
 }
 
-export async function marquerCommissionsPayees(
+export async function marquerCommissionsRestaurantPayees(
   restaurantId: string,
-  adminId:      string,
-  commissionIds: string[]
+  adminId: string,
+  referenceReglement: string,
+  notes?: string
 ) {
-  await db
-    .update(commissions)
-    .set({
-      statut:         "payee",
-      payeeAt:        new Date(),
-      payeeParUserId: adminId,
-    })
-    .where(
-      and(
-        eq(commissions.restaurantId, restaurantId),
-        sql`${commissions.id} = ANY(${commissionIds})`
+  let normalizedSettlement: ReturnType<typeof normalizeSettlementInput>;
+  try {
+    normalizedSettlement = normalizeSettlementInput(referenceReglement, notes);
+  } catch (error) {
+    throw new AdminTransitionError(
+      error instanceof Error ? error.message : "Règlement invalide.",
+    );
+  }
+  const { reference, notes: notesNettoyees } = normalizedSettlement;
+
+  return db.transaction(async (tx) => {
+    const commissionsPayees = await tx
+      .update(commissions)
+      .set({
+        statut: "payee",
+        payeeAt: new Date(),
+        payeeParUserId: adminId,
+      })
+      .where(
+        and(
+          eq(commissions.restaurantId, restaurantId),
+          eq(commissions.statut, "en_attente"),
+        ),
       )
+      .returning({ id: commissions.id, montant: commissions.montantCommission });
+
+    if (commissionsPayees.length === 0) {
+      throw new AdminTransitionError(
+        "Aucune commission en attente pour ce restaurant.",
+      );
+    }
+
+    const montantTotal = commissionsPayees.reduce(
+      (total, commission) => total + commission.montant,
+      0,
     );
 
-  await logAuditAction({
-    adminId,
-    action:        "commission_modifiee",
-    ressourceType: "commission",
-    ressourceId:   restaurantId,
-    details:       { commissionIds, action: "marquees_payees" },
+    // Enregistrer le règlement groupé
+    const [settlement] = await tx.insert(commissionSettlements).values({
+      restaurantId,
+      adminId,
+      montantTotal,
+      nombreCommissions: commissionsPayees.length,
+      referenceReglement: reference,
+      notes: notesNettoyees,
+    }).returning();
+
+    await tx
+      .update(commissions)
+      .set({ settlementId: settlement.id })
+      .where(
+        inArray(
+          commissions.id,
+          commissionsPayees.map((commission) => commission.id),
+        ),
+      );
+
+    await tx.insert(auditLog).values({
+      adminId,
+      action: "commissions_encaissees",
+      ressourceType: "commission",
+      ressourceId: restaurantId,
+      details: {
+        action: "marquees_payees",
+        commissionIds: commissionsPayees.map((commission) => commission.id),
+        montantTotal,
+        settlementId: settlement.id,
+        referenceReglement: reference,
+      },
+    });
+
+    return { nombre: commissionsPayees.length, montantTotal };
   });
 }

@@ -1,12 +1,12 @@
 // Formatting utilities for display values (prices, dates, phone numbers, etc.)
 
-export function formatPrix(centimes: number): string {
+export function formatPrix(montant: number): string {
   return (
     new Intl.NumberFormat("fr-FR", {
       style: "decimal",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(centimes) + " FCFA"
+    }).format(montant) + " FCFA"
   );
 }
 

@@ -1,5 +1,5 @@
 import { apiResponse } from "@/lib/api/response";
-import { TTL, withCache } from "@/lib/cache";
+import { TTL, cacheKey, withCache } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { categories, plats, restaurants } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
@@ -22,14 +22,20 @@ export async function GET(
   try {
     // Le menu public est très cacheable (15 min)
     const menu = await withCache(
-      `restauci:public:menu:${slug}`,
+      cacheKey.restaurantPublicMenu(slug),
       TTL.PLATS,
       async () => {
         // Trouver le restaurant
         const [restaurant] = await db
           .select({ id: restaurants.id })
           .from(restaurants)
-          .where(and(eq(restaurants.slug, slug), eq(restaurants.actif, true)))
+          .where(
+            and(
+              eq(restaurants.slug, slug),
+              eq(restaurants.actif, true),
+              eq(restaurants.enLigne, true),
+            ),
+          )
           .limit(1);
 
         if (!restaurant) return null;
@@ -39,7 +45,12 @@ export async function GET(
           db
             .select()
             .from(categories)
-            .where(eq(categories.restaurantId, restaurant.id))
+            .where(
+              and(
+                eq(categories.restaurantId, restaurant.id),
+                eq(categories.visible, true),
+              ),
+            )
             .orderBy(asc(categories.ordre)),
 
           db

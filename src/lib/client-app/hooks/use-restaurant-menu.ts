@@ -1,7 +1,10 @@
 "use client";
 
+import { readClientMemoryCache, writeClientMemoryCache } from "@/lib/client-app/client-memory-cache";
 import { useEffect, useState } from "react";
 import { clientApi } from "../api-client";
+
+const MENU_CACHE_MAX_AGE_MS = 60_000;
 
 export interface MenuPlat {
   id: string;
@@ -19,36 +22,71 @@ export interface MenuCategorie {
 }
 
 export function useRestaurantMenu(slug: string | null) {
-  const [categories, setCategories] = useState<MenuCategorie[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const endpoint = slug ? `/restaurants/${slug}/menu` : null;
+  const initialCache = endpoint ? readClientMemoryCache<MenuCategorie[]>(endpoint, MENU_CACHE_MAX_AGE_MS) : null;
+  const [categories, setCategories] = useState<MenuCategorie[]>(() => initialCache?.data ?? []);
+  const [isLoading, setIsLoading] = useState(() => !initialCache);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isActive = true;
+
     const load = async () => {
-      if (!slug) {
-        setCategories([]);
-        setIsLoading(false);
+      if (!endpoint) {
+        if (isActive) {
+          setCategories([]);
+          setIsLoading(false);
+          setError(null);
+        }
         return;
       }
 
-      setIsLoading(true);
-
-      const result = await clientApi.get<MenuCategorie[]>(
-        `/restaurants/${slug}/menu`,
-      );
-      if (result.success && result.data) {
-        setCategories(result.data);
-        setError(null);
-      } else {
-        setCategories([]);
-        setError(result.error ?? "Impossible de charger le menu.");
+      const cached = readClientMemoryCache<MenuCategorie[]>(endpoint, MENU_CACHE_MAX_AGE_MS);
+      if (cached?.isFresh) {
+        if (isActive) {
+          setCategories(cached.data);
+          setIsLoading(false);
+          setError(null);
+        }
+        return;
       }
 
-      setIsLoading(false);
+      if (isActive && cached) {
+        setCategories(cached.data);
+        setIsLoading(false);
+        setError(null);
+      } else if (isActive) {
+        setCategories([]);
+        setIsLoading(true);
+        setError(null);
+      }
+      try {
+        const result = await clientApi.get<MenuCategorie[]>(
+          endpoint,
+        );
+        if (!isActive) return;
+        if (result.success && result.data) {
+          writeClientMemoryCache(endpoint, result.data);
+          setCategories(result.data);
+        } else {
+          if (!cached) setCategories([]);
+          setError(result.error ?? "Impossible de charger le menu.");
+        }
+      } catch {
+        if (isActive) {
+          if (!cached) setCategories([]);
+          setError("Impossible de charger le menu.");
+        }
+      } finally {
+        if (isActive) setIsLoading(false);
+      }
     };
 
     void Promise.resolve().then(load);
-  }, [slug]);
+    return () => {
+      isActive = false;
+    };
+  }, [endpoint]);
 
   return { categories, isLoading, error };
 }

@@ -1,4 +1,5 @@
 import { redis } from "./redis";
+import { env } from "@/lib/env";
 import { cacheLogger } from "@/lib/loggers";
 
 export const TTL = {
@@ -7,6 +8,7 @@ export const TTL = {
   PLATS:        60 * 15,
   COMMANDES:    60 * 2,
   STATS:        60 * 5,
+  DASHBOARD:    60,
   NOTIFICATIONS: 60,
   RESTAURANT_PUBLIC: 60 * 60 * 24,
 } as const;
@@ -15,6 +17,7 @@ export const cacheKey = {
   restaurantByUser: (userId: string) => `restauci:restaurant:user:${userId}`,
   restaurant:       (id: string)    => `restauci:restaurant:${id}`,
   restaurantPublic: (slug: string)  => `restauci:restaurant:public:${slug}`,
+  restaurantPublicMenu: (slug: string) => `restauci:public:menu:${slug}`,
   restaurantsPublicAll: ()          => `restauci:restaurants:public:all`,
   categories:       (restaurantId: string) =>
     `restauci:categories:${restaurantId}`,
@@ -49,6 +52,10 @@ export const cacheKey = {
       modeCommande ?? "all"
     }:${dateDebut ?? "all"}:${dateFin ?? "all"}:${search ?? "all"}`,
   stats:            (restaurantId: string) => `restauci:stats:${restaurantId}`,
+  dashboardDaily:   (restaurantId: string, jours: number) =>
+    `restauci:dashboard:daily:${restaurantId}:${jours}`,
+  dashboardModes:   (restaurantId: string) =>
+    `restauci:dashboard:modes:${restaurantId}`,
   notifications:    (userId: string) => `restauci:notifications:${userId}`,
 } as const;
 
@@ -57,6 +64,10 @@ export async function withCache<T>(
   ttl: number,
   fetcher: () => Promise<T>
 ): Promise<T> {
+  if (!env.DATA_CACHE_ENABLED) {
+    return fetcher();
+  }
+
   try {
     const cached = await redis.get<T>(key);
     if (cached !== null) {
@@ -78,7 +89,7 @@ export async function withCache<T>(
 }
 
 export async function invalidateCache(...keys: string[]): Promise<void> {
-  if (keys.length === 0) return;
+  if (!env.DATA_CACHE_ENABLED || keys.length === 0) return;
 
   try {
     await redis.del(...keys);
@@ -88,7 +99,7 @@ export async function invalidateCache(...keys: string[]): Promise<void> {
 }
 
 export async function invalidateCacheByPattern(pattern: string): Promise<void> {
-  if (!pattern) return;
+  if (!env.DATA_CACHE_ENABLED || !pattern) return;
 
   try {
     let cursor = "0";
@@ -117,10 +128,11 @@ export async function invalidateRestaurantCache(
     cacheKey.categories(restaurantId),
     cacheKey.creneauxRestaurant(restaurantId),
     cacheKey.stats(restaurantId),
+    cacheKey.dashboardModes(restaurantId),
     cacheKey.restaurantsPublicAll()
   ];
   if (slug) {
-    keys.push(cacheKey.restaurantPublic(slug));
+    keys.push(cacheKey.restaurantPublic(slug), cacheKey.restaurantPublicMenu(slug));
   }
 
   await invalidateCache(...keys);
@@ -128,4 +140,5 @@ export async function invalidateRestaurantCache(
   await invalidateCacheByPattern(`restauci:plats:${restaurantId}:*`);
   await invalidateCacheByPattern(`restauci:commandes:${restaurantId}:*`);
   await invalidateCacheByPattern(`restauci:top-plats:${restaurantId}:*`);
+  await invalidateCacheByPattern(`restauci:dashboard:daily:${restaurantId}:*`);
 }

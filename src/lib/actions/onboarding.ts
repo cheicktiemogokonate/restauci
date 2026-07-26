@@ -31,6 +31,20 @@ export interface OnboardingData {
   ville?: string;
   email?: string;
   siteWeb?: string;
+  whatsapp?: string;
+  facebook?: string;
+  schedule: {
+    day: string;
+    isOpen: boolean;
+    openTime: string;
+    closeTime: string;
+  }[];
+  menu: {
+    name: string;
+    description: string;
+    price: number;
+    category: string;
+  }[];
 }
 
 const normalizeMode = (mode: ServiceTypeInput) => {
@@ -61,6 +75,40 @@ export async function finaliserOnboarding(data: OnboardingData) {
   }
 
   const mappedModes = parsed.data.modesCommande;
+  const dayCodes: Record<string, string> = {
+    lundi: "lun",
+    mardi: "mar",
+    mercredi: "mer",
+    jeudi: "jeu",
+    vendredi: "ven",
+    samedi: "sam",
+    dimanche: "dim",
+  };
+
+  const schedule = data.schedule
+    .filter((entry) => entry.isOpen)
+    .map((entry) => ({
+      nom: entry.day,
+      heureOuverture: entry.openTime,
+      heureFermeture: entry.closeTime,
+      joursActifs: [dayCodes[entry.day.toLowerCase()]],
+    }))
+    .filter((entry) => Boolean(entry.joursActifs[0]));
+
+  const menu = data.menu
+    .map((item) => ({
+      nom: item.name.trim(),
+      description: item.description.trim() || undefined,
+      prix: item.price,
+      categorie: item.category.trim(),
+    }))
+    .filter(
+      (item) =>
+        item.nom.length >= 2 &&
+        item.categorie.length >= 2 &&
+        Number.isInteger(item.prix) &&
+        item.prix > 0,
+    );
 
   // 3. Créer le restaurant en DB
   try {
@@ -79,6 +127,10 @@ export async function finaliserOnboarding(data: OnboardingData) {
       ville: parsed.data.ville,
       email: parsed.data.email,
       siteWeb: parsed.data.siteWeb,
+      whatsapp: parsed.data.whatsapp || undefined,
+      facebook: parsed.data.facebook || undefined,
+      schedule,
+      menu,
     });
   } catch (error) {
     log.error({ error, userId: session.userId }, "finaliserOnboarding error");

@@ -1,6 +1,14 @@
 "use client";
 
+import { EmptyState } from "@/components/admin/ui/empty-state";
+import { StatusBadge } from "@/components/admin/ui/status-badge";
+import { Input } from "@/components/motion/input";
+import { Table, type TableColumn } from "@/components/motion/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/motion/tabs";
+import { Button } from "@/components/ui/button";
+import { getAdminRestaurantStatus } from "@/lib/config/admin-workflows";
 import type { Restaurant } from "@/lib/db/types";
+import { formatDate } from "@/lib/utils/format";
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,7 +22,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 interface RestaurantsAdminTableProps {
-  items: Pick<
+  items: (Pick<
     Restaurant,
     | "id"
     | "nom"
@@ -23,11 +31,18 @@ interface RestaurantsAdminTableProps {
     | "ville"
     | "actif"
     | "suspendu"
+    | "motifRejet"
     | "enLigne"
     | "nombreCommandes"
     | "noteMoyenne"
     | "createdAt"
-  >[];
+  > & {
+    planCode: string | null;
+    planNom: string | null;
+    statutAbonnement: string | null;
+    dateEcheance: Date | null;
+    tauxCommissionBpsFige: number | null;
+  })[];
   total: number;
   page: number;
   totalPages: number;
@@ -35,6 +50,7 @@ interface RestaurantsAdminTableProps {
     enAttente: number;
     actifs: number;
     suspendus: number;
+    rejetes: number;
     total: number;
   };
   statutActif: string;
@@ -46,32 +62,26 @@ const TABS = [
   { value: "en_attente", label: "En attente" },
   { value: "actif", label: "Actifs" },
   { value: "suspendu", label: "Suspendus" },
+  { value: "rejete", label: "Rejetés" },
 ];
 
 function StatutBadge({
   actif,
   suspendu,
+  motifRejet,
 }: {
   actif: boolean;
   suspendu: boolean;
+  motifRejet: string | null;
 }) {
-  if (suspendu)
-    return (
-      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-100">
-        Suspendu
-      </span>
-    );
-  if (actif)
-    return (
-      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-        Actif
-      </span>
-    );
-  return (
-    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-100">
-      En attente
-    </span>
-  );
+  const status = getAdminRestaurantStatus({ actif, suspendu, motifRejet });
+  if (status === "suspendu")
+    return <StatusBadge variant="danger">Suspendu</StatusBadge>;
+  if (status === "actif")
+    return <StatusBadge variant="success">Actif</StatusBadge>;
+  if (status === "rejete")
+    return <StatusBadge variant="neutral">Rejeté</StatusBadge>;
+  return <StatusBadge variant="warning">En attente</StatusBadge>;
 }
 
 export function RestaurantsAdminTable({
@@ -92,14 +102,22 @@ export function RestaurantsAdminTable({
 
   const changeTab = (statut: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    statut === "tous" ? params.delete("statut") : params.set("statut", statut);
+    if (statut === "tous") {
+      params.delete("statut");
+    } else {
+      params.set("statut", statut);
+    }
     params.delete("page");
     navigate(params);
   };
 
   const handleSearch = () => {
     const params = new URLSearchParams(searchParams.toString());
-    searchValue ? params.set("search", searchValue) : params.delete("search");
+    if (searchValue) {
+      params.set("search", searchValue);
+    } else {
+      params.delete("search");
+    }
     params.delete("page");
     navigate(params);
   };
@@ -112,167 +130,202 @@ export function RestaurantsAdminTable({
         en_attente: counts.enAttente,
         actif: counts.actifs,
         suspendu: counts.suspendus,
+        rejete: counts.rejetes,
       }[tab] ?? null
     );
   };
+
+  type RestaurantRow = RestaurantsAdminTableProps["items"][number];
+  const columns: TableColumn<RestaurantRow>[] = [
+    {
+      key: "nom",
+      header: "Restaurant",
+      sortable: true,
+      width: "260px",
+      cell: (restaurant) => (
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-200">
+            <Store className="size-4 text-emerald-700" />
+          </div>
+          <div className="min-w-0">
+            <Link
+              href={`/admin/restaurants/${restaurant.id}`}
+              className="block truncate font-semibold text-gray-900 transition-colors hover:text-emerald-700"
+            >
+              {restaurant.nom}
+            </Link>
+            <p className="mt-0.5 truncate text-xs text-gray-400">
+              {restaurant.telephone}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "ville",
+      header: "Ville",
+      sortable: true,
+      width: "130px",
+      cell: (restaurant) => restaurant.ville ?? "—",
+    },
+    {
+      key: "statut",
+      header: "Statut",
+      sortable: true,
+      width: "130px",
+      sortValue: (restaurant) => getAdminRestaurantStatus(restaurant),
+      cell: (restaurant) => (
+        <StatutBadge
+          actif={restaurant.actif}
+          suspendu={restaurant.suspendu}
+          motifRejet={restaurant.motifRejet}
+        />
+      ),
+    },
+    {
+      key: "planNom",
+      header: "Offre",
+      sortable: true,
+      width: "150px",
+      cell: (restaurant) => restaurant.planNom ?? "—",
+    },
+    {
+      key: "dateEcheance",
+      header: "Échéance",
+      sortable: true,
+      width: "150px",
+      sortValue: (restaurant) =>
+        restaurant.dateEcheance
+          ? new Date(restaurant.dateEcheance).getTime()
+          : 0,
+      cell: (restaurant) =>
+        restaurant.dateEcheance
+          ? formatDate(restaurant.dateEcheance)
+          : "Sans échéance",
+    },
+    {
+      key: "nombreCommandes",
+      header: "Commandes",
+      sortable: true,
+      width: "120px",
+      cell: (restaurant) => (
+        <span className="inline-flex items-center gap-1.5">
+          <ShoppingBag className="size-3.5 text-gray-400" />
+          <span className="font-medium">{restaurant.nombreCommandes}</span>
+        </span>
+      ),
+    },
+    {
+      key: "noteMoyenne",
+      header: "Note",
+      sortable: true,
+      width: "100px",
+      cell: (restaurant) =>
+        restaurant.noteMoyenne ? (
+          <span className="inline-flex items-center gap-1 text-amber-600">
+            <Star className="size-3.5 fill-amber-400 stroke-amber-400" />
+            <span className="font-semibold text-gray-800">
+              {restaurant.noteMoyenne}
+            </span>
+            <span className="text-gray-400">/5</span>
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "action",
+      header: "Action",
+      width: "100px",
+      align: "right",
+      cell: (restaurant) => (
+        <Link
+          href={`/admin/restaurants/${restaurant.id}`}
+          className="inline-flex items-center gap-1 font-semibold text-emerald-700 transition-colors hover:text-emerald-900"
+        >
+          Gérer <ChevronRight className="size-4" />
+        </Link>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-5">
       {/* Tabs + Recherche */}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
-        <div className="flex items-center gap-1.5 bg-gray-100/80 p-1 rounded-xl w-fit">
-          {TABS.map((tab) => {
-            const count = getCount(tab.value);
-            const isActive = statutActif === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => changeTab(tab.value)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  isActive
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {tab.label}
-                {count !== null && (
-                  <span
-                    className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-600"}`}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <Tabs
+          value={statutActif}
+          onValueChange={changeTab}
+          variant="underline"
+          className="max-w-full overflow-x-auto scrollbar-hide"
+        >
+          <TabsList className="h-11 min-w-max gap-0">
+            {TABS.map((tab) => {
+              const count = getCount(tab.value);
+              const isActive = statutActif === tab.value;
+              return (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="h-11 gap-1.5 px-3.5 text-sm"
+                  indicatorClassName="h-0.5 bg-emerald-600"
+                >
+                  {tab.label}
+                  {count !== null && (
+                    <span
+                      className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-600"}`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </Tabs>
 
-        <div className="flex gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
+        <div className="flex w-full gap-2 sm:w-auto">
+          <div className="relative min-w-0 flex-1 sm:w-64">
+            <Input
               type="text"
+              aria-label="Rechercher un restaurant"
               value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
+              onChange={setSearchValue}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder="Rechercher un restaurant..."
-              className="pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl bg-white shadow-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-64"
+              leftIcon={<Search />}
+              className="w-full"
+              classNames={{ field: "h-10 rounded-xl bg-white" }}
             />
           </div>
-          <button
-            type="button"
-            onClick={handleSearch}
-            className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors"
-          >
+          <Button type="button" onClick={handleSearch} className="h-auto">
             Chercher
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/50">
-              <th className="text-left px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                Restaurant
-              </th>
-              <th className="text-left px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider hidden md:table-cell">
-                Ville
-              </th>
-              <th className="text-left px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                Statut
-              </th>
-              <th className="text-left px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider hidden lg:table-cell">
-                Commandes
-              </th>
-              <th className="text-left px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider hidden lg:table-cell">
-                Note
-              </th>
-              <th className="text-right px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                Action
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {items.map((r) => (
-              <tr
-                key={r.id}
-                className="hover:bg-gray-50/50 transition-colors group"
-              >
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center shrink-0">
-                      <Store className="w-4 h-4 text-emerald-700" />
-                    </div>
-                    <div>
-                      <Link
-                        href={`/admin/restaurants/${r.id}`}
-                        className="font-semibold text-gray-900 hover:text-emerald-700 transition-colors"
-                      >
-                        {r.nom}
-                      </Link>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {r.telephone}
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-5 py-4 text-gray-600 hidden md:table-cell">
-                  {r.ville ?? "—"}
-                </td>
-                <td className="px-5 py-4">
-                  <StatutBadge actif={r.actif} suspendu={r.suspendu} />
-                </td>
-                <td className="px-5 py-4 hidden lg:table-cell">
-                  <div className="flex items-center gap-1.5 text-gray-700">
-                    <ShoppingBag className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="font-medium">{r.nombreCommandes}</span>
-                  </div>
-                </td>
-                <td className="px-5 py-4 hidden lg:table-cell">
-                  {r.noteMoyenne ? (
-                    <div className="flex items-center gap-1 text-amber-600">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 stroke-amber-400" />
-                      <span className="font-semibold text-gray-800">
-                        {r.noteMoyenne}
-                      </span>
-                      <span className="text-gray-400">/5</span>
-                    </div>
-                  ) : (
-                    <span className="text-gray-400">—</span>
-                  )}
-                </td>
-                <td className="px-5 py-4 text-right">
-                  <Link
-                    href={`/admin/restaurants/${r.id}`}
-                    className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700 hover:text-emerald-900 transition-colors"
-                  >
-                    Gérer <ChevronRight className="w-4 h-4" />
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {items.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-              <Store className="w-7 h-7 text-gray-400" />
-            </div>
-            <p className="text-gray-500 font-medium">Aucun restaurant trouvé</p>
-            <p className="text-gray-400 text-xs mt-1">
-              Essayez de modifier vos filtres
-            </p>
-          </div>
-        )}
-      </div>
+      <Table
+        data={items}
+        columns={columns}
+        getRowId={(restaurant) => restaurant.id}
+        defaultSort={{ key: "createdAt", direction: "desc" }}
+        resizable
+        reorderable
+        rowHeight={72}
+        height={Math.min(Math.max(items.length * 72 + 48, 180), 520)}
+        className="rounded-xl bg-white"
+        emptyState={
+          <EmptyState
+            icon={<Store className="size-7" />}
+            title="Aucun restaurant trouvé"
+            description="Essayez de modifier vos filtres."
+          />
+        }
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-gray-500">
             <span className="font-medium text-gray-800">{total}</span> résultats
             · page <span className="font-medium text-gray-800">{page}</span> /{" "}
@@ -280,30 +333,29 @@ export function RestaurantsAdminTable({
           </p>
           <div className="flex gap-1.5">
             {page > 1 && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => {
                   const params = new URLSearchParams(searchParams.toString());
                   params.set("page", String(page - 1));
                   navigate(params);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" /> Précédent
-              </button>
+              </Button>
             )}
             {page < totalPages && (
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   const params = new URLSearchParams(searchParams.toString());
                   params.set("page", String(page + 1));
                   navigate(params);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors"
               >
                 Suivant <ChevronRight className="w-4 h-4" />
-              </button>
+              </Button>
             )}
           </div>
         </div>

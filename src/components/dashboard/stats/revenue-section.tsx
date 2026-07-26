@@ -1,4 +1,4 @@
-import { getCommandesParJour } from "@/lib/db/queries";
+import { getDashboardDailyData } from "./dashboard-data";
 import { RevenueChart } from "./revenue-chart";
 
 interface RevenueSectionProps {
@@ -10,7 +10,7 @@ interface RevenueSectionProps {
  * Doit être enveloppé dans <Suspense fallback={<ChartSkeleton />}>.
  */
 export async function RevenueSection({ restaurantId }: RevenueSectionProps) {
-  const donnees = await getCommandesParJour(restaurantId, 7);
+  const donnees = await getDashboardDailyData(restaurantId);
 
   const data = donnees.map((d) => ({
     date: d.jour,

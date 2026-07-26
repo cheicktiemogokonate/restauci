@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { clientApi } from "../api-client";
+import { useEffect, useState } from "react";
+import { clientApi, tryRefreshToken } from "../api-client";
 import { useAuthStore } from "../stores/auth-store";
 
 export interface TimelineEtape {
@@ -27,122 +27,133 @@ export interface CommandeTracking {
   numeroTable?: string | null;
 }
 
+type SseMessage = { event: string; data: unknown };
+
+function parseSseChunk(buffer: string): {
+  messages: SseMessage[];
+  remainder: string;
+} {
+  const blocks = buffer.split("\n\n");
+  const remainder = blocks.pop() ?? "";
+  const messages = blocks.flatMap((block) => {
+    let event = "message";
+    const dataLines: string[] = [];
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+    }
+    if (dataLines.length === 0) return [];
+    try {
+      return [{ event, data: JSON.parse(dataLines.join("\n")) }];
+    } catch {
+      return [];
+    }
+  });
+  return { messages, remainder };
+}
+
 export function useCommandeTracking(commandeId: string) {
   const [commande, setCommande] = useState<CommandeTracking | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const accessToken = useAuthStore((s) => s.accessToken);
+  const accessToken = useAuthStore((state) => state.accessToken);
 
   useEffect(() => {
-    const initialize = async () => {
-      if (!commandeId || !accessToken) {
-        setCommande(null);
-        setError("Identifiant de commande ou jeton manquant.");
-        setIsLoading(false);
-        return;
-      }
-
-      let isActive = true;
-      setIsLoading(true);
-      setError(null);
-
-      clientApi
-        .get<CommandeTracking>(`/commandes/${commandeId}`)
-        .then((result) => {
-          if (!isActive) return;
-          if (result.success && result.data) {
-            setCommande(result.data);
-          } else {
-            setCommande(null);
-            setError(result.error ?? "Impossible de charger la commande.");
-          }
-        })
-        .catch(() => {
-          if (isActive) {
-            setCommande(null);
-            setError("Impossible de charger la commande.");
-          }
-        })
-        .finally(() => {
-          if (isActive) setIsLoading(false);
-        });
-
-      return () => {
-        isActive = false;
-      };
+    let active = true;
+    Promise.resolve()
+      .then(() => {
+        if (active) {
+          setIsLoading(true);
+          setError(null);
+        }
+      })
+      .then(() => clientApi
+      .get<CommandeTracking>(`/commandes/${commandeId}`)
+      .then((result) => {
+        if (!active) return;
+        if (result.success && result.data) setCommande(result.data);
+        else setError(result.error ?? "Impossible de charger la commande.");
+      })
+      .catch(() => {
+        if (active) setError("Impossible de charger la commande.");
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      }));
+    return () => {
+      active = false;
     };
-
-    void Promise.resolve().then(initialize);
   }, [commandeId, accessToken]);
 
   useEffect(() => {
     if (!commandeId || !accessToken) return;
+    const controller = new AbortController();
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // EventSource natif ne supporte pas les headers custom.
-    // On passe le token en query param pour ce cas précis
-    // (la route SSE doit aussi accepter ?token=... en plus du header Bearer
-    // — vérifie ce point côté API, sinon adapte la route stream
-    // pour lire le token depuis searchParams).
-    const url = `/api/v1/client/commandes/${commandeId}/stream?token=${accessToken}`;
-    let isMounted = true;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const createEventSource = () => {
-      const es = new EventSource(url);
-
-      es.addEventListener("statut", async (event) => {
-        if (!isMounted) return;
-
-        const payload = JSON.parse(event.data);
-        setCommande((prev) =>
-          prev ? { ...prev, statut: payload.statut } : prev,
-        );
-
-        const result = await clientApi.get<CommandeTracking>(
-          `/commandes/${commandeId}`,
-        );
-        if (!isMounted) return;
-        if (result.success && result.data) {
-          setCommande(result.data);
-        } else {
-          setError(
-            result.error ?? "Impossible de récupérer l'état de la commande.",
-          );
-        }
-      });
-
-      es.addEventListener("fin", () => {
-        if (!isMounted) return;
-        es.close();
-      });
-
-      es.addEventListener("close", (event) => {
-        if (!isMounted) return;
-        const payload = JSON.parse(event.data);
-        if (payload?.reconnect) {
-          reconnectTimer = setTimeout(() => {
-            if (!isMounted) return;
-            eventSourceRef.current?.close();
-            eventSourceRef.current = createEventSource();
-          }, 500);
-        }
-      });
-
-      es.onerror = () => {
-        if (!isMounted) return;
-        setError("Connexion temps réel interrompue.");
-      };
-
-      return es;
+    const refreshCommande = async () => {
+      const result = await clientApi.get<CommandeTracking>(
+        `/commandes/${commandeId}`,
+      );
+      if (!controller.signal.aborted && result.success && result.data) {
+        setCommande(result.data);
+        setError(null);
+      }
     };
 
-    eventSourceRef.current = createEventSource();
+    const connect = async () => {
+      const token = useAuthStore.getState().accessToken;
+      if (!token || controller.signal.aborted) return;
+      try {
+        let response = await fetch(
+          `/api/v1/client/commandes/${commandeId}/stream`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          },
+        );
+        if (response.status === 401 && (await tryRefreshToken())) {
+          const refreshedToken = useAuthStore.getState().accessToken;
+          response = await fetch(
+            `/api/v1/client/commandes/${commandeId}/stream`,
+            {
+              headers: { Authorization: `Bearer ${refreshedToken}` },
+              signal: controller.signal,
+            },
+          );
+        }
+        if (!response.ok || !response.body) throw new Error("Stream indisponible");
 
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let shouldReconnect = true;
+        while (!controller.signal.aborted) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+          const parsed = parseSseChunk(buffer);
+          buffer = parsed.remainder;
+          for (const message of parsed.messages) {
+            if (message.event === "statut") await refreshCommande();
+            if (message.event === "fin") shouldReconnect = false;
+            if (message.event === "close") shouldReconnect = true;
+          }
+        }
+        if (shouldReconnect && !controller.signal.aborted) {
+          reconnectTimer = setTimeout(connect, 1_000);
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setError("Connexion temps réel interrompue. Nouvelle tentative…");
+          reconnectTimer = setTimeout(connect, 2_000);
+        }
+      }
+    };
+
+    void connect();
     return () => {
-      isMounted = false;
+      controller.abort();
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      eventSourceRef.current?.close();
     };
   }, [commandeId, accessToken]);
 

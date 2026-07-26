@@ -10,6 +10,7 @@ import {
   Users,
   UtensilsCrossed,
 } from "lucide-react";
+import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { dishesData } from "../data";
@@ -19,7 +20,7 @@ export default function DashboardShowcase() {
     "menu" | "analytics" | "staff" | "rules"
   >("menu");
   const [localDishes, setLocalDishes] = useState(dishesData);
-  const [hoveredDishId, setHoveredDishId] = useState<string | null>(null);
+  const [, setHoveredDishId] = useState<string | null>(null);
 
   // Toggle dish availability
   const toggleAvailable = (dishId: string) => {
@@ -123,11 +124,10 @@ export default function DashboardShowcase() {
             <div className="flex gap-1.5 overflow-x-auto w-full sm:w-auto">
               <button
                 onClick={() => setActiveTab("menu")}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
-                  activeTab === "menu"
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${activeTab === "menu"
                     ? "bg-white text-brand-green shadow-xs border border-[#EAEAEA]"
                     : "text-gray-400 hover:text-brand-dark"
-                }`}
+                  }`}
               >
                 <UtensilsCrossed className="h-4 w-4" />
                 Gestion de la Carte (Menu)
@@ -135,11 +135,10 @@ export default function DashboardShowcase() {
 
               <button
                 onClick={() => setActiveTab("analytics")}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
-                  activeTab === "analytics"
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${activeTab === "analytics"
                     ? "bg-white text-brand-green shadow-xs border border-[#EAEAEA]"
                     : "text-gray-400 hover:text-brand-dark"
-                }`}
+                  }`}
               >
                 <BarChart2 className="h-4 w-4" />
                 Ventes & Rentabilités
@@ -147,11 +146,10 @@ export default function DashboardShowcase() {
 
               <button
                 onClick={() => setActiveTab("staff")}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
-                  activeTab === "staff"
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${activeTab === "staff"
                     ? "bg-white text-brand-green shadow-xs border border-[#EAEAEA]"
                     : "text-gray-400 hover:text-brand-dark"
-                }`}
+                  }`}
               >
                 <Users className="h-4 w-4" />
                 Equipes & Staff (Service)
@@ -159,11 +157,10 @@ export default function DashboardShowcase() {
 
               <button
                 onClick={() => setActiveTab("rules")}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
-                  activeTab === "rules"
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${activeTab === "rules"
                     ? "bg-white text-brand-green shadow-xs border border-[#EAEAEA]"
                     : "text-gray-400 hover:text-brand-dark"
-                }`}
+                  }`}
               >
                 <ClipboardList className="h-4 w-4" />
                 Contrôle des Recettes
@@ -215,13 +212,13 @@ export default function DashboardShowcase() {
                       >
                         {/* Realistic food photo wrapper */}
                         <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-50">
-                          <img
+                          <Image
                             src={dish.image}
                             alt={dish.name}
-                            width={400}
-                            height={400}
+                            fill
+                            sizes="64px"
                             referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            className="object-cover group-hover:scale-110 transition-transform duration-300"
                           />
                           <div className="absolute top-1 left-1 bg-white/90 backdrop-blur-xs px-1 rounded text-[9px] font-mono font-bold text-brand-dark">
                             ⭐ {dish.rating}
@@ -410,13 +407,12 @@ export default function DashboardShowcase() {
                         key={index}
                         className="border border-[#EAEAEA] p-4 rounded-2xl flex flex-col items-center text-center bg-white hover:border-brand-green/30 transition-all shadow-xs"
                       >
-                        <div className="w-14 h-14 rounded-full overflow-hidden mb-3 border border-gray-100">
-                          <img
+                        <div className="w-14 h-14 rounded-full overflow-hidden mb-3 border border-gray-100 relative">
+                          <Image
                             src={member.avatar}
                             alt={member.name}
-                            width={100}
-                            height={100}
-                            className="w-full h-full object-cover"
+                            fill
+                            className="object-cover"
                             referrerPolicy="no-referrer"
                           />
                         </div>
@@ -429,11 +425,10 @@ export default function DashboardShowcase() {
                         </p>
 
                         <span
-                          className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold mt-3 ${
-                            member.status === "Pause"
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold mt-3 ${member.status === "Pause"
                               ? "bg-amber-50 text-amber-600 border border-amber-100"
                               : "bg-emerald-50 text-emerald-600 border border-emerald-100"
-                          }`}
+                            }`}
                         >
                           {member.status}
                         </span>
@@ -469,7 +464,7 @@ export default function DashboardShowcase() {
                     </p>
                   </div>
 
-                  <div className="bg-gray-50 p-4 rounded-2xl border border-[#EAEAEA] grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-gray-50 p-4 rounded-2xl border border-[#EAEAEA] grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
                     <div className="space-y-2 p-4 bg-white rounded-xl border border-gray-100">
                       <span className="text-[10px] font-bold font-mono text-brand-green block">
                         PRESTATION COMMERCIALE
@@ -478,9 +473,7 @@ export default function DashboardShowcase() {
                         Calculateur Marge Majeure
                       </h4>
                       <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                        RestauCI détecte si le prix de vente est trop bas par
-                        rapport aux prix fluctuants des fournisseurs
-                        d&apos;ingrédients.
+                        Toutci détecte si le prix de vente est trop bas par rapport au coût réel de vos ingrédients.
                       </p>
                     </div>
 
@@ -498,7 +491,8 @@ export default function DashboardShowcase() {
                       </p>
                     </div>
 
-                    <div className="space-y-2 p-4 bg-white rounded-xl border border-gray-100">
+                    {/* 🔗 réintégrer quand des partenariats fournisseurs locaux (Bouaké/CI) sont confirmés — actuellement référence Metro/Transgourmet (Europe), non pertinent pour le marché cible */}
+                    {/* <div className="space-y-2 p-4 bg-white rounded-xl border border-gray-100">
                       <span className="text-[10px] font-bold font-mono text-brand-green block">
                         FOURNISSEURS INTÉGRÉS
                       </span>
@@ -510,7 +504,7 @@ export default function DashboardShowcase() {
                         distributeurs locaux en un clic grâce à nos bons de
                         commandes auto-générés.
                       </p>
-                    </div>
+                    </div> */}
                   </div>
                 </motion.div>
               )}

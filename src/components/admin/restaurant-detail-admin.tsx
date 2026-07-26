@@ -7,6 +7,18 @@ import {
   validerRestaurantAction,
 } from "@/lib/actions/admin-restaurants";
 import { formatDate, formatPrix } from "@/lib/utils/format";
+import { getCommandeStatusMeta } from "@/lib/config/commande-status";
+import { AdminPage } from "@/components/admin/ui/admin-page";
+import { StatusBadge } from "@/components/admin/ui/status-badge";
+import {
+  CenterMorphModal,
+  CenterMorphModalContent,
+} from "@/components/motion/center-morph-modal";
+import { AnimatedNumber } from "@/components/motion/animated-number";
+import { StatefulButton } from "@/components/motion/stateful-button";
+import { Table, type TableColumn } from "@/components/motion/table";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -20,15 +32,20 @@ import {
   Store,
   TrendingUp,
   User,
-  X,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
+import type {
+  AdminRestaurantDetail,
+  AdminRestaurantOrder,
+} from "@/lib/db/queries-admin";
+import { getAdminRestaurantStatus } from "@/lib/config/admin-workflows";
 
 interface RestaurantDetailAdminProps {
-  restaurant: any;
-  commandes: any[];
+  restaurant: AdminRestaurantDetail;
+  commandes: AdminRestaurantOrder[];
   totalCommandes: number;
   page: number;
   totalPages: number;
@@ -38,51 +55,58 @@ interface RestaurantDetailAdminProps {
 function StatutBadge({
   actif,
   suspendu,
+  motifRejet,
 }: {
   actif: boolean;
   suspendu: boolean;
+  motifRejet: string | null;
 }) {
-  if (suspendu)
+  const status = getAdminRestaurantStatus({ actif, suspendu, motifRejet });
+  if (status === "suspendu")
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 border border-red-200">
+      <StatusBadge variant="danger" showIcon={false}>
         <XCircle className="w-4 h-4" />
         Suspendu
-      </span>
+      </StatusBadge>
     );
-  if (actif)
+  if (status === "actif")
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+      <StatusBadge variant="success" showIcon={false}>
         <CheckCircle2 className="w-4 h-4" />
         Actif
-      </span>
+      </StatusBadge>
+    );
+  if (status === "rejete")
+    return (
+      <StatusBadge variant="neutral" showIcon={false}>
+        <XCircle className="w-4 h-4" />
+        Rejeté
+      </StatusBadge>
     );
   return (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+    <StatusBadge variant="warning" showIcon={false}>
       <AlertTriangle className="w-4 h-4" />
       En attente de validation
-    </span>
+    </StatusBadge>
   );
 }
 
 function CommandeStatutBadge({ statut }: { statut: string }) {
-  const styles: Record<string, string> = {
-    livree: "bg-emerald-50 text-emerald-700",
-    en_cours: "bg-blue-50 text-blue-700",
-    annulee: "bg-red-50 text-red-700",
-    en_attente: "bg-amber-50 text-amber-700",
-  };
-  const labels: Record<string, string> = {
-    livree: "Livrée",
-    en_cours: "En cours",
-    annulee: "Annulée",
-    en_attente: "En attente",
-  };
+  const statusMeta = getCommandeStatusMeta(statut);
   return (
-    <span
-      className={`px-2.5 py-1 rounded-full text-xs font-semibold ${styles[statut] ?? "bg-gray-100 text-gray-600"}`}
+    <StatusBadge
+      variant={
+        statut === "annulee"
+          ? "danger"
+          : statut === "servie"
+            ? "success"
+            : statut === "recue"
+              ? "warning"
+              : "info"
+      }
     >
-      {labels[statut] ?? statut}
-    </span>
+      {statusMeta.label}
+    </StatusBadge>
   );
 }
 
@@ -101,33 +125,118 @@ export function RestaurantDetailAdmin({
 
   const handleValider = () =>
     startTransition(async () => {
-      await validerRestaurantAction(restaurant.id);
+      try {
+        await validerRestaurantAction(restaurant.id);
+        toast.success("Restaurant validé.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "La validation a échoué.");
+      }
     });
   const handleRejeter = () => {
     if (motif.trim().length < 5) return;
     startTransition(async () => {
-      await rejeterRestaurantAction(restaurant.id, motif);
-      setShowRejetModal(false);
-      setMotif("");
+      try {
+        const result = await rejeterRestaurantAction(restaurant.id, motif);
+        if (result.error) throw new Error(result.error);
+        toast.success("Restaurant rejeté.");
+        setShowRejetModal(false);
+        setMotif("");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Le rejet a échoué.");
+      }
     });
   };
   const handleSuspendre = () => {
     if (motif.trim().length < 5) return;
     startTransition(async () => {
-      await suspendreRestaurantAction(restaurant.id, motif);
-      setShowSuspendModal(false);
-      setMotif("");
+      try {
+        const result = await suspendreRestaurantAction(restaurant.id, motif);
+        if (result.error) throw new Error(result.error);
+        toast.success("Restaurant suspendu.");
+        setShowSuspendModal(false);
+        setMotif("");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "La suspension a échoué.");
+      }
     });
   };
   const handleReactiver = () =>
     startTransition(async () => {
-      await reactiverRestaurantAction(restaurant.id);
+      try {
+        await reactiverRestaurantAction(restaurant.id);
+        toast.success("Restaurant réactivé.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "La réactivation a échoué.");
+      }
     });
 
   const maxEvolution = Math.max(...evolution.map((e) => Number(e.count)), 1);
+  const commandeColumns: TableColumn<AdminRestaurantOrder>[] = [
+    {
+      key: "numero",
+      header: "N°",
+      sortable: true,
+      width: "140px",
+      cell: (commande) => (
+        <span className="font-mono text-xs font-semibold text-gray-700">
+          {commande.numero}
+        </span>
+      ),
+    },
+    {
+      key: "nomClient",
+      header: "Client",
+      sortable: true,
+      width: "200px",
+      cell: (commande) => (
+        <span className="font-medium">{commande.nomClient}</span>
+      ),
+    },
+    {
+      key: "statut",
+      header: "Statut",
+      sortable: true,
+      width: "150px",
+      cell: (commande) => (
+        <CommandeStatutBadge statut={commande.statut} />
+      ),
+    },
+    {
+      key: "modeCommande",
+      header: "Mode",
+      sortable: true,
+      width: "130px",
+      cell: (commande) => (
+        <span className="capitalize text-gray-500">{commande.modeCommande}</span>
+      ),
+    },
+    {
+      key: "total",
+      header: "Total",
+      sortable: true,
+      width: "130px",
+      align: "right",
+      cell: (commande) => (
+        <span className="font-bold">{formatPrix(commande.total)}</span>
+      ),
+    },
+    {
+      key: "createdAt",
+      header: "Date",
+      sortable: true,
+      width: "150px",
+      align: "right",
+      sortValue: (commande) => new Date(commande.createdAt).getTime(),
+      cell: (commande) => (
+        <span className="text-xs text-gray-400">
+          {formatDate(commande.createdAt)}
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 bg-[#FAFAFA] min-h-full">
+    <AdminPage>
       {/* Retour */}
       <Link
         href="/admin/restaurants"
@@ -137,10 +246,10 @@ export function RestaurantDetailAdmin({
       </Link>
 
       {/* Header */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="rounded-xl border bg-white p-5 sm:p-6">
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
           <div className="flex items-start gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center shrink-0 shadow-sm">
+            <div className="flex size-16 shrink-0 items-center justify-center rounded-xl bg-emerald-100">
               <Store className="w-8 h-8 text-emerald-700" />
             </div>
             <div>
@@ -151,6 +260,7 @@ export function RestaurantDetailAdmin({
                 <StatutBadge
                   actif={restaurant.actif}
                   suspendu={restaurant.suspendu}
+                  motifRejet={restaurant.motifRejet}
                 />
               </div>
               <div className="gap-4 mt-2 text-sm text-gray-500">
@@ -183,41 +293,43 @@ export function RestaurantDetailAdmin({
           <div className="flex items-center gap-2 flex-wrap">
             {!restaurant.actif && !restaurant.suspendu && (
               <>
-                <button
-                  type="button"
-                  disabled={isPending}
+                <StatefulButton
+                  state={isPending ? "loading" : "idle"}
+                  loadingText="Validation…"
                   onClick={handleValider}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm"
+                  icon={<CheckCircle2 className="w-4 h-4" />}
                 >
-                  <CheckCircle2 className="w-4 h-4" /> Valider
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowRejetModal(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 text-sm font-bold rounded-xl hover:bg-red-50 transition-colors"
-                >
-                  <XCircle className="w-4 h-4" /> Rejeter
-                </button>
+                  Valider
+                </StatefulButton>
+                {!restaurant.motifRejet && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => setShowRejetModal(true)}
+                  >
+                    <XCircle className="w-4 h-4" /> Rejeter
+                  </Button>
+                )}
               </>
             )}
             {restaurant.actif && !restaurant.suspendu && (
-              <button
+              <Button
                 type="button"
+                variant="destructive"
                 onClick={() => setShowSuspendModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 text-sm font-bold rounded-xl hover:bg-red-50 transition-colors"
               >
                 <AlertTriangle className="w-4 h-4" /> Suspendre
-              </button>
+              </Button>
             )}
             {restaurant.suspendu && (
-              <button
-                type="button"
-                disabled={isPending}
+              <StatefulButton
+                state={isPending ? "loading" : "idle"}
+                loadingText="Réactivation…"
                 onClick={handleReactiver}
-                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm"
+                icon={<CheckCircle2 className="w-4 h-4" />}
               >
-                <CheckCircle2 className="w-4 h-4" /> Réactiver
-              </button>
+                Réactiver
+              </StatefulButton>
             )}
           </div>
         </div>
@@ -260,8 +372,8 @@ export function RestaurantDetailAdmin({
             color: "text-amber-600",
           },
           {
-            label: "Taux de commission",
-            value: `${(restaurant.tauxCommissionBps / 100).toFixed(1)}%`,
+            label: "Abonnement effectif",
+            value: restaurant.effectivePlan?.plan?.nom || "—",
             icon: BadgeDollarSign,
             bg: "bg-purple-50",
             color: "text-purple-600",
@@ -278,14 +390,20 @@ export function RestaurantDetailAdmin({
           return (
             <div
               key={kpi.label}
-              className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4"
+              className="rounded-xl border bg-white p-4"
             >
               <div
                 className={`inline-flex p-2 rounded-xl ${kpi.bg} ${kpi.color} mb-3`}
               >
                 <Icon className="w-4 h-4" />
               </div>
-              <p className="text-xl font-bold text-gray-900">{kpi.value}</p>
+              <p className="text-xl font-bold text-gray-900">
+                {typeof kpi.value === "number" ? (
+                  <AnimatedNumber value={kpi.value} locale="fr-FR" />
+                ) : (
+                  kpi.value
+                )}
+              </p>
               <p className="text-xs text-gray-500 mt-0.5">{kpi.label}</p>
             </div>
           );
@@ -293,7 +411,7 @@ export function RestaurantDetailAdmin({
       </div>
 
       {/* Graphique évolution */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="rounded-xl border bg-white p-5 sm:p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-emerald-600" />
@@ -332,7 +450,7 @@ export function RestaurantDetailAdmin({
       </div>
 
       {/* Commandes */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="overflow-hidden rounded-xl border bg-white">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-base font-bold text-gray-900">
             Historique des commandes
@@ -341,84 +459,33 @@ export function RestaurantDetailAdmin({
             {totalCommandes} au total
           </span>
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-50 bg-gray-50/50">
-              <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                N°
-              </th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                Client
-              </th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                Statut
-              </th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider hidden md:table-cell">
-                Mode
-              </th>
-              <th className="text-right px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                Total
-              </th>
-              <th className="text-right px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider hidden sm:table-cell">
-                Date
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {commandes.map((c) => (
-              <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
-                <td className="px-5 py-3.5 font-mono text-gray-700 font-semibold text-xs">
-                  {c.numero}
-                </td>
-                <td className="px-5 py-3.5 font-medium text-gray-900">
-                  {c.nomClient}
-                </td>
-                <td className="px-5 py-3.5">
-                  <CommandeStatutBadge statut={c.statut} />
-                </td>
-                <td className="px-5 py-3.5 text-gray-500 capitalize hidden md:table-cell">
-                  {c.modeCommande}
-                </td>
-                <td className="px-5 py-3.5 text-right font-bold text-gray-900">
-                  {formatPrix(c.total)}
-                </td>
-                <td className="px-5 py-3.5 text-right text-gray-400 text-xs hidden sm:table-cell">
-                  {formatDate(c.createdAt)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {commandes.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <ShoppingBag className="w-8 h-8 text-gray-300 mb-3" />
-            <p className="text-gray-400 text-sm">
-              Aucune commande pour ce restaurant
-            </p>
-          </div>
-        )}
+        <Table
+          data={commandes}
+          columns={commandeColumns}
+          getRowId={(commande) => commande.id}
+          defaultSort={{ key: "createdAt", direction: "desc" }}
+          resizable
+          reorderable
+          rowHeight={64}
+          height={Math.min(Math.max(commandes.length * 64 + 48, 180), 520)}
+          emptyState="Aucune commande pour ce restaurant"
+        />
 
         {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+          <div className="flex flex-col gap-3 border-t px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-gray-500">
               Page {page} sur {totalPages}
             </p>
             <div className="flex gap-1.5">
               {page > 1 && (
-                <Link
-                  href={`?page=${page - 1}`}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-                >
-                  Précédent
-                </Link>
+                <Button asChild variant="outline">
+                  <Link href={`?page=${page - 1}`}>Précédent</Link>
+                </Button>
               )}
               {page < totalPages && (
-                <Link
-                  href={`?page=${page + 1}`}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors"
-                >
-                  Suivant
-                </Link>
+                <Button asChild>
+                  <Link href={`?page=${page + 1}`}>Suivant</Link>
+                </Button>
               )}
             </div>
           </div>
@@ -462,7 +529,7 @@ export function RestaurantDetailAdmin({
           danger
         />
       )}
-    </div>
+    </AdminPage>
   );
 }
 
@@ -490,53 +557,60 @@ function ConfirmModal({
   danger?: boolean;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full">
-        <div className="flex items-start justify-between mb-4">
+    <CenterMorphModal open onOpenChange={(open) => !open && onClose()}>
+      <CenterMorphModalContent
+        ariaLabel={titre}
+        ariaDescribedBy="restaurant-confirm-description"
+        className="max-w-md rounded-2xl"
+      >
+        <div className="space-y-5 p-6">
           <div className="flex items-center gap-3">
             <div
-              className={`p-2.5 rounded-xl ${danger ? "bg-red-100" : "bg-amber-100"}`}
+              className={`rounded-lg p-2.5 ${danger ? "bg-red-100" : "bg-amber-100"}`}
             >
               <AlertTriangle
                 className={`w-5 h-5 ${danger ? "text-red-600" : "text-amber-600"}`}
               />
             </div>
-            <h3 className="text-base font-bold text-gray-900">{titre}</h3>
+            <h2 className="text-lg font-semibold">{titre}</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
         {description && (
-          <p className="text-sm text-gray-500 mb-3">{description}</p>
+          <p
+            id="restaurant-confirm-description"
+            className="text-sm text-muted-foreground"
+          >
+            {description}
+          </p>
         )}
-        <textarea
+        <Textarea
           value={motif}
           onChange={(e) => setMotif(e.target.value)}
           placeholder={placeholder}
-          className="w-full border border-gray-200 rounded-xl p-3 text-sm h-24 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-300 resize-none"
+          className="min-h-24 resize-none"
         />
-        <div className="flex gap-2 mt-4">
-          <button
+        <p className="text-xs text-muted-foreground">
+          {motif.trim().length}/5 caractères minimum
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button
             type="button"
-            disabled={isPending || motif.trim().length < 5}
-            onClick={onConfirm}
-            className={`flex-1 py-2.5 text-white text-sm font-bold rounded-xl disabled:opacity-40 transition-colors ${danger ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700"}`}
-          >
-            {isPending ? "En cours..." : confirmLabel}
-          </button>
-          <button
-            type="button"
+            variant="outline"
             onClick={onClose}
-            className="flex-1 py-2.5 border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors"
           >
             Annuler
-          </button>
+          </Button>
+          <StatefulButton
+            variant={danger ? "destructive" : "default"}
+            state={isPending ? "loading" : "idle"}
+            loadingText="En cours…"
+            disabled={isPending || motif.trim().length < 5}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </StatefulButton>
         </div>
-      </div>
-    </div>
+        </div>
+      </CenterMorphModalContent>
+    </CenterMorphModal>
   );
 }

@@ -1,13 +1,12 @@
 "use client";
 
+import { useRealtimeContext } from "@/components/dashboard/layout/dashboard-realtime-provider";
+import { useNotificationsContext } from "@/components/dashboard/notifications/notifications-provider";
+import { Button } from "@/components/ui/button";
 import type { Notification } from "@/lib/db/types";
 import Link from "next/link";
-import { useState } from "react";
-
-interface NotificationsClientProps {
-  initialNotifications: Notification[];
-  initialUnreadCount: number;
-}
+import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 
 function getNotificationHref(notification: Notification): string {
   if (!notification.lienType || !notification.lienId) return "#";
@@ -22,83 +21,202 @@ function getNotificationHref(notification: Notification): string {
 function getNotificationIcon(type: string): string {
   switch (type) {
     case "nouvelle_commande":
-      return "U";
+      return "🛒";
     case "commande_prete":
-      return "C";
+      return "✅";
     case "commande_annulee":
-      return "X";
+      return "❌";
     case "nouveau_avis":
-      return "M";
+      return "⭐";
     default:
-      return "B";
+      return "🔔";
   }
 }
 
-export function NotificationsClient({
-  initialNotifications,
-  initialUnreadCount,
-}: NotificationsClientProps) {
-  const [notifications, setNotifications] = useState(initialNotifications);
-  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+/** Contexte audio partagé, déverrouillé à la première interaction */
+let _audioCtx: AudioContext | null = null;
+let _audioUnlocked = false;
 
-  const markAsRead = async (id: string) => {
-    try {
-      const res = await fetch("/api/notifications", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notificationIds: [id] }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === id ? { ...n, lue: true, lueAt: new Date() } : n,
-        ),
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    } catch (err) {
-      console.error("[NotificationsClient] Failed to mark as read:", err);
-    }
-  };
+function unlockAudio() {
+  if (_audioUnlocked) return;
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    _audioCtx = new AudioCtx();
+    const buf = _audioCtx.createBuffer(1, 1, 22050);
+    const src = _audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(_audioCtx.destination);
+    src.start(0);
+    _audioUnlocked = true;
+  } catch {
+    /* silencieux */
+  }
+}
 
-  const markAllAsRead = async () => {
-    const unreadIds = notifications.filter((n) => !n.lue).map((n) => n.id);
-    if (unreadIds.length === 0) return;
-    try {
-      const res = await fetch("/api/notifications", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notificationIds: unreadIds }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setNotifications((prev) =>
-        prev.map((n) => (!n.lue ? { ...n, lue: true, lueAt: new Date() } : n)),
-      );
-      setUnreadCount(0);
-    } catch (err) {
-      console.error("[NotificationsClient] Failed to mark all as read:", err);
+/** Joue un bip sonore via Web Audio API pour signaler une nouvelle notification */
+function playNotificationSound() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = _audioCtx ?? new AudioCtx();
+    if (!_audioCtx) _audioCtx = ctx;
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+    const beep = (startTime: number, freq: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+      osc.start(startTime);
+      osc.stop(startTime + 0.3);
+    };
+    beep(ctx.currentTime, 880);
+    beep(ctx.currentTime + 0.35, 660);
+  } catch {
+    // Web Audio API non disponible, on ignore silencieusement
+  }
+}
+
+// Types d'événements SSE pertinents pour les notifications.
+const NOTIFICATION_TRIGGER_TYPES = new Set([
+  "nouvelle_commande",
+  "commande_prete",
+  "commande_annulee",
+  "nouveau_avis",
+]);
+
+// Types déjà gérés par le DashboardRealtimeProvider (toast + son + refresh).
+// On les saute ICI pour éviter tout doublon son/toast. On continue quand
+// même de rafraîchir la liste (via le contexte) — seuls le son et le toast
+// sont filtrés. `nouveau_avis` reste géré ici (le provider ne le traite pas).
+const SKIP_SOUND_FOR = new Set([
+  "nouvelle_commande",
+  "commande_prete",
+  "commande_annulee",
+]);
+
+export function NotificationsClient() {
+  // État et actions centralisés dans le NotificationsProvider. Toute action
+  // ici (markAsRead / markAllAsRead) se propage immédiatement à tous les
+  // consommateurs du contexte (navbar incluse) — c'est la synchronisation
+  // attendue entre composants.
+  const {
+    notifications,
+    unreadCount,
+    isRefreshing,
+    markAsRead,
+    markAllAsRead,
+    refresh,
+  } = useNotificationsContext();
+  const { latestEvent } = useRealtimeContext();
+
+  // Référence au plus récent ID connu pour détecter les nouvelles notifs
+  // (pour le son/toast spécifique à `nouveau_avis` non géré par le provider).
+  const lastTopIdRef = useRef<string | null>(
+    notifications.length > 0 ? notifications[0].id : null,
+  );
+  const currentIdsRef = useRef<Set<string>>(
+    new Set(notifications.map((n) => n.id)),
+  );
+
+  // Déverrouiller l'audio à la première interaction
+  useEffect(() => {
+    const unlock = () => {
+      unlockAudio();
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    window.addEventListener("click", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  // Détection locale des nouvelles notifications (son + toast) pour les types
+  // NON gérés par le DashboardRealtimeProvider (ex: `nouveau_avis`). Les types
+  // déjà traités par le provider sont filtrés via SKIP_SOUND_FOR.
+  useEffect(() => {
+    if (!latestEvent || !NOTIFICATION_TRIGGER_TYPES.has(latestEvent.type))
+      return;
+
+    // Détecte les nouvelles notifs apparues dans la liste (raffraîchie par le
+    // provider via le même latestEvent).
+    if (notifications.length > 0) {
+      const latestId = notifications[0].id;
+      if (lastTopIdRef.current && latestId !== lastTopIdRef.current) {
+        const brandNewNotifs = notifications.filter(
+          (n) => !currentIdsRef.current.has(n.id),
+        );
+        const notifsForSound = brandNewNotifs.filter(
+          (n) => !SKIP_SOUND_FOR.has(n.type),
+        );
+
+        if (notifsForSound.length > 0) {
+          playNotificationSound();
+          notifsForSound.slice(0, 3).forEach((notif) => {
+            toast(getNotificationIcon(notif.type) + " " + notif.titre, {
+              description: notif.message,
+              duration: 6000,
+            });
+          });
+        }
+      }
+      lastTopIdRef.current = latestId;
     }
-  };
+    currentIdsRef.current = new Set(notifications.map((n) => n.id));
+  }, [latestEvent, notifications]);
 
   return (
     <div className="min-h-screen bg-background py-8">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-          <div className="flex items-center gap-4">
-            <button
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+            {unreadCount > 0 && (
+              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {unreadCount} non lue{unreadCount > 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Bouton actualisation manuelle */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => refresh(false)}
+              disabled={isRefreshing}
+              aria-label="Actualiser"
+            >
+              <svg
+                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </Button>
+            {/* Marquer tout comme lu */}
+            <Button
+              type="button"
               onClick={markAllAsRead}
               disabled={unreadCount === 0}
-              className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium 
-                ${unreadCount === 0 ? "text-gray-400 bg-gray-50" : "text-white bg-primary"} 
-                rounded-md transition-colors`}
             >
-              {unreadCount > 0 && (
-                <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-                  {unreadCount}
-                </span>
-              )}
               Marquer tout comme lu
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -125,27 +243,40 @@ export function NotificationsClient({
             {notifications.map((notification) => (
               <div
                 key={notification.id}
-                className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                className={`border rounded-lg p-4 transition-colors ${
+                  notification.lue
+                    ? "bg-white hover:bg-gray-50"
+                    : "bg-blue-50 border-blue-200 hover:bg-blue-100"
+                }`}
               >
                 <div className="flex items-start gap-4">
                   <div className="shrink-0 mt-0.5">
-                    <div className="h-6 w-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium">
-                      {getNotificationIcon(notification.type).charAt(0)}
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-base">
+                      {getNotificationIcon(notification.type)}
                     </div>
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between mb-2">
                       <h3
-                        className={`font-semibold 
-                          ${notification.lue ? "text-gray-900" : "text-primary font-bold"}`}
+                        className={`font-semibold ${
+                          notification.lue
+                            ? "text-gray-900"
+                            : "text-primary font-bold"
+                        }`}
                       >
                         {notification.titre}
+                        {!notification.lue && (
+                          <span className="ml-2 inline-block w-2 h-2 rounded-full bg-blue-500 align-middle" />
+                        )}
                       </h3>
-                      <time className="text-xs text-gray-500">
+                      <time className="text-xs text-gray-500 ml-2 shrink-0">
                         {new Date(notification.createdAt).toLocaleString(
                           "fr-FR",
-                          { dateStyle: "short", timeStyle: "short" },
+                          {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          },
                         )}
                       </time>
                     </div>
@@ -156,75 +287,40 @@ export function NotificationsClient({
 
                     {notification.lienType && notification.lienId && (
                       <div className="mt-3">
-                        <Link
-                          href={getNotificationHref(notification)}
-                          className={`inline-flex items-center px-3 py-1.5 text-sm font-medium 
-                            ${notification.lue ? "text-gray-600 hover:text-gray-900" : "text-primary hover:text-primary/80"}
-                            bg-gray-50
-                            rounded-md
-                          `}
-                        >
-                          Voir la commande
-                        </Link>
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={getNotificationHref(notification)}>
+                            Voir la commande →
+                          </Link>
+                        </Button>
                       </div>
                     )}
                   </div>
 
-                  <div className="shrink-0 mt-2">
-                    <button
+                  <div className="shrink-0 mt-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => markAsRead(notification.id)}
                       disabled={notification.lue}
-                      className={`flex h-8 w-8 items-center justify-center 
-                        ${notification.lue ? "text-gray-400" : "text-primary"} 
-                        bg-gray-50
-                        rounded-full hover:bg-gray-100
-                        transition-colors`}
+                      aria-label={notification.lue ? "Déjà lu" : "Marquer comme lu"}
                     >
-                      {!notification.lue && (
-                        <svg
-                          className="h-4 w-4"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      )}
-                      {notification.lue && (
-                        <svg
-                          className="h-4 w-4"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 12l7 7 7-7"
-                          />
-                        </svg>
-                      )}
-                    </button>
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        fill="none"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    </Button>
                   </div>
                 </div>
-
-                {!notification.lue && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Envoyé le</span>
-                      <span className="text-gray-600 font-medium">
-                        {new Date(notification.createdAt).toLocaleString(
-                          "fr-FR",
-                          { dateStyle: "short", timeStyle: "short" },
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
             ))}
           </div>

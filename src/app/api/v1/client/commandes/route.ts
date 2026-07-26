@@ -1,6 +1,6 @@
 import { getClientSession } from "@/lib/api/auth-client";
 import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
+import { validateBody, validateSearchParams } from "@/lib/api/validate";
 import {
   buildPaginationMeta,
   PAGINATION,
@@ -16,7 +16,7 @@ import {
   commandeClientLimiter,
 } from "@/lib/rate-limit";
 import { formatPrix } from "@/lib/utils/format";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -42,11 +42,16 @@ const passerCommandeSchema = z
     numeroTable: z.string().max(10).optional(),
     // Note
     noteClient: z.string().max(500).optional(),
+    idempotencyKey: z.string().uuid(),
   })
   .refine((d) => d.modeCommande !== "livraison" || !!d.adresseLivraison, {
     message: "Adresse de livraison requise",
     path: ["adresseLivraison"],
   });
+
+const historiqueQuerySchema = z.object({
+  search: z.string().trim().min(3).max(80).optional(),
+});
 
 // POST /api/v1/client/commandes — Passer une commande
 export async function POST(request: NextRequest): Promise<Response> {
@@ -71,6 +76,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       .select({
         id: restaurants.id,
         actif: restaurants.actif,
+        enLigne: restaurants.enLigne,
         accepteCommandes: restaurants.accepteCommandes,
         fraisLivraison: restaurants.fraisLivraison,
         commandeMinimum: restaurants.commandeMinimum,
@@ -87,6 +93,14 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     if (!restaurant) {
       return apiResponse.notFound("Restaurant");
+    }
+
+    if (!restaurant.enLigne) {
+      return apiResponse.error(
+        "Ce restaurant est fermé pour le moment",
+        "BAD_REQUEST",
+        { status: 400 },
+      );
     }
 
     if (!restaurant.accepteCommandes) {
@@ -189,6 +203,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const commande = await createCommande({
       restaurantId: restaurant.id,
       clientId: (await session).clientId,
+      idempotencyKey: (await data).idempotencyKey,
       modeCommande: (await data).modeCommande,
       nomClient: client.nom,
       telephoneClient: client.telephone,
@@ -245,8 +260,19 @@ export async function GET(request: NextRequest): Promise<Response> {
     PAGINATION.MAX_PAR_PAGE,
   );
   const offset = (page - 1) * limit;
+  const { data: query, error: queryError } = validateSearchParams(
+    searchParams,
+    historiqueQuerySchema,
+  );
+  if (queryError) return queryError;
 
   try {
+    const conditions = [eq(commandes.clientId, (await session).clientId)];
+    if (query?.search) {
+      conditions.push(ilike(commandes.numero, `%${query.search}%`));
+    }
+    const whereClause = and(...conditions);
+
     const [items, [{ total }]] = await Promise.all([
       db
         .select({
@@ -260,15 +286,15 @@ export async function GET(request: NextRequest): Promise<Response> {
           restaurantId: commandes.restaurantId,
         })
         .from(commandes)
-        .where(eq(commandes.clientId, (await session).clientId))
-        .orderBy(commandes.createdAt) // desc via le type
+        .where(whereClause)
+        .orderBy(desc(commandes.createdAt))
         .limit(limit)
         .offset(offset),
 
       db
         .select({ total: count() })
         .from(commandes)
-        .where(eq(commandes.clientId, (await session).clientId)),
+        .where(whereClause),
     ]);
 
     return apiResponse.success(items, {

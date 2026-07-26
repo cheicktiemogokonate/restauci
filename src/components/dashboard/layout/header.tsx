@@ -1,8 +1,7 @@
 "use client";
 
-import { Search, Bell, Settings, ChevronDown, ArrowLeft } from "lucide-react";
+import { ChevronDown, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -36,7 +35,7 @@ export function Header({ title, subtitle, breadcrumb, backHref }: HeaderProps) {
                     <ArrowLeft className="h-5 w-5" />
                   </Link>
                 )}
-                <h1 className="text-xl font-semibold text-foreground">{title || "RestauCI"}</h1>
+                <h1 className="text-xl font-semibold text-foreground">{title || "Toutci"}</h1>
               </div>
               <nav className="flex items-center gap-1 text-[13px] mt-0.5 text-muted-foreground">
                 {breadcrumb.map((item, index) => (
@@ -55,7 +54,7 @@ export function Header({ title, subtitle, breadcrumb, backHref }: HeaderProps) {
             </div>
           ) : (
             <div>
-              <h1 className="text-lg font-semibold text-foreground">{title || "RestauCI"}</h1>
+              <h1 className="text-lg font-semibold text-foreground">{title || "Toutci"}</h1>
               <p className="text-sm text-muted-foreground">{subtitle || "Hello Orlando, welcome back!"}</p>
             </div>
           )}

@@ -1,11 +1,14 @@
 import { getAdminSession } from "@/lib/auth/get-admin-session";
+import { PageHeader } from "@/components/admin/ui/page-header";
+import { AdminPage } from "@/components/admin/ui/admin-page";
+import { AnimatedNumber } from "@/components/motion/animated-number";
 import {
+  getAdminActionCenterSummary,
   getEvolutionPlateformeAdmin,
   getStatsGlobalAdmin,
 } from "@/lib/db/queries-admin";
 import { formatPrix } from "@/lib/utils/format";
 import {
-  Activity,
   AlertTriangle,
   ArrowDownRight,
   ArrowRight,
@@ -14,39 +17,21 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
-  Cpu,
-  Database,
   ShoppingBag,
   Store,
   TrendingUp,
   Users,
   Wallet,
-  WifiOff,
 } from "lucide-react";
 import Link from "next/link";
 
 export default async function AdminDashboardPage() {
   const admin = await getAdminSession();
 
-  // Fetch health + stats en parallèle
-  const [stats, evolution, healthRes] = await Promise.all([
+  const [stats, evolution, actionSummary] = await Promise.all([
     getStatsGlobalAdmin(),
     getEvolutionPlateformeAdmin(14),
-    fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/health`,
-      {
-        cache: "no-store",
-      },
-    )
-      .then((r) => r.json())
-      .catch(() => null) as Promise<{
-      status: "healthy" | "degraded" | "unhealthy";
-      version: string;
-      services: {
-        database: { status: "up" | "down"; latency?: number };
-        cache: { status: "up" | "down"; latency?: number };
-      };
-    } | null>,
+    getAdminActionCenterSummary(),
   ]);
 
   const prenom = admin.nom.split(" ")[0];
@@ -61,17 +46,14 @@ export default async function AdminDashboardPage() {
   });
 
   return (
-    <div className="p-6 lg:p-8 bg-[#FAFAFA] min-h-full">
+    <AdminPage>
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* ─── Colonne principale ─── */}
         <div className="xl:col-span-2 space-y-6">
-          {/* En-tête */}
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              Bonjour, {prenom} 👋
-            </h2>
-            <p className="text-sm text-gray-500 mt-1 capitalize">{dateLabel}</p>
-          </div>
+          <PageHeader
+            title={`Bonjour, ${prenom} 👋`}
+            description={dateLabel}
+          />
 
           {/* Alerte restaurants en attente */}
           {stats.restaurants.enAttente > 0 && (
@@ -96,6 +78,29 @@ export default async function AdminDashboardPage() {
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-amber-600 group-hover:translate-x-1 transition-transform shrink-0" />
+            </Link>
+          )}
+
+          {actionSummary.pendingSubscriptions > 0 && (
+            <Link
+              href="/admin/a-traiter"
+              className="group flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl p-4 hover:bg-blue-100 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-100 rounded-xl text-blue-600">
+                  <BadgeDollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-blue-900">
+                    {actionSummary.pendingSubscriptions} demande
+                    {actionSummary.pendingSubscriptions > 1 ? "s" : ""} d’abonnement à valider
+                  </p>
+                  <p className="text-xs text-blue-700 mt-0.5">
+                    Action requise — examiner les demandes des partenaires.
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform shrink-0" />
             </Link>
           )}
 
@@ -127,12 +132,12 @@ export default async function AdminDashboardPage() {
                 href: "/admin/users",
               },
               {
-                label: "Commandes aujourd'hui",
-                value: stats.commandesAujourdhui,
-                icon: Clock,
-                color: "text-orange-600",
-                bg: "bg-orange-50",
-                href: "/admin/commandes",
+                label: "Actions à traiter",
+                value: actionSummary.requiredActions,
+                icon: AlertTriangle,
+                color: "text-amber-600",
+                bg: "bg-amber-50",
+                href: "/admin/a-traiter",
               },
             ].map((kpi) => {
               const Icon = kpi.icon;
@@ -140,7 +145,7 @@ export default async function AdminDashboardPage() {
                 <Link
                   key={kpi.label}
                   href={kpi.href}
-                  className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group cursor-pointer"
+                  className="group rounded-xl border bg-white p-5 transition-colors hover:bg-muted/30"
                 >
                   <div
                     className={`inline-flex p-2 rounded-xl ${kpi.bg} ${kpi.color} mb-3`}
@@ -148,7 +153,7 @@ export default async function AdminDashboardPage() {
                     <Icon className="w-5 h-5" />
                   </div>
                   <p className="text-2xl font-bold text-gray-900">
-                    {kpi.value.toLocaleString("fr-FR")}
+                    <AnimatedNumber value={kpi.value} locale="fr-FR" />
                   </p>
                   <p className="text-xs text-gray-500 font-medium mt-1 flex items-center gap-1">
                     {kpi.label}
@@ -162,7 +167,7 @@ export default async function AdminDashboardPage() {
           {/* GMV + Commissions */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Volume transactionnel */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-md transition-all duration-200">
+            <div className="rounded-xl border bg-white p-6">
               <div className="flex items-start justify-between mb-4">
                 <div
                   className={`p-2.5 bg-emerald-50 text-emerald-600 rounded-xl`}
@@ -190,7 +195,11 @@ export default async function AdminDashboardPage() {
                 Volume transactionnel (ce mois)
               </p>
               <p className="text-2xl font-bold text-gray-900">
-                {formatPrix(stats.gmvMois)}
+                <AnimatedNumber
+                  value={stats.gmvMois}
+                  locale="fr-FR"
+                  suffix=" FCFA"
+                />
               </p>
               <p className="text-xs text-gray-400 mt-1">vs mois précédent</p>
             </div>
@@ -198,7 +207,7 @@ export default async function AdminDashboardPage() {
             {/* Commissions en attente */}
             <Link
               href="/admin/commissions"
-              className="bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-md transition-all duration-200 group block"
+              className="group block rounded-xl border bg-white p-6 transition-colors hover:bg-muted/30"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
@@ -212,10 +221,14 @@ export default async function AdminDashboardPage() {
                 Commissions en attente
               </p>
               <p className="text-2xl font-bold text-gray-900">
-                {formatPrix(stats.commissionsEnAttente)}
+                <AnimatedNumber
+                  value={stats.commissionsEnAttente}
+                  locale="fr-FR"
+                  suffix=" FCFA"
+                />
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                à reverser aux partenaires
+                à encaisser auprès des partenaires
               </p>
             </Link>
           </div>
@@ -357,10 +370,14 @@ export default async function AdminDashboardPage() {
                   </span>
                 </div>
                 <p className="text-3xl font-bold mb-1">
-                  {formatPrix(stats.commissionsEnAttente)}
+                  <AnimatedNumber
+                    value={stats.commissionsEnAttente}
+                    locale="fr-FR"
+                    suffix=" FCFA"
+                  />
                 </p>
                 <p className="text-xs opacity-70 mb-4">
-                  à reverser aux partenaires
+                  à encaisser auprès des partenaires
                 </p>
                 <Link
                   href="/admin/commissions"
@@ -402,172 +419,8 @@ export default async function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* Widget santé plateforme */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-gray-600" />
-                <h3 className="font-bold text-gray-900">
-                  Santé de la plateforme
-                </h3>
-              </div>
-              {healthRes ? (
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${
-                    healthRes.status === "healthy"
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                      : healthRes.status === "degraded"
-                        ? "bg-amber-50 text-amber-700 border-amber-100"
-                        : "bg-red-50 text-red-700 border-red-100"
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      healthRes.status === "healthy"
-                        ? "bg-emerald-500"
-                        : healthRes.status === "degraded"
-                          ? "bg-amber-500"
-                          : "bg-red-500"
-                    }`}
-                  />
-                  {healthRes.status === "healthy"
-                    ? "Opérationnel"
-                    : healthRes.status === "degraded"
-                      ? "Dégradé"
-                      : "Hors ligne"}
-                </span>
-              ) : (
-                <span className="text-xs text-gray-400">Indisponible</span>
-              )}
-            </div>
-
-            {healthRes ? (
-              <div className="space-y-3">
-                {/* Base de données */}
-                <div
-                  className={`flex items-center justify-between p-3.5 rounded-xl border ${
-                    healthRes.services.database.status === "up"
-                      ? "bg-emerald-50/50 border-emerald-100"
-                      : "bg-red-50/50 border-red-100"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`p-1.5 rounded-lg ${
-                        healthRes.services.database.status === "up"
-                          ? "bg-emerald-100"
-                          : "bg-red-100"
-                      }`}
-                    >
-                      <Database
-                        className={`w-4 h-4 ${
-                          healthRes.services.database.status === "up"
-                            ? "text-emerald-600"
-                            : "text-red-500"
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">
-                        Base de données
-                      </p>
-                      <p className="text-xs text-gray-500">PostgreSQL</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={`text-xs font-bold ${
-                        healthRes.services.database.status === "up"
-                          ? "text-emerald-600"
-                          : "text-red-500"
-                      }`}
-                    >
-                      {healthRes.services.database.status === "up"
-                        ? "En ligne"
-                        : "Hors ligne"}
-                    </p>
-                    {healthRes.services.database.latency !== undefined && (
-                      <p className="text-xs text-gray-400">
-                        {healthRes.services.database.latency} ms
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Cache Redis */}
-                <div
-                  className={`flex items-center justify-between p-3.5 rounded-xl border ${
-                    healthRes.services.cache.status === "up"
-                      ? "bg-emerald-50/50 border-emerald-100"
-                      : "bg-amber-50/50 border-amber-100"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`p-1.5 rounded-lg ${
-                        healthRes.services.cache.status === "up"
-                          ? "bg-emerald-100"
-                          : "bg-amber-100"
-                      }`}
-                    >
-                      <Cpu
-                        className={`w-4 h-4 ${
-                          healthRes.services.cache.status === "up"
-                            ? "text-emerald-600"
-                            : "text-amber-600"
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">
-                        Cache
-                      </p>
-                      <p className="text-xs text-gray-500">Redis</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={`text-xs font-bold ${
-                        healthRes.services.cache.status === "up"
-                          ? "text-emerald-600"
-                          : "text-amber-600"
-                      }`}
-                    >
-                      {healthRes.services.cache.status === "up"
-                        ? "En ligne"
-                        : "Hors ligne"}
-                    </p>
-                    {healthRes.services.cache.latency !== undefined && (
-                      <p className="text-xs text-gray-400">
-                        {healthRes.services.cache.latency} ms
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Version déployée */}
-                {healthRes.version && (
-                  <div className="flex items-center justify-between px-1 pt-1">
-                    <span className="text-xs text-gray-400">
-                      Version déployée
-                    </span>
-                    <span className="text-xs font-mono font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
-                      {healthRes.version}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <WifiOff className="w-8 h-8 text-gray-300 mb-3" />
-                <p className="text-sm text-gray-400">
-                  Impossible de joindre le service de santé
-                </p>
-              </div>
-            )}
-          </div>
         </div>
       </div>
-    </div>
+    </AdminPage>
   );
 }

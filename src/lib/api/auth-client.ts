@@ -3,6 +3,10 @@ import { apiResponse }  from "./response";
 import { verifyToken }  from "@/lib/auth";  // adapte selon ton fichier auth
 import { redis }        from "@/lib/cache/redis";
 import { createLogger } from "@/lib/logger";
+import { db } from "@/lib/db";
+import { clients } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { isTokenBlacklisted } from "@/lib/api/token-blacklist";
 
 const log = createLogger("api-client-auth");
 
@@ -32,7 +36,9 @@ export async function getClientSession(req: NextRequest): Promise<
 
   // Vérifier le blacklist (logout)
   try {
-    const isBlacklisted = await redis.get(`restauci:blacklist:${token}`);
+    const isBlacklisted =
+      (await isTokenBlacklisted(token)) ||
+      (await redis.get(`restauci:blacklist:${token}`));
     if (isBlacklisted) {
       return {
         session: null,
@@ -53,8 +59,20 @@ export async function getClientSession(req: NextRequest): Promise<
       };
     }
 
+    const [client] = await db
+      .select({ id: clients.id, actif: clients.actif })
+      .from(clients)
+      .where(eq(clients.id, payload.clientId as string))
+      .limit(1);
+    if (!client?.actif) {
+      return {
+        session: null,
+        error: apiResponse.forbidden("Compte client désactivé"),
+      };
+    }
+
     return {
-      session: { clientId: payload.clientId as string, type: "client" },
+      session: { clientId: client.id, type: "client" },
       error:   null,
     };
   } catch {

@@ -18,15 +18,18 @@ export function DatePicker({
   date,
   setDate,
   className,
+  id,
 }: {
   date?: Date;
   setDate: (date?: Date) => void;
   className?: string;
+  id?: string;
 }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant={"outline"}
           className={cn(
             "w-[240px] justify-start text-left font-normal",

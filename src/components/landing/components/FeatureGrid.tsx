@@ -285,7 +285,6 @@ export default function FeatureGrid() {
             itemStackDistance={35}
             baseScale={0.92}
             rotationAmount={1.5}
-            blurAmount={1.5}
           >
             {featureGridData.map((feature, idx) => (
               <ScrollStackItem
@@ -324,7 +323,7 @@ export default function FeatureGrid() {
 
                       {/* Custom premium details listed per card */}
                       <ul className="space-y-2.5 mb-8">
-                        {idx === 0 && (
+                        {feature.id === "f1" && (
                           <>
                             <li className="flex items-center gap-2 text-xs font-medium text-brand-dark/75">
                               <Check className="h-4 w-4 text-brand-green" />{" "}
@@ -340,7 +339,7 @@ export default function FeatureGrid() {
                             </li>
                           </>
                         )}
-                        {idx === 1 && (
+                        {feature.id === "f2" && (
                           <>
                             <li className="flex items-center gap-2 text-xs font-medium text-brand-dark/75">
                               <Check className="h-4 w-4 text-brand-green" />{" "}
@@ -356,7 +355,7 @@ export default function FeatureGrid() {
                             </li>
                           </>
                         )}
-                        {idx === 2 && (
+                        {feature.id === "f3" && (
                           <>
                             <li className="flex items-center gap-2 text-xs font-medium text-brand-dark/75">
                               <Check className="h-4 w-4 text-brand-green" />{" "}
@@ -372,7 +371,7 @@ export default function FeatureGrid() {
                             </li>
                           </>
                         )}
-                        {idx === 3 && (
+                        {feature.id === "f4" && (
                           <>
                             <li className="flex items-center gap-2 text-xs font-medium text-brand-dark/75">
                               <Check className="h-4 w-4 text-brand-green" />{" "}

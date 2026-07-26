@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { notifications } from "@/lib/db/schema";
@@ -7,7 +7,7 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("notifications-count");
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const session = await getCurrentUser();
     if (!session) {

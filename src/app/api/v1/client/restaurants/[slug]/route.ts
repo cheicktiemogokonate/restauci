@@ -48,7 +48,13 @@ export async function GET(
         const [r] = await db
           .select()
           .from(restaurants)
-          .where(and(eq(restaurants.slug, slug), eq(restaurants.actif, true)))
+          .where(
+            and(
+              eq(restaurants.slug, slug),
+              eq(restaurants.actif, true),
+              eq(restaurants.enLigne, true),
+            ),
+          )
           .limit(1);
         return r ?? null;
       },

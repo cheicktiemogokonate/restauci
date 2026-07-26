@@ -8,7 +8,8 @@ export interface Dish {
   description: string;
   price: number; // en FCFA entiers
   image: string;
-  category: "plats" | "boissons" | "desserts";
+  categoryId: string;
+  categoryName: string;
   isPopular?: boolean;
 }
 

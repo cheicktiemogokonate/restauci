@@ -5,6 +5,9 @@ export interface SseStatutPayload {
   statut: StatutCommande;
   commandeId: string;
   timestamp: string;
+  lienId?: string;
+  numero?: string;
+  total?: number;
 }
 
 // Payload SSE pour une notification push (titre/message, ex: commande_prete)
@@ -15,11 +18,17 @@ export interface SseNotificationPayload {
   lienType?: string;
 }
 
+export interface SseDriverAssignmentPayload {
+  commandeId: string;
+  livreurId: string;
+}
+
 // Map exhaustive des types d'événements SSE et leur payload.
 // Utilisée par le hook useCommandesStream et le consommateur.
 export interface SseEventMap {
   nouvelle_commande: Commande;
   statut: SseStatutPayload;
+  livreur_assigne: SseDriverAssignmentPayload;
   commande_prete: SseNotificationPayload;
   commande_annulee: SseNotificationPayload;
   nouveau_avis: SseNotificationPayload;
@@ -66,3 +75,20 @@ export const STATUT_TRANSITIONS: Record<StatutCommande, StatutCommande[]> = {
   servie: [],
   annulee: [],
 };
+
+// Forme inverse utilisée par la mutation atomique côté serveur. Garder les
+// deux tables ici évite que l'UI et l'API divergent sur le workflow métier.
+export const STATUT_PREVIOUS_STATUSES: Record<StatutCommande, StatutCommande[]> = {
+  recue: [],
+  en_preparation: ["recue"],
+  prete: ["en_preparation"],
+  servie: ["prete"],
+  annulee: ["recue", "en_preparation", "prete"],
+};
+
+export function canRestaurateurSetCommandeStatus(
+  modeCommande: ModeCommande,
+  statut: StatutCommande,
+) {
+  return !(modeCommande === "livraison" && statut === "servie");
+}

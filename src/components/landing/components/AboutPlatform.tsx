@@ -7,20 +7,20 @@ import BackgroundDecoration from "./BackgroundDecoration";
 export default function AboutPlatform() {
   const points = [
     {
-      title: "Gestion Centralisée Universelle",
-      desc: "Pilotez plusieurs franchises, points de vente ou menus saisonniers depuis un tableau de bord unique, sans ressaisie.",
+      title: "Visible dès votre inscription",
+      desc: "Après validation, votre fiche restaurant, votre menu, vos photos et vos horaires deviennent accessibles aux clients Toutci.",
     },
     {
-      title: "Suivi Instantané en Temps Réel",
-      desc: "Les commandes saisies par vos serveurs s'affichent instantanément en cuisine avec un indicateur d'attente précis.",
+      title: "Commandes reçues en temps réel",
+      desc: "Chaque commande passée par un client sur l'application arrive directement dans votre tableau de bord, sans intermédiaire.",
     },
     {
-      title: "Accès Multi-Support sans Couture",
-      desc: "Compatible avec vos tablettes Android/iPad, terminaux de poche Android, smartphones et ordinateurs de bureau.",
+      title: "Gérez depuis n'importe où",
+      desc: "Consultez vos commandes, modifiez votre menu et suivez vos ventes depuis votre téléphone ou votre ordinateur, à tout moment.",
     },
     {
-      title: "Infrastructure Cloud Ultra-Sécurisée",
-      desc: "Base de données résiliente avec synchronisation hors-ligne pour continuer à prendre des commandes même en cas de panne réseau.",
+      title: "Données fiables et sécurisées",
+      desc: "Votre historique de commandes, vos revenus et vos avis clients sont conservés en sécurité et consultables à tout moment.",
     },
   ];
 
@@ -67,16 +67,13 @@ export default function AboutPlatform() {
               transition={shouldReduceMotion ? undefined : { duration: 0.6 }}
             >
               <span className="text-xs font-bold text-brand-green uppercase tracking-widest block mb-3">
-                L&apos;ÉCOSYSTÈME RESTAUCI
+                L&apos;ÉCOSYSTÈME TOUTCI
               </span>
               <h2 className="font-display font-extrabold text-3xl sm:text-4xl text-brand-dark tracking-tight leading-[1.1] mb-6">
-                Une infrastructure complète, pensée pour les restaurateurs
-                réels.
+                Votre établissement, visible et organisé.
               </h2>
               <p className="text-sm sm:text-base text-brand-dark/80 leading-relaxed font-sans">
-                Oubliez les papiers perdus, les erreurs de communication entre
-                la salle et la cuisine, et les ruptures de stocks imprévues.
-                RestauCI unifie vos opérations.
+                Toutci rend votre établissement visible auprès des clients et centralise vos commandes depuis une seule interface — sans matériel compliqué à installer.
               </p>
             </motion.div>
 
@@ -143,7 +140,7 @@ export default function AboutPlatform() {
                   <div className="flex items-center gap-1.5">
                     <Tablet className="h-4 w-4 text-emerald-600" />
                     <span className="text-[10px] font-mono font-bold text-brand-dark/60">
-                      RestauCI Terminal • Cuisine #1
+                      Toutci Dashboard • Commandes
                     </span>
                   </div>
                   <div className="flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -154,7 +151,7 @@ export default function AboutPlatform() {
                   <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                     <span className="text-[11px] font-bold text-brand-dark flex items-center gap-1">
                       <ShieldCheck className="h-3 w-3 text-emerald-600" />
-                      Commandes actives connectées
+                      Commandes clients en cours
                     </span>
                     <span className="text-[10px] bg-emerald-500/10 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-500/15 font-semibold">
                       Sync OK
@@ -315,7 +312,7 @@ export default function AboutPlatform() {
                   <div className="flex items-center gap-1 font-mono font-medium">
                     <Smartphone className="h-2.5 w-2.5 text-emerald-600" />
                     <span className="text-gray-500 font-sans tracking-wide">
-                      RestauCI Mobile
+                      Toutci Mobile
                     </span>
                   </div>
                   <div className="flex h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />

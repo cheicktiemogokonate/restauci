@@ -1,4 +1,4 @@
-import { Check, Clock, Eye, HelpCircle, MapPin, Store } from "lucide-react";
+import { Check, Clock, Eye, HelpCircle, MapPin, Store, Utensils } from "lucide-react";
 
 interface SidebarProps {
   currentStep: number;
@@ -32,8 +32,14 @@ export default function Sidebar({
     },
     {
       number: 4,
+      title: "Premiers plats",
+      description: "Ajoutez les plats principaux de votre carte.",
+      icon: Utensils,
+    },
+    {
+      number: 5,
       title: "Lancement",
-      description: "Aperçu de la fiche et déploiement cloud.",
+      description: "Vérifiez puis créez votre établissement.",
       icon: Eye,
     },
   ];
@@ -58,7 +64,7 @@ export default function Sidebar({
           </svg>
         </div>
         <span className="text-2xl font-bold font-display text-gray-900 tracking-tight">
-          Restau<span className="text-brand-green">CI</span>
+          Tout<span className="text-brand-green">ci</span>
         </span>
       </div>
 
@@ -117,7 +123,7 @@ export default function Sidebar({
         {/* Connecting Vertical Bar */}
         <div className="absolute left-4.25 top-3.5 bottom-6 w-0.5 bg-gray-200 z-0" />
 
-        {steps.map((step, idx) => {
+        {steps.map((step) => {
           const isCompleted = completedSteps[step.number - 1];
           const isActive = currentStep === step.number;
           const StepIcon = step.icon;
@@ -187,7 +193,7 @@ export default function Sidebar({
       <div className="hidden lg:flex mt-8 pt-6 border-t border-gray-100 items-center justify-between text-xs text-gray-400 font-mono">
         <span className="flex items-center">
           <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse" />
-          Région: Abidjan, CI
+          Côte d&apos;Ivoire
         </span>
         <span className="hover:text-brand-500 cursor-pointer flex items-center gap-1 transition-colors">
           <HelpCircle className="w-3.5 h-3.5" />

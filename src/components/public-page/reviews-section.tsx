@@ -217,7 +217,7 @@ export default function ReviewsSection({ restaurant }: ReviewsSectionProps) {
               <div className="bg-[#0b663b] px-6 py-5 text-white flex items-center justify-between">
                 <div>
                   <h3 className="text-xl font-bold tracking-tight">
-                    Avis de l'écosystème RestauCI
+                    Avis des clients
                   </h3>
                   <p className="text-sm text-emerald-100/95 font-light mt-0.5">
                     Moyenne : {averageRating} / 5 • de {totalReviews} Gourmets
@@ -371,7 +371,7 @@ export default function ReviewsSection({ restaurant }: ReviewsSectionProps) {
                   </div>
 
                   <div className="text-[10px] text-gray-400 text-center font-semibold pt-4 border-t border-gray-50">
-                    RestauCI • Certifié Conforme aux Conditions Générales
+                    Avis publié sur Toutci
                   </div>
                 </div>
               </div>

@@ -1,5 +1,6 @@
 "use client";
 import { Restaurant } from "@/types";
+import { Button } from "@/components/ui/button";
 import { CheckCircle2, MapPin, Phone, Share2, Star } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
@@ -7,23 +8,22 @@ import { useState } from "react";
 
 interface HeroProps {
   onOpenMenu: () => void;
-  onOpenReserve: () => void;
   restaurant: Restaurant;
 }
 
 export default function Hero({
   onOpenMenu,
-  onOpenReserve,
   restaurant,
 }: HeroProps) {
   const [copied, setCopied] = useState(false);
   const [phoneVisible, setPhoneVisible] = useState(false);
+  const commandesOuvertes = restaurant.enLigne && restaurant.accepteCommandes;
 
   const handleShare = async () => {
     const url = window.location.href;
     const shareData = {
       title: restaurant.nom,
-      text: `Découvrez ${restaurant.nom} sur RestauCI !`,
+      text: `Découvrez ${restaurant.nom} sur Toutci !`,
       url,
     };
 
@@ -50,7 +50,7 @@ export default function Hero({
   return (
     <section
       id="accueil"
-      className="relative min-h-[70vh] w-full overflow-hidden bg-gray-950 text-white -mt-10"
+      className="relative -mt-10 min-h-[70vh] w-full overflow-hidden bg-gray-950 text-white"
     >
       {/* Background Image with elegant overlay */}
       <div className="min-h-screen w-full overflow-hidden bg-linear-to-t from-black via-black/50 to-black/20">
@@ -66,12 +66,13 @@ export default function Hero({
           width={1920}
           height={1080}
           priority
+          loading="eager"
         />
 
         <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/60 to-black/40 lg:from-black/60 lg:via-black/40 lg:to-black/20" />
       </div>
 
-      <div className="absolute top-[50%] translate-y-[-50%] max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col justify-end pb-12 sm:pb-20 ">
+      <div className="absolute inset-x-0 top-1/2 mx-auto flex w-full max-w-7xl -translate-y-1/2 flex-col justify-end px-4 pb-12 sm:px-6 sm:pb-20 lg:px-8">
         {/* Hero Details Text Box */}
         <div className="max-w-2xl md:space-y-10 space-y-5 ">
           {/* Tagline Status */}
@@ -86,7 +87,7 @@ export default function Hero({
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-300"></span>
             </span>
             <span>
-              {restaurant.enLigne ? "Ouvert maintenant" : "Fermé actuellement"}
+              {commandesOuvertes ? "Commandes ouvertes" : "Commandes suspendues"}
             </span>
           </motion.div>
 
@@ -132,12 +133,13 @@ export default function Hero({
             className="flex flex-wrap items-center gap-4 pt-4"
           >
             {/* View menu green button */}
-            <button
+            <Button
               onClick={onOpenMenu}
-              className="bg-[#0b663b] text-white px-7 py-3.5 rounded-full text-xs sm:text-sm font-bold shadow-lg shadow-[#0b663b]/10 hover:bg-[#074728] hover:shadow-xl hover:shadow-[#0b663b]/20 active:scale-[0.98] transition duration-200 cursor-pointer"
+              size="lg"
+              className="rounded-xl px-7 shadow-lg"
             >
               Voir le menu
-            </button>
+            </Button>
 
             {/* Reserve table white/beige button */}
             {/* <button
@@ -149,13 +151,15 @@ export default function Hero({
 
             {/* Circular phone action button */}
             <div className="relative">
-              <button
+              <Button
                 onClick={handleCall}
-                className="p-3.5 rounded-full border border-gray-400/40 bg-black/35 text-white hover:bg-black/60 active:scale-[0.95] backdrop-blur-md transition cursor-pointer"
-                title="Appeler le restaurant"
+                variant="outline"
+                size="icon-lg"
+                className="rounded-xl border-gray-400/40 bg-black/35 text-white backdrop-blur-md hover:bg-black/60 hover:text-white"
+                aria-label="Afficher le téléphone du restaurant"
               >
                 <Phone className="h-4.5 w-4.5" />
-              </button>
+              </Button>
 
               <AnimatePresence>
                 {phoneVisible && (
@@ -181,13 +185,15 @@ export default function Hero({
 
             {/* Circular share action button */}
             <div className="relative">
-              <button
+              <Button
                 onClick={handleShare}
-                className="p-3.5 rounded-full border border-gray-400/40 bg-black/35 text-white hover:bg-black/60 active:scale-[0.95] backdrop-blur-md transition cursor-pointer"
-                title="Partager"
+                variant="outline"
+                size="icon-lg"
+                className="rounded-xl border-gray-400/40 bg-black/35 text-white backdrop-blur-md hover:bg-black/60 hover:text-white"
+                aria-label="Partager ce restaurant"
               >
                 <Share2 className="h-4.5 w-4.5" />
-              </button>
+              </Button>
 
               <AnimatePresence>
                 {copied && (

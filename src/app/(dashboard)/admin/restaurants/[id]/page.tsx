@@ -13,8 +13,8 @@ export default async function AdminRestaurantDetailPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams: { page?: string; statut?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string; statut?: string }>;
 }) {
   await getAdminSession();
 

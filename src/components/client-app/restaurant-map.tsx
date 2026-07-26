@@ -1,5 +1,8 @@
 "use client";
 
+import Image from "next/image";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Map,
   MapMarker,
@@ -7,6 +10,7 @@ import {
   MarkerContent,
   useMap,
 } from "@/components/ui/map";
+import { AlertCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface RestaurantMapPin {
@@ -94,17 +98,15 @@ export function RestaurantMap({
 
       {/* Error overlay with retry */}
       {mapError && (
-        <div
-          className="absolute inset-0 z-20 flex items-center justify-center bg-red-50/90 backdrop-blur-sm"
-          onClick={handleRetry}
-        >
-          <div className="cursor-pointer rounded-xl bg-white p-6 text-center shadow-lg">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-              <span className="text-2xl">⚠️</span>
-            </div>
-            <p className="font-medium text-red-700">{mapError}</p>
-            <p className="mt-2 text-sm text-gray-500">Appuyez pour réessayer</p>
-          </div>
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <Alert variant="destructive" className="max-w-sm bg-background shadow-xl">
+            <AlertCircle />
+            <AlertTitle>Carte indisponible</AlertTitle>
+            <AlertDescription>{mapError}</AlertDescription>
+            <Button type="button" variant="outline" size="sm" onClick={handleRetry} className="mt-3 w-fit">
+              <RefreshCw /> Réessayer
+            </Button>
+          </Alert>
         </div>
       )}
     </div>
@@ -143,8 +145,7 @@ function MapInner({
     if (isLoaded) {
       onMapReady();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded]);
+  }, [isLoaded, onMapReady]);
 
   // Recenter the map when the provided coordinates change
   useEffect(() => {
@@ -217,15 +218,12 @@ function MapInner({
                   }}
                 >
                   {restaurant.logoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={restaurant.logoUrl}
                       alt={restaurant.nom}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
+                      width={48}
+                      height={48}
+                      className="w-full h-full object-cover"
                     />
                   ) : (
                     <span style={{ fontSize: "18px" }}>🍽️</span>

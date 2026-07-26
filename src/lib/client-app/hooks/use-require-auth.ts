@@ -5,7 +5,7 @@ import { useAuthStore } from "../stores/auth-store";
 
 /**
  * Retourne une fonction qui vérifie l'authentification avant
- * d'exécuter une action. Si non connecté, redirige vers /login
+ * d'exécuter une action. Si non connecté, redirige vers /client/login
  * avec un paramètre de retour.
  *
  * @example

@@ -33,11 +33,11 @@ export function OrderTypes({ data = [] }: OrderTypesProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-base font-semibold">
+        <CardTitle className="text-sm font-semibold sm:text-base">
           Types de commandes
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4 pt-2">
+      <CardContent className="space-y-3 pt-2 sm:space-y-4">
         {!hasData ? (
           <div className="h-45 flex items-center justify-center border-2 border-dashed rounded-lg">
             <p className="text-muted-foreground text-sm">
@@ -49,9 +49,9 @@ export function OrderTypes({ data = [] }: OrderTypesProps) {
             const Icon = getIcon(type.type);
             return (
               <div key={type.label} className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted shrink-0">
                       <Icon className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div>

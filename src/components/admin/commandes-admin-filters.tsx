@@ -1,8 +1,11 @@
 "use client";
 
+import { Input } from "@/components/motion/input";
+import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
+import { format } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { Search } from "lucide-react";
 
 const STATUTS = [
   { value: "tous", label: "Tous" },
@@ -16,71 +19,170 @@ const STATUTS = [
 export function CommandesAdminFilters({
   initialSearch,
   initialStatut,
+  initialRestaurant,
+  initialDateDebut,
+  initialDateFin,
+  initialSignal,
 }: {
   initialSearch?: string;
   initialStatut?: string;
+  initialRestaurant?: string;
+  initialDateDebut?: string;
+  initialDateFin?: string;
+  initialSignal?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchValue, setSearchValue] = useState(initialSearch ?? "");
+  const [restaurantValue, setRestaurantValue] = useState(
+    initialRestaurant ?? "",
+  );
+  const [dateDebut, setDateDebut] = useState(initialDateDebut ?? "");
+  const [dateFin, setDateFin] = useState(initialDateFin ?? "");
 
   const changeStatut = (statut: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    statut === "tous" ? params.delete("statut") : params.set("statut", statut);
+    if (statut === "tous") {
+      params.delete("statut");
+    } else {
+      params.set("statut", statut);
+    }
     params.delete("page");
     router.push(`?${params.toString()}`);
   };
 
-  const handleSearch = () => {
+  const handleFilters = () => {
     const params = new URLSearchParams(searchParams.toString());
-    searchValue ? params.set("search", searchValue) : params.delete("search");
+    const setOrDelete = (key: string, value: string) => {
+      const normalizedValue = value.trim();
+      if (normalizedValue) {
+        params.set(key, normalizedValue);
+      } else {
+        params.delete(key);
+      }
+    };
+    setOrDelete("search", searchValue);
+    setOrDelete("restaurant", restaurantValue);
+    setOrDelete("dateDebut", dateDebut);
+    setOrDelete("dateFin", dateFin);
     params.delete("page");
+    router.push(`?${params.toString()}`);
+  };
+
+  const resetFilters = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    [
+      "search",
+      "restaurant",
+      "dateDebut",
+      "dateFin",
+      "statut",
+      "signal",
+    ].forEach((key) => params.delete(key));
+    params.delete("page");
+    setSearchValue("");
+    setRestaurantValue("");
+    setDateDebut("");
+    setDateFin("");
     router.push(`?${params.toString()}`);
   };
 
   return (
-    <div className="flex flex-col xl:flex-row gap-3 xl:items-center">
-      {/* Tabs statut */}
-      <div className="flex items-center gap-1.5 bg-gray-100/80 p-1 rounded-xl flex-wrap">
-        {STATUTS.map((tab) => {
-          const isActive = (initialStatut ?? "tous") === tab.value;
-          return (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => changeStatut(tab.value)}
-              className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                isActive
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
+    <div className="space-y-3">
+      <div className="flex flex-col xl:flex-row gap-3 xl:items-center">
+        {/* <Tabs value={initialStatut ?? "tous"} onValueChange={changeStatut} variant="underline" className="max-w-full overflow-x-auto scrollbar-hide">
+          <TabsList className="h-11 min-w-max gap-0">
+            {STATUTS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value} className="h-11 px-3.5 text-sm" indicatorClassName="h-0.5 bg-emerald-600">
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs> */}
+
+        {/* <div className="flex w-full gap-2 xl:ml-auto xl:w-auto">
+          <div className="relative min-w-0 flex-1 xl:w-64">
+            <Input
+              type="text"
+              aria-label="Rechercher une commande"
+              value={searchValue}
+              onChange={setSearchValue}
+              onKeyDown={(e) => e.key === "Enter" && handleFilters()}
+              placeholder="N° commande ou client..."
+              leftIcon={<Search />}
+              className="w-full"
+              classNames={{ field: "h-10 rounded-xl bg-white" }}
+            />
+          </div>
+          <Button type="button" onClick={handleFilters} className="h-auto">
+            Chercher
+          </Button>
+        </div> */}
       </div>
 
-      {/* Recherche */}
-      <div className="flex gap-2 xl:ml-auto">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="N° commande ou client..."
-            className="pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl bg-white shadow-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-56"
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="space-y-1 sm:w-56">
+          <label
+            htmlFor="restaurant"
+            className="text-xs font-medium text-gray-600"
+          >
+            Restaurant
+          </label>
+          <Input
+            id="restaurant"
+            value={restaurantValue}
+            onChange={setRestaurantValue}
+            onKeyDown={(e) => e.key === "Enter" && handleFilters()}
+            placeholder="Nom du restaurant"
+            classNames={{ field: "h-10 rounded-xl bg-white" }}
           />
         </div>
-        <button
-          type="button"
-          onClick={handleSearch}
-          className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors shrink-0"
-        >
-          Chercher
-        </button>
+        <div className="space-y-1">
+          <label
+            htmlFor="dateDebut"
+            className="text-xs font-medium text-gray-600 mr-2"
+          >
+            Du
+          </label>
+          <DatePicker
+            id="dateDebut"
+            date={dateDebut ? new Date(`${dateDebut}T00:00:00`) : undefined}
+            setDate={(date) =>
+              setDateDebut(date ? format(date, "yyyy-MM-dd") : "")
+            }
+            className="w-full sm:w-44 h-10"
+          />
+        </div>
+        <div className="space-y-1">
+          <label
+            htmlFor="dateFin"
+            className="text-xs font-medium text-gray-600 mr-2"
+          >
+            Au
+          </label>
+          <DatePicker
+            id="dateFin"
+            date={dateFin ? new Date(`${dateFin}T00:00:00`) : undefined}
+            setDate={(date) =>
+              setDateFin(date ? format(date, "yyyy-MM-dd") : "")
+            }
+            className="w-full sm:w-44 h-10"
+          />
+        </div>
+
+        <Button type="button" className="h-10" onClick={handleFilters}>
+          Appliquer
+        </Button>
+        {(initialSearch ||
+          initialStatut ||
+          initialRestaurant ||
+          initialDateDebut ||
+          initialDateFin ||
+          initialSignal) && (
+          <Button type="button" variant="ghost" onClick={resetFilters}>
+            Réinitialiser
+          </Button>
+        )}
       </div>
     </div>
   );

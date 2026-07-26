@@ -9,6 +9,7 @@ import { compare } from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { setClientRefreshCookie } from "@/lib/api/client-session-cookie";
 
 const log = createLogger("v1-client-login");
 
@@ -61,8 +62,9 @@ export async function POST(req: NextRequest) {
       return apiResponse.unauthorized(erreurGenerique);
     }
 
-    const accessExpiry = data.rememberMe ? "30d" : "24h";
-    const refreshExpiry = data.rememberMe ? "90d" : "7d";
+    const accessExpiry = "15m";
+    const refreshExpiry = data.rememberMe ? "30d" : "7d";
+    const refreshMaxAge = data.rememberMe ? 30 * 24 * 3600 : 7 * 24 * 3600;
 
     const [accessToken, refreshToken] = await Promise.all([
       signToken({ clientId: client.id, type: "client" }, accessExpiry),
@@ -75,14 +77,15 @@ export async function POST(req: NextRequest) {
     const { password: _password, ...clientSafe } = client;
     void _password;
 
-    return apiResponse.success({
+    const response = apiResponse.success({
       client: clientSafe,
       tokens: {
         accessToken,
-        refreshToken,
-        expiresIn: data.rememberMe ? 30 * 24 * 3600 : 24 * 3600,
+        expiresIn: 15 * 60,
       },
     });
+    setClientRefreshCookie(response, refreshToken, refreshMaxAge);
+    return response;
   } catch (err) {
     log.error({ err }, "Erreur lors de la connexion client");
     return apiResponse.internalError();

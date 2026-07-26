@@ -1,4 +1,5 @@
 import { Quote, Star } from "lucide-react";
+import Image from "next/image";
 import { testimonialData } from "../data";
 import BackgroundDecoration from "./BackgroundDecoration";
 import LogoLoop from "./LogoLoop";
@@ -32,25 +33,35 @@ function TestimonialCard({ testimonial }: TestimonialCardProps) {
 
       {/* Author metadata */}
       <div className="flex items-center gap-3.5 pt-4 border-t border-gray-50 mt-auto">
-        <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-gray-100 border border-gray-100">
-          <img
-            src={testimonial.avatar}
-            alt={testimonial.name}
-            width={100}
-            height={100}
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-        <div>
-          <h5 className="font-display font-bold text-xs text-brand-dark font-sans">
-            {testimonial.name}
-          </h5>
+        {testimonial.avatar ? (
+          <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-gray-100 border border-gray-100">
+            <Image
+              src={testimonial.avatar}
+              alt={testimonial.name || "Avatar"}
+              width={100}
+              height={100}
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        ) : (
+          <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-[#14532D] flex items-center justify-center border border-brand-green/20">
+            <span className="text-white font-bold text-xs tracking-wider">RP</span>
+          </div>
+        )}
+        <div className="flex flex-col justify-center">
+          {testimonial.name && (
+            <h5 className="font-display font-bold text-xs text-brand-dark font-sans">
+              {testimonial.name}
+            </h5>
+          )}
           <p className="text-[10px] text-gray-400 font-semibold">
-            {testimonial.role} •{" "}
-            <strong className="text-brand-green font-bold">
-              {testimonial.restaurant}
-            </strong>
+            {testimonial.role} {testimonial.role && testimonial.restaurant && "• "}
+            {testimonial.restaurant && (
+              <strong className="text-brand-green font-bold">
+                {testimonial.restaurant}
+              </strong>
+            )}
           </p>
         </div>
       </div>
@@ -63,21 +74,21 @@ export default function Testimonials() {
     .filter((_, idx) => idx % 3 === 0)
     .map((t) => ({
       node: <TestimonialCard testimonial={t} />,
-      title: t.name,
+      title: t.name || t.role || "Témoignage",
     }));
 
   const col2 = testimonialData
     .filter((_, idx) => idx % 3 === 1)
     .map((t) => ({
       node: <TestimonialCard testimonial={t} />,
-      title: t.name,
+      title: t.name || t.role || "Témoignage",
     }));
 
   const col3 = testimonialData
     .filter((_, idx) => idx % 3 === 2)
     .map((t) => ({
       node: <TestimonialCard testimonial={t} />,
-      title: t.name,
+      title: t.name || t.role || "Témoignage",
     }));
 
   return (
@@ -128,9 +139,7 @@ export default function Testimonials() {
             Ce que disent nos restaurateurs partenaires.
           </h2>
           <p className="text-sm sm:text-base text-brand-dark/70 font-sans leading-relaxed max-w-2xl mx-auto">
-            Découvrez les retours authentiques de chefs de cuisine, de gérants
-            de fast-food et de propriétaires de boulangerie qui ont digitalisé
-            leurs ventes avec RestauCI.
+            Ce que nos restaurateurs partenaires disent apprécier à Bouaké.
           </p>
         </div>
 

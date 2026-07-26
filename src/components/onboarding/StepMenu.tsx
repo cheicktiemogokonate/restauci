@@ -15,7 +15,7 @@ export default function StepMenu({ menu, updateMenu, onNext, onPrev }: StepMenuP
 
   const handleAddItem = () => {
     if (!newItem.name || !newItem.price || !newItem.category) return;
-    const newMenu = [...menu, { ...newItem, id: Math.random().toString(36).substr(2, 9) } as MenuItem];
+    const newMenu = [...menu, { ...newItem, id: crypto.randomUUID() } as MenuItem];
     updateMenu(newMenu);
     setNewItem({ name: "", price: 0, category: "", description: "" });
   };
@@ -40,8 +40,10 @@ export default function StepMenu({ menu, updateMenu, onNext, onPrev }: StepMenuP
           <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100 space-y-5">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Nom du plat</label>
+                <label htmlFor="onboarding-dish-name" className="text-xs font-bold text-gray-700 uppercase tracking-wider">Nom du plat</label>
                 <input
+                  id="onboarding-dish-name"
+                  name="dishName"
                   type="text"
                   value={newItem.name}
                   onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
@@ -50,8 +52,10 @@ export default function StepMenu({ menu, updateMenu, onNext, onPrev }: StepMenuP
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Catégorie</label>
+                <label htmlFor="onboarding-dish-category" className="text-xs font-bold text-gray-700 uppercase tracking-wider">Catégorie</label>
                 <input
+                  id="onboarding-dish-category"
+                  name="dishCategory"
                   type="text"
                   value={newItem.category}
                   onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
@@ -60,8 +64,10 @@ export default function StepMenu({ menu, updateMenu, onNext, onPrev }: StepMenuP
                 />
               </div>
               <div className="space-y-1.5 col-span-2">
-                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Description courte</label>
+                <label htmlFor="onboarding-dish-description" className="text-xs font-bold text-gray-700 uppercase tracking-wider">Description courte</label>
                 <input
+                  id="onboarding-dish-description"
+                  name="dishDescription"
                   type="text"
                   value={newItem.description}
                   onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
@@ -70,8 +76,10 @@ export default function StepMenu({ menu, updateMenu, onNext, onPrev }: StepMenuP
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Prix (FCFA)</label>
+                <label htmlFor="onboarding-dish-price" className="text-xs font-bold text-gray-700 uppercase tracking-wider">Prix (FCFA)</label>
                 <input
+                  id="onboarding-dish-price"
+                  name="dishPrice"
                   type="number"
                   value={newItem.price || ""}
                   onChange={(e) => setNewItem({ ...newItem, price: parseInt(e.target.value) || 0 })}
@@ -116,6 +124,7 @@ export default function StepMenu({ menu, updateMenu, onNext, onPrev }: StepMenuP
                       <button
                         type="button"
                         onClick={() => handleRemoveItem(item.id)}
+                        aria-label={`Retirer ${item.name}`}
                         className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />

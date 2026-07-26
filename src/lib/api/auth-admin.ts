@@ -27,12 +27,12 @@ export async function requireAdminSession(
   }
 
   const [user] = await db
-    .select({ id: users.id, role: users.role })
+    .select({ id: users.id, role: users.role, suspendu: users.suspendu })
     .from(users)
     .where(eq(users.id, session.userId))
     .limit(1);
 
-  if (!user || user.role !== "admin") {
+  if (!user || user.role !== "admin" || user.suspendu) {
     return {
       session: null,
       error: apiResponse.forbidden("Accès réservé aux administrateurs"),

@@ -1,5 +1,6 @@
 "use client";
 
+import { AppLogo } from "@/components/ui/app-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +18,6 @@ import {
   LucideIcon,
   Menu,
   Sparkles,
-  UtensilsCrossed,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -37,13 +37,15 @@ const navItems: NavItem[] = [
   { label: "Menu", href: "/restaurateur/menu", icon: CookingPot },
 ];
 
-function Logo({ restauName = "RestauCI" }: { restauName?: string }) {
+function Logo() {
   return (
-    <div className="flex items-center gap-2 px-2">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-green">
-        <UtensilsCrossed className="h-5 w-5 text-primary-foreground" />
-      </div>
-      {<span className="text-xl font-bold text-foreground">{restauName}</span>}
+    <div className="px-2">
+      <AppLogo
+        href="/restaurateur"
+        className="w-full"
+        iconSizeClassName="h-10 w-10 sm:h-11 sm:w-11"
+        textSizeClassName="w-24 sm:w-28"
+      />
     </div>
   );
 }
@@ -68,7 +70,7 @@ function NavLinks({
             prefetch={true}
             onClick={onItemClick}
             className={cn(
-              "flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+              "flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors sm:text-[15px]",
               isActive
                 ? "bg-brand-green text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
@@ -116,11 +118,13 @@ function ProCard() {
       </div>
       <p className="text-sm text-muted-foreground mb-3">
         Gerez votre restaurant plus efficacement avec{" "}
-        <span className="font-semibold text-brand-green">RestauCI</span>.
+        <span className="font-semibold text-brand-green">Toutci</span>.
       </p>
-      <Button className="w-full gap-2 bg-brand-green" size="sm">
-        <Sparkles className="h-4 w-4" />
-        Passer au Pro
+      <Button asChild className="w-full gap-2" size="sm">
+        <Link href="/restaurateur/facturation">
+          <Sparkles className="h-4 w-4" />
+          Voir les offres
+        </Link>
       </Button>
     </div>
   );

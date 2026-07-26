@@ -1,12 +1,14 @@
-import { db, pool } from "@/lib/db";
+import { db } from "@/lib/db";
 import { commandes, plats, restaurants } from "@/lib/db/schema";
 import { commandeLogger } from "@/lib/loggers";
+import { sendNotification } from "@/lib/notifications";
 import { checkRateLimit, commandeLimiter } from "@/lib/rate-limit";
 import { buildNouvelleCommandePayload } from "@/lib/realtime/sse-payloads";
-import { pushSseEvent } from "@/lib/realtime/sse-push";
+import { formatPrix } from "@/lib/utils/format";
 import { haversineDistance } from "@/lib/utils/geo";
 import { commandeSchema } from "@/lib/validations/commande";
 import { eq } from "drizzle-orm";
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 
 function formatDate(date: Date) {
@@ -90,6 +92,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Restaurant introuvable ou inactif." },
         { status: 404 },
+      );
+    }
+
+    if (!restaurant.enLigne) {
+      return NextResponse.json(
+        { error: "Ce restaurant est fermé pour le moment." },
+        { status: 400 },
+      );
+    }
+
+    if (!restaurant.accepteCommandes) {
+      return NextResponse.json(
+        { error: "Ce restaurant n'accepte pas de commandes pour le moment." },
+        { status: 400 },
       );
     }
 
@@ -222,42 +238,28 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    // Pousser l'événement dans la file Redis SSE du restaurant
-    // pour que le dashboard le reçoive en temps réel
-    try {
-      await pushSseEvent(
-        data.restaurantId,
-        "nouvelle_commande",
-        buildNouvelleCommandePayload(inserted),
-      );
-    } catch (redisErr) {
-      commandeLogger.warn({ redisErr }, "Erreur push SSE Redis — commande créée quand même");
-    }
-
-    const pgClient = await pool.connect();
-    try {
-      await pgClient.query("SELECT pg_notify($1, $2)", [
-        "nouvelle_commande",
-        JSON.stringify({
+    // Même canal que les autres créations de commande : persistance dans le
+    // centre de notifications, SSE et push. Exécuté après la réponse pour ne
+    // jamais ajouter de latence au passage de commande.
+    after(async () => {
+      try {
+        await sendNotification({
+          userId: restaurant.userId,
           restaurantId: data.restaurantId,
-          commandeId: inserted.id,
-        }),
-      ]);
-    } catch (notifyError) {
-      commandeLogger.error(
-        {
-          ip,
-          restaurantId: data.restaurantId,
-          error:
-            notifyError instanceof Error
-              ? notifyError.message
-              : "Unknown error",
-        },
-        "pg_notify error",
-      );
-    } finally {
-      pgClient.release();
-    }
+          type: "nouvelle_commande",
+          titre: "Nouvelle commande !",
+          message: `Commande ${inserted.numero} de ${inserted.nomClient} — ${formatPrix(inserted.total)}`,
+          lienType: "commande",
+          lienId: inserted.id,
+          data: buildNouvelleCommandePayload(inserted),
+        });
+      } catch (notificationError) {
+        commandeLogger.warn(
+          { notificationError, commandeId: inserted.id },
+          "Notification de nouvelle commande en échec",
+        );
+      }
+    });
 
     commandeLogger.info(
       {

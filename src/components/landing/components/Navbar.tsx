@@ -1,5 +1,6 @@
 "use client";
-import { ArrowRight, Utensils } from "lucide-react";
+import { AppLogo } from "@/components/ui/app-logo";
+import { ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { navigationLinks } from "../data";
 import StaggeredMenu from "./StaggeredMenu";
@@ -25,11 +26,7 @@ export default function Navbar() {
     link: link.href,
   }));
 
-  const socialItems = [
-    { label: "Twitter", link: "https://twitter.com" },
-    { label: "Facebook", link: "https://facebook.com" },
-    { label: "Instagram", link: "https://instagram.com" },
-  ];
+  const socialItems: Array<{ label: string; link: string }> = [];
 
   return (
     <nav
@@ -42,14 +39,12 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <a href="#" className="flex items-center gap-2 group">
-            <div className="w-10 h-10 rounded-xl bg-brand-green flex items-center justify-center shadow-md shadow-[#0f8a5f33] group-hover:scale-105 transition-transform duration-300">
-              <Utensils className="h-5.5 w-5.5 text-white" />
-            </div>
-            <span className="font-display font-extrabold text-2xl tracking-tight text-brand-dark">
-              Restau<span className="text-brand-green">CI</span>
-            </span>
-          </a>
+          <AppLogo
+            href="/"
+            className="group"
+            iconSizeClassName=" w-16  sm:w-18"
+            textSizeClassName="w-24 sm:w-28"
+          />
 
           {/* Desktop Nav Links */}
           <div className="hidden md:flex items-center gap-8">
@@ -74,7 +69,7 @@ export default function Navbar() {
                 Connexion
               </a>
               <a
-                href="#cta"
+                href="/register"
                 className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-brand-green hover:bg-[#0c734e] rounded-xl shadow-xs transition-all duration-200 hover:-translate-y-[1px] active:translate-y-0 cursor-pointer"
               >
                 Essayer gratuitement
@@ -87,7 +82,7 @@ export default function Navbar() {
               position="right"
               items={menuItems}
               socialItems={socialItems}
-              displaySocials={true}
+              displaySocials={false}
               displayItemNumbering={true}
               menuButtonColor="#111827"
               openMenuButtonColor="#111827"

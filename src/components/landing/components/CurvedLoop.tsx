@@ -89,6 +89,7 @@ const CurvedLoop = ({
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!interactive) return;
     dragRef.current = true;
+    setIsDragging(true);
     lastXRef.current = e.clientX;
     velRef.current = 0;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -113,26 +114,19 @@ const CurvedLoop = ({
     setOffset(newOffset);
   };
 
-  const [cursorStyle, setCursorStyle] =
-    useState<React.CSSProperties["cursor"]>("auto");
+  const [isDragging, setIsDragging] = useState(false);
 
-  useEffect(() => {
-    if (!interactive) {
-      setCursorStyle("auto");
-      return;
-    }
-    const updateCursor = () => {
-      setCursorStyle(dragRef.current ? "grabbing" : "grab");
-    };
-    const interval = setInterval(updateCursor, 50);
-    return () => clearInterval(interval);
-  }, [interactive]);
+  const cursorStyle: React.CSSProperties["cursor"] = interactive
+    ? isDragging
+      ? "grabbing"
+      : "grab"
+    : "auto";
 
   const endDrag = () => {
     if (!interactive) return;
     dragRef.current = false;
     dirRef.current = velRef.current > 0 ? "right" : "left";
-    setCursorStyle("grab");
+    setIsDragging(false);
   };
 
   return (

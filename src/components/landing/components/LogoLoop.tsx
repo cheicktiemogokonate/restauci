@@ -1,4 +1,5 @@
 "use client";
+import Image, { type StaticImageData } from "next/image";
 import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import "./LogoLoop.css";
 
@@ -6,18 +7,23 @@ const ANIMATION_CONFIG = { SMOOTH_TAU: 0.25, MIN_COPIES: 2, COPY_HEADROOM: 2 };
 
 const toCssLength = (value?: number | string) => (typeof value === "number" ? `${value}px` : (value ?? undefined));
 
-export interface LogoItem {
-  node?: React.ReactNode;
-  src?: string;
-  srcSet?: string;
-  sizes?: string;
-  width?: number;
-  height?: number;
-  alt?: string;
-  title?: string;
-  href?: string;
-  ariaLabel?: string;
-}
+export type LogoItem =
+  | {
+      node: React.ReactNode;
+      title?: string;
+      href?: string;
+      ariaLabel?: string;
+    }
+  | {
+      src: string | StaticImageData;
+      sizes?: string;
+      width?: number;
+      height?: number;
+      alt?: string;
+      title?: string;
+      href?: string;
+      ariaLabel?: string;
+    };
 
 interface LogoLoopProps {
   logos: LogoItem[];
@@ -264,9 +270,8 @@ export const LogoLoop = memo(
             {item.node}
           </span>
         ) : (
-          <img
+          <Image
             src={item.src}
-            srcSet={item.srcSet}
             sizes={item.sizes}
             width={item.width}
             height={item.height}

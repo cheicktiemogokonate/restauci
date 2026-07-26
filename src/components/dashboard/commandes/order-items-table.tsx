@@ -2,8 +2,9 @@ import { CustomAvatar } from "@/components/shared/avatar-fallback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatPrix } from "@/lib/utils/format";
-import { MoreHorizontal } from "lucide-react";
+import { MessageSquareText, MoreHorizontal } from "lucide-react";
 
 interface OrderItem {
   id: string;
@@ -19,12 +20,18 @@ interface OrderItem {
 interface OrderItemsTableProps {
   items: OrderItem[];
   subtotal: number;
+  fraisLivraison: number;
+  remise: number;
+  noteClient?: string | null;
   total: number;
 }
 
 export function OrderItemsTable({
   items,
   subtotal,
+  fraisLivraison,
+  remise,
+  noteClient,
   total,
 }: OrderItemsTableProps) {
   return (
@@ -40,13 +47,22 @@ export function OrderItemsTable({
         </Button>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col">
+        {noteClient && (
+          <Alert className="mb-5 border-amber-200 bg-amber-50 text-amber-900">
+            <MessageSquareText className="h-4 w-4 text-amber-700" />
+            <AlertTitle className="text-amber-900">Note du client</AlertTitle>
+            <AlertDescription className="text-amber-800">
+              {noteClient}
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="overflow-x-auto flex-1">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border/40 text-[13px] text-muted-foreground">
                 <th className="text-left pb-3 font-medium">Article</th>
                 <th className="text-center pb-3 font-medium">Qté</th>
-                <th className="text-left pb-3 font-medium">Notes</th>
+                <th className="text-left pb-3 font-medium">Note article</th>
                 <th className="text-right pb-3 font-medium">Prix unitaire</th>
                 <th className="text-right pb-3 font-medium">Total</th>
               </tr>
@@ -74,14 +90,16 @@ export function OrderItemsTable({
                       </div>
                     </div>
                   </td>
-                  <td className="text-center py-4 font-medium text-[14px]">
-                    {item.quantity}
+                  <td className="text-center py-4">
+                    <Badge variant="secondary" className="min-w-8 justify-center rounded-full px-2 font-semibold">
+                      ×{item.quantity}
+                    </Badge>
                   </td>
                   <td className="py-4">
                     {item.notes && (
                       <Badge
                         variant="secondary"
-                        className="bg-orange-50 text-orange-600 border-orange-100 font-medium px-2.5 py-0.5"
+                        className="bg-amber-50 text-amber-700 border-amber-200 font-medium px-2.5 py-0.5"
                       >
                         {item.notes}
                       </Badge>
@@ -106,6 +124,22 @@ export function OrderItemsTable({
               {formatPrix(subtotal)}
             </span>
           </div>
+          {fraisLivraison > 0 && (
+            <div className="flex justify-end gap-16 text-[14px]">
+              <span className="font-medium text-muted-foreground">Livraison</span>
+              <span className="w-32 text-right font-medium">
+                {formatPrix(fraisLivraison)}
+              </span>
+            </div>
+          )}
+          {remise > 0 && (
+            <div className="flex justify-end gap-16 text-[14px]">
+              <span className="font-medium text-brand-green">Remise</span>
+              <span className="w-32 text-right font-medium text-brand-green">
+                −{formatPrix(remise)}
+              </span>
+            </div>
+          )}
           <div className="flex justify-end gap-16 text-[16px]">
             <span className="font-bold text-foreground">Total à payer</span>
             <span className="font-bold w-32 text-right text-[#2d7d46]">

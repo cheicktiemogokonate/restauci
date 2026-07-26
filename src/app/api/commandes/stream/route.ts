@@ -12,6 +12,14 @@ const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET);
 
 // Durée max d'une connexion SSE (4 minutes pour Vercel Pro)
 const MAX_DURATION_MS = 4 * 60 * 1000;
+const POLL_INTERVAL_MS = 1000;
+
+interface StoredSseEvent {
+  id?: string;
+  type: string;
+  data: unknown;
+  timestamp?: number;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -60,19 +68,22 @@ export async function GET(request: NextRequest) {
 
     const restaurantId = restaurant.id;
     const queueKey = `restauci:sse:queue:${restaurantId}`;
+    const cursor = request.nextUrl.searchParams.get("cursor");
 
     commandeLogger.info({ restaurantId }, "SSE connexion ouverte");
 
     const encoder = new TextEncoder();
     let isClosed = false;
+    let cleanup: (() => void) | undefined;
 
     const stream = new ReadableStream({
       async start(controller) {
         // Helper pour envoyer un événement SSE
-        const send = (event: string, data: unknown) => {
+        const send = (event: string, data: unknown, id?: string) => {
           if (isClosed) return;
           try {
-            const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+            const eventId = id ? `id: ${id}\n` : "";
+            const payload = `${eventId}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
             controller.enqueue(encoder.encode(payload));
           } catch {
             isClosed = true;
@@ -102,7 +113,11 @@ export async function GET(request: NextRequest) {
           }
         }, MAX_DURATION_MS);
 
-        // Polling Redis pour les événements (toutes les 2 secondes)
+        const deliveredEventIds = new Set<string>();
+        let initialized = false;
+
+        // Lecture non destructive : contrairement à LPOP, chaque connexion
+        // conserve son propre curseur et reçoit donc tous les événements.
         const pollInterval = setInterval(async () => {
           if (isClosed) {
             clearInterval(pollInterval);
@@ -110,25 +125,52 @@ export async function GET(request: NextRequest) {
           }
 
           try {
-            const event = await redis.lpop<string>(queueKey);
-            if (event) {
-              const parsed = JSON.parse(event) as {
-                type: string;
-                data: unknown;
-              };
-              send(parsed.type, parsed.data);
+            const events = await redis.lrange<StoredSseEvent>(queueKey, 0, -1);
+
+            if (!initialized) {
+              const cursorIndex = cursor
+                ? events.findIndex((event) => event.id === cursor)
+                : -1;
+
+              // Une nouvelle connexion ne rejoue pas les événements déjà
+              // affichés. Après une reconnexion, seuls ceux postérieurs au
+              // dernier identifiant reçu sont envoyés.
+              const pending = cursorIndex >= 0 ? events.slice(cursorIndex + 1) : [];
+              for (const event of pending) {
+                const eventId = event.id ?? `${event.timestamp ?? 0}:${event.type}`;
+                send(event.type, event.data, eventId);
+              }
+              for (const event of events) {
+                deliveredEventIds.add(
+                  event.id ?? `${event.timestamp ?? 0}:${event.type}`,
+                );
+              }
+              initialized = true;
+              return;
+            }
+
+            for (const event of events) {
+              const eventId = event.id ?? `${event.timestamp ?? 0}:${event.type}`;
+              if (deliveredEventIds.has(eventId)) continue;
+
+              deliveredEventIds.add(eventId);
+              send(event.type, event.data, eventId);
             }
           } catch (err) {
             commandeLogger.warn({ err }, "Erreur polling SSE Redis");
           }
-        }, 2000);
+        }, POLL_INTERVAL_MS);
 
-        // Nettoyer quand le client se déconnecte
-        request.signal.addEventListener("abort", () => {
+        cleanup = () => {
           isClosed = true;
           clearInterval(pingInterval);
           clearInterval(pollInterval);
           clearTimeout(timeoutId);
+        };
+
+        // Nettoyer quand le client se déconnecte
+        request.signal.addEventListener("abort", () => {
+          cleanup?.();
           commandeLogger.info(
             { restaurantId },
             "SSE connexion fermee par le client",
@@ -137,7 +179,7 @@ export async function GET(request: NextRequest) {
       },
 
       cancel() {
-        isClosed = true;
+        cleanup?.();
       },
     });
 

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import {
   Check,
   Image as ImageIcon,
@@ -74,9 +75,7 @@ export default function StepGeneral({
   const [bannerPreview, setBannerPreview] = useState<string | null>(
     data.bannerUrl,
   );
-  const [galleryPreviews, setGalleryPreviews] = useState<string[]>(
-    data.galleryUrls || [],
-  );
+  const [isUploading, setIsUploading] = useState(false);
   const [descriptionCount, setDescriptionCount] = useState(
     data.description.length,
   );
@@ -103,65 +102,68 @@ export default function StepGeneral({
 
     setLogoPreview(preset.logoUrl);
     setBannerPreview(preset.bannerUrl);
-    setGalleryPreviews(preset.gallery);
     setDescriptionCount(preset.description.length);
     setSelectedPresetIndex(idx);
     setError(null);
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadImage = async (file: File) => {
+    const formData = new FormData();
+    formData.set("file", file);
+    const response = await fetch("/api/media/upload", {
+      method: "POST",
+      body: formData,
+    });
+    const payload = (await response.json()) as { url?: string; error?: string };
+    if (!response.ok || !payload.url) {
+      throw new Error(payload.error || "Impossible d’envoyer cette image.");
+    }
+    return payload.url;
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setLogoPreview(result);
-        updateData({ logoUrl: result });
-        setSelectedPresetIndex(null);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const url = await uploadImage(file);
+      setLogoPreview(url);
+      updateData({ logoUrl: url });
+      setSelectedPresetIndex(null);
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Impossible d’envoyer le logo.",
+      );
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setBannerPreview(result);
-        updateData({ bannerUrl: result });
-        setSelectedPresetIndex(null);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const url = await uploadImage(file);
+      setBannerPreview(url);
+      updateData({ bannerUrl: url });
+      setSelectedPresetIndex(null);
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Impossible d’envoyer la couverture.",
+      );
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      const newUrls: string[] = [];
-      const promises = (Array.from(files) as File[]).map((file) => {
-        return new Promise<void>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            newUrls.push(reader.result as string);
-            resolve();
-          };
-          reader.readAsDataURL(file);
-        });
-      });
-
-      Promise.all(promises).then(() => {
-        const updated = [...galleryPreviews, ...newUrls].slice(0, 8);
-        setGalleryPreviews(updated);
-        updateData({ galleryUrls: updated });
-        setSelectedPresetIndex(null);
-      });
-    }
-  };
-
-  const removeImage = (type: "logo" | "banner" | "gallery", index?: number) => {
+  const removeImage = (type: "logo" | "banner") => {
     if (type === "logo") {
       setLogoPreview(null);
       updateData({ logoUrl: null });
@@ -169,11 +171,6 @@ export default function StepGeneral({
     } else if (type === "banner") {
       setBannerPreview(null);
       updateData({ bannerUrl: null });
-      setSelectedPresetIndex(null);
-    } else if (type === "gallery" && typeof index === "number") {
-      const updated = galleryPreviews.filter((_, i) => i !== index);
-      setGalleryPreviews(updated);
-      updateData({ galleryUrls: updated });
       setSelectedPresetIndex(null);
     }
   };
@@ -185,10 +182,6 @@ export default function StepGeneral({
     }
     if (!data.description.trim()) {
       setError("Une brève description est requise.");
-      return;
-    }
-    if (!logoPreview) {
-      setError("Veuillez ajouter un logo pour votre enseigne.");
       return;
     }
     setError(null);
@@ -204,7 +197,7 @@ export default function StepGeneral({
             <Store className="w-5 h-5" />
           </div>
           <span className="text-xs font-mono text-gray-400 font-semibold uppercase tracking-wider">
-            Étape 1/3
+            Étape 1/5
           </span>
         </div>
         <h1 className="text-2xl font-bold font-display text-gray-900 tracking-tight leading-none">
@@ -219,10 +212,10 @@ export default function StepGeneral({
 
       {/* Modern High-Impact Preset Archetypes Grid inside the container */}
       <div className="mb-8">
-        <label className="text-xs font-bold uppercase tracking-wider text-emerald-600 mb-3 flex items-center space-x-1.5 font-mono">
+        <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 mb-3 flex items-center space-x-1.5 font-mono">
           <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
           <span>Gabarit de départ rapide</span>
-        </label>
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           {RESTAURANT_PRESETS.map((preset, idx) => {
             const isSelected =
@@ -278,6 +271,7 @@ export default function StepGeneral({
             <input
               type="text"
               id="name"
+              name="restaurant-name"
               placeholder="Ex: Le Krystal, Maquis la Braise"
               value={data.name}
               onChange={(e) => {
@@ -304,6 +298,7 @@ export default function StepGeneral({
             </div>
             <textarea
               id="description"
+              name="description"
               rows={3}
               maxLength={300}
               placeholder="Décrivez en quelques mots l'histoire culinaire du restaurant..."
@@ -322,22 +317,25 @@ export default function StepGeneral({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Logo Dropzone */}
           <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Logo de l&apos;enseigne *
-            </label>
+            <p className="block text-sm font-semibold text-gray-900 mb-2">
+              Logo de l&apos;enseigne <span className="font-normal text-gray-400">(optionnel)</span>
+            </p>
             <div className="relative border-2 border-dashed border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 transition-colors h-40 group">
               {logoPreview ? (
                 <div className="absolute inset-2 bg-white rounded-xl overflow-hidden flex items-center justify-center p-3 group">
-                  <img
+                  <Image
                     src={logoPreview}
                     alt="Logo restaurant"
                     referrerPolicy="no-referrer"
                     className="max-h-full max-w-full object-contain rounded-lg shadow-sm"
+                    width={160}
+                    height={160}
                   />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200 gap-2">
                     <button
                       type="button"
                       onClick={() => removeImage("logo")}
+                      aria-label="Supprimer le logo"
                       className="p-1.5 bg-white/95 rounded-lg text-red-500 hover:bg-white transition-colors"
                       title="Supprimer"
                     >
@@ -358,6 +356,7 @@ export default function StepGeneral({
                   </span>
                   <input
                     type="file"
+                    disabled={isUploading}
                     accept="image/*"
                     onChange={handleLogoUpload}
                     className="hidden"
@@ -369,22 +368,25 @@ export default function StepGeneral({
 
           {/* Banner Dropzone */}
           <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Visuel de couverture *
-            </label>
+            <p className="block text-sm font-semibold text-gray-900 mb-2">
+              Visuel de couverture <span className="font-normal text-gray-400">(optionnel)</span>
+            </p>
             <div className="relative border-2 border-dashed border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 transition-colors h-40 group">
               {bannerPreview ? (
                 <div className="absolute inset-2 bg-white rounded-xl overflow-hidden group">
-                  <img
+                  <Image
                     src={bannerPreview}
                     alt="Bannière restaurant"
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover rounded-lg"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 50vw"
                   />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200">
                     <button
                       type="button"
                       onClick={() => removeImage("banner")}
+                      aria-label="Supprimer la couverture"
                       className="p-1.5 bg-white/95 rounded-lg text-red-500 hover:bg-white transition-colors"
                       title="Supprimer"
                     >
@@ -405,6 +407,7 @@ export default function StepGeneral({
                   </span>
                   <input
                     type="file"
+                    disabled={isUploading}
                     accept="image/*"
                     onChange={handleBannerUpload}
                     className="hidden"
@@ -415,54 +418,6 @@ export default function StepGeneral({
           </div>
         </div>
 
-        {/* Gallery Photos (Optional) */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
-            Galerie photos additionnelle{" "}
-            <span className="text-gray-400 text-xs font-normal">
-              (Optionnel)
-            </span>
-          </label>
-          <div className="border border-gray-100 bg-gray-50/30 rounded-xl p-4">
-            <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 mb-2">
-              {galleryPreviews.map((url, idx) => (
-                <div
-                  key={idx}
-                  className="relative aspect-video rounded-lg overflow-hidden group border border-gray-100 shadow-xs"
-                >
-                  <img
-                    src={url}
-                    alt={`Galerie ${idx + 1}`}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
-                    <button
-                      type="button"
-                      onClick={() => removeImage("gallery", idx)}
-                      className="p-1 bg-white/95 rounded text-red-500 hover:bg-white transition-colors"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {galleryPreviews.length < 8 && (
-                <label className="cursor-pointer border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center aspect-video bg-white hover:border-brand-500 hover:text-brand-500 transition-all">
-                  <Upload className="w-4 h-4 text-gray-400" />
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleGalleryUpload}
-                    className="hidden"
-                  />
-                </label>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Buttons Block */}
@@ -470,6 +425,7 @@ export default function StepGeneral({
         <button
           type="button"
           onClick={validateAndProceed}
+          disabled={isUploading}
           className="px-6 py-3 bg-brand-green text-white text-sm font-semibold rounded-xl inline-flex items-center space-x-2 shadow-sm cursor-pointer transition-all active:scale-[0.98]"
         >
           <span>Suivant, Localisation</span>

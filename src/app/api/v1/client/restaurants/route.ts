@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
             accepteCommandes: restaurants.accepteCommandes,
           })
           .from(restaurants)
-          .where(and(eq(restaurants.actif, true))),
+          .where(and(eq(restaurants.actif, true), eq(restaurants.enLigne, true))),
     );
 
     // Appliquer les filtres côté application (les données sont cachées)

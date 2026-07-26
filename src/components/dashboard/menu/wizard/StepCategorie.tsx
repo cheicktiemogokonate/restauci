@@ -1,6 +1,7 @@
 "use client";
 
 import { Info } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import type { CategorieOption, PlatWizardData } from "./types";
 
 interface StepCategorieProps {
@@ -110,18 +111,12 @@ export default function StepCategorie({
               Les plats indisponibles ne sont pas visibles par les clients.
             </p>
           </div>
-          <div
-            className={`w-11 h-6 rounded-full p-0.5 cursor-pointer flex items-center transition-all shrink-0 ${
-              formData.disponible ? "bg-[#036B3A]" : "bg-zinc-200"
-            }`}
-            onClick={() => onDisponibleChange(!formData.disponible)}
-          >
-            <div
-              className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all ${
-                formData.disponible ? "translate-x-5" : ""
-              }`}
-            />
-          </div>
+          <Switch
+            checked={formData.disponible}
+            onCheckedChange={onDisponibleChange}
+            aria-label="Rendre ce plat disponible"
+            className="data-checked:bg-[#036B3A]"
+          />
         </div>
         <p className="text-xs text-zinc-400 mt-3">
           {formData.disponible

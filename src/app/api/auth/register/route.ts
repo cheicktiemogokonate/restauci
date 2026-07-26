@@ -54,10 +54,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password, nom, telephone, role } = validation.data;
+    const { email, password, nom, telephone, planCode } = validation.data;
 
     // Log tentative d'inscription (sans le mot de passe)
-    authLogger.info({ ip, email, nom, role }, "Registration attempt");
+    authLogger.info({ ip, email, nom }, "Registration attempt");
 
     // Vérifier que l'email n'existe pas
     const existingUser = await db
@@ -88,7 +88,8 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         nom,
         telephone,
-        role,
+        role: "restaurateur",
+        pendingPlanCode: planCode,
       })
       .returning({
         id: users.id,

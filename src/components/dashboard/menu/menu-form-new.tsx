@@ -1,6 +1,7 @@
 "use client";
 
 import { createPlatWizardAction } from "@/lib/actions/menu";
+import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronLeft,
@@ -149,10 +150,10 @@ export default function PlatFormWizard({ categories }: PlatFormWizardProps) {
   const activeStep = steps[currentStep - 1];
 
   return (
-    <div className="w-full mx-auto max-w-7xl bg-white flex h-screen">
-      <aside className="w-75 bg-[#F8F9FA] border-r border-zinc-100 p-8 flex flex-col justify-between shrink-0">
+    <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col bg-white lg:min-h-screen lg:flex-row">
+      <aside className="border-b border-zinc-100 bg-[#F8F9FA] p-5 lg:w-75 lg:shrink-0 lg:border-b-0 lg:border-r lg:p-8">
         <div>
-          <div className="flex items-center gap-3 mb-10">
+          <div className="mb-6 flex items-center gap-3 lg:mb-10">
             <div className="w-9 h-9 bg-[#036B3A] rounded-xl flex items-center justify-center text-white shadow-sm shadow-[#036B3A]/30">
               <UtensilsCrossed className="w-5 h-5" />
             </div>
@@ -160,7 +161,7 @@ export default function PlatFormWizard({ categories }: PlatFormWizardProps) {
               Restau<span className="text-[#036B3A]">CI</span>
             </span>
           </div>
-          <div className="mb-8">
+          <div className="mb-5 lg:mb-8">
             <h1 className="text-2xl font-bold text-zinc-900 mb-1">
               Ajouter un plat
             </h1>
@@ -168,16 +169,19 @@ export default function PlatFormWizard({ categories }: PlatFormWizardProps) {
               Votre carte se compose de l&apos;ensemble de vos plats.
             </p>
           </div>
-          <div className="relative flex flex-col gap-6">
-            <div className="absolute left-4.5 top-4 bottom-4 w-0.5 bg-zinc-200 z-0" />
+          <div className="flex gap-3 overflow-x-auto pb-1 lg:relative lg:flex-col lg:gap-6 lg:overflow-visible lg:pb-0">
+            <div className="absolute bottom-4 left-4.5 top-4 z-0 hidden w-0.5 bg-zinc-200 lg:block" />
             {steps.map((s) => {
               const isCompleted = currentStep > s.id;
               const isActive = currentStep === s.id;
+              const canVisit = s.id <= currentStep;
               return (
-                <div
+                <button
+                  type="button"
                   key={s.id}
-                  className="flex gap-4 relative z-10 cursor-pointer"
-                  onClick={() => setCurrentStep(s.id as StepNumber)}
+                  className={`relative z-10 flex min-w-38 gap-3 text-left lg:min-w-0 lg:gap-4 ${canVisit ? "cursor-pointer" : "cursor-not-allowed"}`}
+                  onClick={() => canVisit && setCurrentStep(s.id as StepNumber)}
+                  disabled={!canVisit}
                 >
                   <div className="flex items-center justify-center shrink-0">
                     {isCompleted ? (
@@ -210,15 +214,15 @@ export default function PlatFormWizard({ categories }: PlatFormWizardProps) {
                       </p>
                     )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col justify-between bg-white relative">
-        <div className="flex-1 px-10 py-8">
+      <main className="relative flex flex-1 flex-col justify-between bg-white">
+        <div className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentStep}
@@ -280,15 +284,17 @@ export default function PlatFormWizard({ categories }: PlatFormWizardProps) {
           </AnimatePresence>
         </div>
 
-        <footer className="h-20 border-t border-zinc-100 px-10 flex items-center justify-between shrink-0 bg-white z-20">
+        <footer className="flex min-h-20 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-zinc-100 bg-white px-5 py-4 sm:px-8 lg:px-10">
           <div>
             {currentStep > 1 && (
-              <button
+              <Button
+                type="button"
+                variant="outline"
                 onClick={prevStep}
-                className="px-4 py-2 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 border border-zinc-200 transition-all flex items-center gap-1.5 shadow-sm"
+                className="text-muted-foreground"
               >
                 <ChevronLeft className="w-4 h-4" /> Précédent
-              </button>
+              </Button>
             )}
           </div>
 
@@ -296,19 +302,19 @@ export default function PlatFormWizard({ categories }: PlatFormWizardProps) {
             {submitError && (
               <p className="text-xs text-red-600 max-w-xs">{submitError}</p>
             )}
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => router.push("/restaurateur/menu")}
               disabled={isSubmitting}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-zinc-500 hover:text-zinc-800 transition-colors disabled:opacity-50"
             >
               Annuler
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handlePrimaryAction}
               disabled={isNextDisabled || isSubmitting}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#036B3A] hover:bg-[#02562E] disabled:bg-zinc-300 text-white transition-all flex items-center gap-1.5 shadow-md shadow-[#036B3A]/20"
+              size="lg"
             >
               {isSubmitting ? (
                 <>
@@ -321,7 +327,7 @@ export default function PlatFormWizard({ categories }: PlatFormWizardProps) {
                   <ChevronRight className="w-4 h-4" />
                 </>
               )}
-            </button>
+            </Button>
           </div>
         </footer>
       </main>

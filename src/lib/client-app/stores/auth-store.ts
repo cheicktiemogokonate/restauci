@@ -12,16 +12,15 @@ export interface ClientUser {
 
 interface AuthState {
   accessToken: string | null;
-  refreshToken: string | null;
   user: ClientUser | null;
   isAuthenticated: boolean;
 
   setAuth: (data: {
     accessToken: string;
-    refreshToken: string;
     user: ClientUser;
   }) => void;
   setAccessToken: (token: string) => void;
+  updateUser: (user: Partial<ClientUser>) => void;
   logout: () => void;
 }
 
@@ -29,36 +28,43 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       accessToken: null,
-      refreshToken: null,
       user: null,
       isAuthenticated: false,
 
-      setAuth: ({ accessToken, refreshToken, user }) =>
+      setAuth: ({ accessToken, user }) =>
         set({
           accessToken,
-          refreshToken,
           user,
           isAuthenticated: true,
         }),
 
       setAccessToken: (token) => set({ accessToken: token }),
 
+      updateUser: (user) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...user } : null,
+        })),
+
       logout: () =>
         set({
           accessToken: null,
-          refreshToken: null,
           user: null,
           isAuthenticated: false,
         }),
     }),
     {
       name: "restauci-client-auth",
+      version: 2,
       storage: createJSONStorage(() => localStorage),
-      // On NE persiste QUE le refreshToken et le user.
-      // L'accessToken reste en mémoire et est régénéré au chargement
-      // de l'app via le refreshToken (voir useInitAuth).
+      migrate: (persistedState) => {
+        const state = persistedState as Partial<AuthState>;
+        return {
+          accessToken: null,
+          user: state.user ?? null,
+          isAuthenticated: state.isAuthenticated ?? false,
+        };
+      },
       partialize: (state) => ({
-        refreshToken: state.refreshToken,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),

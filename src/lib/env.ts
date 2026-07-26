@@ -24,6 +24,14 @@ const envSchema = z.object({
     .min(1, "UPSTASH_REDIS_REST_TOKEN manquant")
     .describe("Token Upstash Redis"),
 
+  // Le cache de données métier reste opt-in : Redis sert déjà au temps réel
+  // et au rate limiting, sans imposer de données potentiellement périmées.
+  DATA_CACHE_ENABLED: z
+    .enum(["true", "false"])
+    .optional()
+    .default("false")
+    .transform((value) => value === "true"),
+
   // ── Upload medias ─────────────────────────────────────────────
   CLOUDINARY_URL: z.string().optional(),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
@@ -45,7 +53,7 @@ const envSchema = z.object({
     .describe("URL publique de l'application"),
 
   NEXT_PUBLIC_APP_NAME: z.string()
-    .default("RestauCI")
+    .default("Toutci")
     .describe("Nom de l'application"),
 
   NODE_ENV: z.enum(["development", "production", "test"]) 

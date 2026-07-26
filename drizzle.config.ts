@@ -2,7 +2,11 @@ import type { Config } from "drizzle-kit"
 import { readFileSync } from "fs"
 import { resolve } from "path"
 
-const dotenvPath = resolve(process.cwd(), ".env.local")
+const isTestDatabase = process.env.TEST_DATABASE === "true"
+const dotenvPath = resolve(
+  process.cwd(),
+  isTestDatabase ? ".env.test.local" : ".env.local",
+)
 
 if (!process.env.DATABASE_URL) {
   try {
@@ -19,6 +23,10 @@ if (!process.env.DATABASE_URL) {
   } catch {
     // ignore if .env.local is missing
   }
+}
+
+if (isTestDatabase && process.env.DATABASE_URL_TEST) {
+  process.env.DATABASE_URL = process.env.DATABASE_URL_TEST
 }
 
 export default {

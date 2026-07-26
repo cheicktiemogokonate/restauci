@@ -1,23 +1,14 @@
 "use client";
 
+import { useNotificationsContext } from "@/components/dashboard/notifications/notifications-provider";
+import { Button } from "@/components/ui/button";
 import { useWebPush } from "@/hooks/use-web-push";
 import { getRouteConfig } from "@/lib/config/dashboard-routes";
 import { ArrowLeft, Bell, LogOut } from "lucide-react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-
-interface NavbarProps {
-  user: {
-    nom: string;
-    avatarUrl?: string | null;
-  };
-  restaurant: {
-    nom: string;
-    logoUrl?: string | null;
-  };
-  notificationsCount?: number;
-}
+import { useEffect } from "react";
+import { MobileSidebar } from "./sidebar";
 
 export default function Navbar({
   user,
@@ -30,12 +21,14 @@ export default function Navbar({
   const router = useRouter();
   const config = getRouteConfig(pathname);
 
-  const [notificationsCount, setNotificationsCount] = useState(0);
+  // Source unique de vérité pour le compteur de notifications : le
+  // NotificationsProvider se synchronise automatiquement (SSE + actions
+  // markAsRead). La navbar n'a plus son propre fetch ni son propre debounce.
+  const { unreadCount } = useNotificationsContext();
   const { isSubscribed, subscribe } = useWebPush();
 
   const titre = config?.titre ?? "Tableau de bord";
   const showBack = config?.showBackButton ?? false;
-  const parentPath = config?.parentPath ?? "/restaurateur";
 
   // Web Push subscription on mount
   useEffect(() => {
@@ -43,29 +36,6 @@ export default function Navbar({
       subscribe().catch(console.error);
     }
   }, [isSubscribed, subscribe]);
-
-  // Poll notification count every 30 seconds
-  useEffect(() => {
-    const fetchCount = async () => {
-      try {
-        const res = await fetch("/api/notifications/count");
-        if (res.ok) {
-          const data = await res.json();
-          setNotificationsCount(data.count);
-        }
-      } catch (err) {
-        console.error("[Navbar] Failed to fetch notification count:", err);
-      }
-    };
-
-    // Fetch on mount
-    fetchCount();
-
-    // Set interval
-    const interval = setInterval(fetchCount, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -81,40 +51,54 @@ export default function Navbar({
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6 gap-4 z-20 lg:left-64 lg:w-[calc(100%-16rem)]">
-      {/* Gauche : bouton retour + titre */}
-      <div className="flex items-center gap-3">
+    <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-4 lg:px-6 gap-2 sm:gap-4 z-20 lg:left-64 lg:w-[calc(100%-16rem)]">
+      {/* Gauche : menu mobile + bouton retour + titre */}
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="lg:hidden">
+          <MobileSidebar />
+        </div>
         {showBack && (
-          <button
-            onClick={() => router.push(parentPath)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-lg"
+            onClick={() => router.back()}
+            className="shrink-0"
             aria-label="Retour"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </button>
+          </Button>
         )}
-        <h1 className="text-xl font-bold text-gray-900">{titre}</h1>
+        <h1 className="truncate text-base font-bold text-gray-900 sm:text-lg">
+          {titre}
+        </h1>
       </div>
 
       {/* Droite : notifications + profil */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Cloche notifications */}
-        <button
-          className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-lg"
+          className="relative"
           onClick={() => router.push("/restaurateur/notifications")}
+          aria-label="Notifications"
         >
           <Bell className="w-5 h-5 text-gray-600" />
-          {notificationsCount > 0 && (
+          {unreadCount > 0 && (
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
           )}
-        </button>
+        </Button>
 
-        <div className="w-px h-6 bg-gray-200" />
+        <div className="hidden h-6 w-px bg-gray-200 sm:block" />
 
         {/* Profil utilisateur */}
-        <button
+        <Button
+          type="button"
+          variant="ghost"
           onClick={() => router.push("/restaurateur/profil")}
-          className="flex items-center gap-2 hover:bg-gray-50 rounded-xl px-2 py-1.5 transition-colors"
+          className="h-auto gap-2 px-1.5 py-1.5 sm:px-2"
         >
           {/* Avatar avec fallback */}
           {user.avatarUrl ? (
@@ -123,10 +107,10 @@ export default function Navbar({
               alt={user.nom}
               width={32}
               height={32}
-              className="w-8 h-8 rounded-full object-cover"
+              className="h-8 w-8 rounded-full object-cover"
             />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-[#2d7d46] flex items-center justify-center shrink-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
               <span className="text-xs font-bold text-white">
                 {user.nom
                   .split(" ")
@@ -137,21 +121,23 @@ export default function Navbar({
               </span>
             </div>
           )}
-          <div className="text-left hidden md:block">
-            <p className="text-sm font-semibold text-gray-900 leading-tight">
+          <div className="hidden text-left sm:block">
+            <p className="text-sm font-semibold leading-tight text-gray-900">
               {user.nom}
             </p>
             <p className="text-xs text-gray-400">{restaurant.nom}</p>
           </div>
-        </button>
-        <button
-          type="submit"
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-lg"
           aria-label="Se déconnecter"
-          className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors"
+          className="text-muted-foreground hover:text-destructive"
           onClick={handleLogout}
         >
           <LogOut className="w-4 h-4" />
-        </button>
+        </Button>
       </div>
     </header>
   );

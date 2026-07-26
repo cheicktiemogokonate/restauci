@@ -3,6 +3,7 @@
 import { Users } from "lucide-react";
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import Image from "next/image";
 
 const foodImages = [
   {
@@ -64,7 +65,7 @@ function RegisterVisual() {
             key={i}
             className="relative aspect-square md:aspect-auto h-full w-full rounded-xl overflow-hidden shadow-2xs group"
           >
-            <img
+            <Image
               src={image.url}
               alt={image.alt}
               width={400}
@@ -90,10 +91,10 @@ function RegisterVisual() {
 
           <div className="flex-1 leading-tight">
             <span className="text-lg font-extrabold block tracking-tight">
-              +1 200 restaurants
+              Pensé pour vos équipes
             </span>
             <span className="text-[11px] text-white/75 font-semibold tracking-wide block mt-0.5">
-              nous font confiance
+              Une gestion simple au quotidien
             </span>
           </div>
         </motion.div>

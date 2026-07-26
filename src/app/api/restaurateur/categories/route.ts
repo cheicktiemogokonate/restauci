@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { categories, restaurants } from "@/lib/db/schema";
+import { categories } from "@/lib/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { getMyRestaurant } from "@/lib/db/queries";

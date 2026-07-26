@@ -1,8 +1,9 @@
-import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { restaurants } from "@/lib/db/schema";
+import { requireAdminSession } from "@/lib/api/auth-admin";
+import {
+  AdminTransitionError,
+  validerRestaurant,
+} from "@/lib/db/mutations-admin";
 import { restaurantLogger } from "@/lib/loggers";
-import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -15,10 +16,8 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await getCurrentUser();
-    if (!session || session.role !== "admin") {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
-    }
+    const { session, error } = await requireAdminSession(request);
+    if (error) return error;
 
     const { id } = await context.params;
     let body: unknown;
@@ -55,11 +54,17 @@ export async function PATCH(
       );
     }
 
-    const [updated] = await db
-      .update(restaurants)
-      .set({ actif: validation.data.actif, updatedAt: new Date() })
-      .where(eq(restaurants.id, id))
-      .returning();
+    if (!validation.data.actif) {
+      return NextResponse.json(
+        {
+          error:
+            "La désactivation directe est interdite. Utilisez le flux de rejet ou de suspension.",
+        },
+        { status: 409 },
+      );
+    }
+
+    const updated = await validerRestaurant(id, session.userId);
 
     if (!updated) {
       return NextResponse.json(
@@ -70,6 +75,9 @@ export async function PATCH(
 
     return NextResponse.json({ restaurant: updated }, { status: 200 });
   } catch (error) {
+    if (error instanceof AdminTransitionError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     restaurantLogger.error(
       {
         error: error instanceof Error ? error.message : "Unknown error",

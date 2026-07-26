@@ -27,8 +27,8 @@ export default function InteractiveMap({
   onCoordinatesChange,
 }: InteractiveMapProps) {
   const [pinPos, setPinPos] = useState({
-    lat: latitude || 5.3484,
-    lng: longitude || -3.9878,
+    lat: latitude || 7.6905,
+    lng: longitude || -5.03,
   });
 
   useEffect(() => {
@@ -43,26 +43,18 @@ export default function InteractiveMap({
     const finalLat = Number(lngLat.lat.toFixed(5));
     const finalLng = Number(lngLat.lng.toFixed(5));
     setPinPos({ lat: finalLat, lng: finalLng });
-    // Minimal reverse geocoding approximation for demonstration
-    onCoordinatesChange(
-      finalLat,
-      finalLng,
-      commune,
-      "Quartier",
-      "Adresse sélectionnée",
-    );
+    onCoordinatesChange(finalLat, finalLng, commune);
   };
 
   const handleRecentrer = () => {
-    const marcory = { lat: 5.3065, lng: -4.0133 };
-    setPinPos(marcory);
-    onCoordinatesChange(
-      marcory.lat,
-      marcory.lng,
-      "Marcory",
-      "Zone 4",
-      "Rue des Jardins, Immeuble 12, Marcory Zone 4, Abidjan, Côte d'Ivoire",
-    );
+    navigator.geolocation?.getCurrentPosition((position) => {
+      const current = {
+        lat: Number(position.coords.latitude.toFixed(5)),
+        lng: Number(position.coords.longitude.toFixed(5)),
+      };
+      setPinPos(current);
+      onCoordinatesChange(current.lat, current.lng, commune);
+    });
   };
 
   return (
@@ -74,7 +66,7 @@ export default function InteractiveMap({
           className="flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-xs font-semibold text-gray-700 rounded-lg shadow-sm transition-all"
         >
           <RefreshCw className="w-3.5 h-3.5 text-gray-400" />
-          <span>Recentrer</span>
+          <span>Me localiser</span>
         </button>
       </div>
 

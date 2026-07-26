@@ -1,0 +1,29 @@
+{
+  "name": "Toutci",
+  "short_name": "Toutci",
+  "description": "Une app pour découvrir les restaurants et commander partout en Côte d’Ivoire.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFBFA",
+  "theme_color": "#0F8A5F",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}

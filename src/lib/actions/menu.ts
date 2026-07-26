@@ -7,6 +7,7 @@ import {
   createPlat,
   deletePlat,
   toggleDisponibilitePlat,
+  updateCategorie,
   updatePlat,
 } from "@/lib/db/mutations";
 import { categories } from "@/lib/db/schema";
@@ -41,6 +42,111 @@ function parsePrix(prix: string): number | null {
 }
 
 export type CreatePlatWizardInput = z.infer<typeof platWizardSchema>;
+
+const categoryNameSchema = z
+  .string()
+  .trim()
+  .min(2, "Le nom doit contenir au moins 2 caractères.")
+  .max(255, "Le nom est trop long.");
+
+async function getRestaurantCategory(categoryId: string, restaurantId: string) {
+  const [category] = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(
+      and(
+        eq(categories.id, categoryId),
+        eq(categories.restaurantId, restaurantId),
+      ),
+    )
+    .limit(1);
+
+  return category;
+}
+
+export async function createMenuCategoryAction(name: string) {
+  const { restaurant } = await getRestaurateurSession();
+  const parsed = categoryNameSchema.safeParse(name);
+
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  try {
+    const [existingCategory] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        and(
+          eq(categories.restaurantId, restaurant.id),
+          eq(categories.nom, parsed.data),
+        ),
+      )
+      .limit(1);
+
+    if (existingCategory) {
+      return { error: "Une catégorie porte déjà ce nom." };
+    }
+
+    const category = await createCategorie({
+      restaurantId: restaurant.id,
+      nom: parsed.data,
+    });
+
+    if (!category) {
+      return { error: "Impossible de créer la catégorie. Réessayez." };
+    }
+
+    revalidatePath("/restaurateur/menu");
+    return {
+      success: true,
+      category: { id: category.id, nom: category.nom },
+    };
+  } catch (error) {
+    log.error(
+      { error, restaurantId: restaurant.id },
+      "createMenuCategoryAction error",
+    );
+    return { error: "Impossible de créer la catégorie. Réessayez." };
+  }
+}
+
+export async function renameMenuCategoryAction(categoryId: string, name: string) {
+  const { restaurant } = await getRestaurateurSession();
+  const parsed = categoryNameSchema.safeParse(name);
+
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  if (!categoryId) return { error: "Catégorie introuvable." };
+
+  try {
+    const category = await getRestaurantCategory(categoryId, restaurant.id);
+    if (!category) return { error: "Catégorie introuvable." };
+
+    const [sameNameCategory] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        and(
+          eq(categories.restaurantId, restaurant.id),
+          eq(categories.nom, parsed.data),
+        ),
+      )
+      .limit(1);
+
+    if (sameNameCategory && sameNameCategory.id !== categoryId) {
+      return { error: "Une catégorie porte déjà ce nom." };
+    }
+
+    await updateCategorie(categoryId, restaurant.id, { nom: parsed.data });
+  } catch (error) {
+    log.error(
+      { error, categoryId, restaurantId: restaurant.id },
+      "renameMenuCategoryAction error",
+    );
+    return { error: "Impossible de renommer la catégorie. Réessayez." };
+  }
+
+  revalidatePath("/restaurateur/menu");
+  return { success: true };
+}
 
 export async function createPlatWizardAction(data: CreatePlatWizardInput) {
   const { restaurant } = await getRestaurateurSession();
@@ -77,7 +183,6 @@ export async function createPlatWizardAction(data: CreatePlatWizardInput) {
         const categorie = await createCategorie({
           restaurantId: restaurant.id,
           nom: parsed.data.newCategorieName,
-          ordre: 0,
         });
         categorieId = categorie.id;
       }
@@ -182,7 +287,10 @@ export async function deletePlatAction(platId: string) {
   }
 
   try {
-    await deletePlat(platId, restaurant.id);
+    const deletedPlats = await deletePlat(platId, restaurant.id);
+    if (deletedPlats.length === 0) {
+      return { error: "Ce plat est introuvable ou a déjà été supprimé." };
+    }
   } catch (error) {
     log.error(
       { error, platId, restaurantId: restaurant.id },

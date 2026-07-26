@@ -1,7 +1,12 @@
 "use client";
 
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { GeolocationStatus } from "@/lib/client-app/hooks/use-geolocation";
 import { useAuthStore } from "@/lib/client-app/stores/auth-store";
+import { LocateFixed, MapPin, Search, UserRound } from "lucide-react";
 import Link from "next/link";
 
 interface ClientTopBarProps {
@@ -9,12 +14,13 @@ interface ClientTopBarProps {
   onDemanderGeolocation: () => void;
   nombreResultats: number;
   isLoading: boolean;
-  // NOUVEAU :
   search: string;
   onSearchChange: (value: string) => void;
   cuisine: string | null;
   onCuisineChange: (value: string | null) => void;
 }
+
+const cuisines = ["Tout", "Africaine", "Pizza", "Fast food", "Pâtisserie", "Boissons"];
 
 export function ClientTopBar({
   geoStatus,
@@ -26,144 +32,92 @@ export function ClientTopBar({
   cuisine,
   onCuisineChange,
 }: ClientTopBarProps) {
-  const user = useAuthStore((s) => s.user);
+  const user = useAuthStore((state) => state.user);
+  const initials = user?.nom
+    .split(" ")
+    .map((name) => name[0])
+    .join("");
 
   return (
-    <div className="absolute top-0 left-0 right-0 z-20 p-4 pointer-events-none">
-      <div className="flex items-center gap-2 pointer-events-auto">
-        {/* Barre de recherche */}
-        <div className="flex-1 bg-white rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3">
-          <svg
-            className="w-5 h-5 text-gray-400 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+    <header className="pointer-events-none absolute inset-x-0 top-0 z-20 p-3 sm:p-4">
+      <div className="pointer-events-auto mx-auto max-w-2xl space-y-2.5">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Restaurant ou plat"
+              aria-label="Rechercher un restaurant ou un plat"
+              className="h-11 rounded-xl border-white/80 bg-background/95 pr-3 pl-9 text-sm shadow-lg backdrop-blur-md"
             />
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Rechercher un restaurant, un plat..."
-            className="flex-1 text-sm focus:outline-none placeholder:text-gray-400"
-          />
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-lg"
+            onClick={onDemanderGeolocation}
+            className="rounded-xl bg-background/95 shadow-lg backdrop-blur-md hover:bg-background"
+            aria-label="Me localiser"
+          >
+            <LocateFixed className={geoStatus === "demande" ? "animate-pulse text-primary" : "text-primary"} />
+          </Button>
+
+          <Button
+            asChild
+            variant="secondary"
+            size="icon-lg"
+            className="rounded-xl bg-background/95 shadow-lg backdrop-blur-md hover:bg-background"
+          >
+            <Link href={user ? "/profil" : "/client/login?redirect=%2Fprofil"} aria-label={user ? "Ouvrir mon profil" : "Se connecter"}>
+              {user ? (
+                <Avatar className="size-7">
+                  <AvatarFallback className="bg-primary text-[10px] font-bold text-primary-foreground">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              ) : (
+                <UserRound className="text-foreground" />
+              )}
+            </Link>
+          </Button>
         </div>
 
-        {/* Bouton localisation */}
-        <button
-          type="button"
-          onClick={onDemanderGeolocation}
-          className="w-12 h-12 bg-white rounded-2xl shadow-lg flex items-center justify-center shrink-0"
-          aria-label="Me localiser"
-        >
-          {geoStatus === "demande" ? (
-            <div className="w-4 h-4 border-2 border-gray-300 border-t-green-700 rounded-full animate-spin" />
-          ) : (
-            <svg
-              className="w-5 h-5 text-green-700"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"
-              />
-            </svg>
-          )}
-        </button>
+        {!isLoading && (
+          <Badge variant="secondary" className="h-6 rounded-lg bg-background/90 px-2.5 shadow-sm backdrop-blur-md">
+            <MapPin className="size-3 text-primary" />
+            {nombreResultats} restaurant{nombreResultats !== 1 ? "s" : ""} à proximité
+          </Badge>
+        )}
 
-        {/* Profil / connexion */}
-        <Link
-          href="/profil"
-          className="w-12 h-12 bg-white rounded-2xl shadow-lg flex items-center justify-center shrink-0"
-        >
-          {user ? (
-            <div className="w-8 h-8 rounded-full bg-green-700 flex items-center justify-center">
-              <span className="text-xs font-bold text-white">
-                {user.nom
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")}
-              </span>
-            </div>
-          ) : (
-            <svg
-              className="w-5 h-5 text-gray-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
-              />
-            </svg>
-          )}
-        </Link>
+        <nav aria-label="Filtrer par cuisine" className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {cuisines.map((label) => {
+            const value = label === "Tout" ? null : label;
+            const isActive = cuisine === value;
+
+            return (
+              <Button
+                key={label}
+                type="button"
+                variant={isActive ? "default" : "secondary"}
+                size="sm"
+                onClick={() => onCuisineChange(value)}
+                className="shrink-0 rounded-full px-3 shadow-sm backdrop-blur-md"
+              >
+                {label}
+              </Button>
+            );
+          })}
+        </nav>
+
+        {geoStatus === "refusee" && (
+          <p className="w-fit rounded-lg border border-amber-200 bg-amber-50/95 px-2.5 py-1.5 text-xs text-amber-800 shadow-sm backdrop-blur-md">
+            Localisation refusée — affichage centré sur Abidjan.
+          </p>
+        )}
       </div>
-
-      {/* Indicateur de resultats */}
-      {!isLoading && (
-        <div className="mt-2 inline-block bg-white/90 backdrop-blur-sm px-3 py-1.5 pointer-events-auto">
-          <span className="text-xs font-medium text-gray-600">
-            {nombreResultats} restaurant{nombreResultats !== 1 ? "s" : ""} a
-            proximite
-          </span>
-        </div>
-      )}
-
-      {/* Filtres cuisine */}
-      <div className="mt-2 flex gap-2 overflow-x-auto pb-1 pointer-events-auto scrollbar-hide">
-        {[
-          "Tout",
-          "Africaine",
-          "Pizza",
-          "Fast food",
-          "Pâtisserie",
-          "Boissons",
-        ].map((c) => {
-          const value = c === "Tout" ? null : c;
-          const isActive = cuisine === value;
-          return (
-            <button
-              key={c}
-              type="button"
-              onClick={() => onCuisineChange(value)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-                isActive
-                  ? "bg-gray-900 text-white"
-                  : "bg-white/90 text-gray-600"
-              }`}
-            >
-              {c}
-            </button>
-          );
-        })}
-      </div>
-
-      {geoStatus === "refusee" && (
-        <div className="mt-2 inline-block bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 pointer-events-auto">
-          <span className="text-xs text-amber-700">
-            Localisation refusee - affichage centre sur Abidjan
-          </span>
-        </div>
-      )}
-    </div>
+    </header>
   );
 }

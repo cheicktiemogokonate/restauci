@@ -14,6 +14,10 @@ import {
   avis,
   notifications,
   abonnements,
+  subscriptionPlans,
+  subscriptionRequests,
+  subscriptionPeriods,
+  commissionSettlements,
 } from "./schema";
 
 // ============================================================================
@@ -34,6 +38,10 @@ export type Livreur        = InferSelectModel<typeof livreurs>;
 export type Promotion      = InferSelectModel<typeof promotions>;
 export type Avis           = InferSelectModel<typeof avis>;
 export type Notification   = InferSelectModel<typeof notifications>;
+export type SubscriptionPlan = InferSelectModel<typeof subscriptionPlans>;
+export type SubscriptionRequest = InferSelectModel<typeof subscriptionRequests>;
+export type SubscriptionPeriod = InferSelectModel<typeof subscriptionPeriods>;
+export type CommissionSettlement = InferSelectModel<typeof commissionSettlements>;
 
 // ============================================================================
 // INSERT TYPES  (ce qu'on envoie en écriture)
@@ -53,6 +61,10 @@ export type NewLivreur        = InferInsertModel<typeof livreurs>;
 export type NewPromotion      = InferInsertModel<typeof promotions>;
 export type NewAvis           = InferInsertModel<typeof avis>;
 export type NewNotification   = InferInsertModel<typeof notifications>;
+export type NewSubscriptionPlan = InferInsertModel<typeof subscriptionPlans>;
+export type NewSubscriptionRequest = InferInsertModel<typeof subscriptionRequests>;
+export type NewSubscriptionPeriod = InferInsertModel<typeof subscriptionPeriods>;
+export type NewCommissionSettlement = InferInsertModel<typeof commissionSettlements>;
 
 // ============================================================================
 // TYPES ENRICHIS  (avec relations)
@@ -60,6 +72,8 @@ export type NewNotification   = InferInsertModel<typeof notifications>;
 
 export type RestaurantAvecRelations = Restaurant & {
   abonnement?: Abonnement | null;
+  subscriptionPeriods?: SubscriptionPeriod[];
+  subscriptionRequests?: SubscriptionRequest[];
   creneaux?: CreneauHoraire[];
   categories?: CategorieAvecPlats[];
   livreurs?: Livreur[];
@@ -104,9 +118,11 @@ export type StatutPaiement   = "en_attente" | "paye" | "rembourse" | "echoue";
 export type MethodePaiement  = "especes" | "carte" | "mobile_money" | "en_ligne";
 export type StatutLivraison  = "en_attente" | "assignee" | "en_route" | "livree" | "echouee";
 export type TypePromotion    = "pourcentage" | "montant_fixe" | "offre_1_1" | "livraison_gratuite";
-export type TypeNotification = "nouvelle_commande" | "commande_prete" | "commande_annulee" | "nouveau_avis" | "promotion" | "systeme";
-export type PlanAbonnement   = "gratuit" | "starter" | "pro" | "entreprise";
-export type StatutAbonnement = "essai" | "actif" | "expire" | "suspendu";
+export type TypeNotification = "nouvelle_commande" | "commande_prete" | "commande_annulee" | "nouveau_avis" | "promotion" | "systeme" | "abonnement_valide" | "abonnement_refuse" | "echeance_proche" | "abonnement_regrade" | "abonnement_suspendu" | "abonnement_expire";
+export type PlanCode         = "decouverte" | "croissance" | "partenaire_fier";
+export type StatutDemandeAbonnement = "en_attente" | "validee" | "refusee" | "annulee";
+export type StatutPeriodeAbonnement = "active" | "expiree" | "suspendue" | "annulee";
+export type MoyenReglement   = "mobile_money" | "virement" | "especes" | "cheque";
 
 /** Nutrition d'un plat */
 export type Nutrition = {
@@ -161,18 +177,4 @@ export const MODE_COMMANDE_LABELS: Record<ModeCommande, string> = {
   sur_place: "Sur place",
   livraison: "Livraison",
   emporter:  "À emporter",
-};
-
-export const PLAN_LABELS: Record<PlanAbonnement, string> = {
-  gratuit:    "Gratuit",
-  starter:    "Starter",
-  pro:        "Pro",
-  entreprise: "Entreprise",
-};
-
-export const PLAN_LIMITES: Record<PlanAbonnement, { maxPlats: number; maxCategories: number }> = {
-  gratuit:    { maxPlats: 20,  maxCategories: 5  },
-  starter:    { maxPlats: 50,  maxCategories: 10 },
-  pro:        { maxPlats: 200, maxCategories: 30 },
-  entreprise: { maxPlats: 999, maxCategories: 99 },
 };

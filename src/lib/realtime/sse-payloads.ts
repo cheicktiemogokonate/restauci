@@ -31,6 +31,20 @@ export function buildNouvelleCommandePayload(commande: Commande): Record<string,
     remise: commande.remise,
     total: commande.total,
     noteClient: commande.noteClient,
+    noteInterne: commande.noteInterne,
+    tempsPreparationEstime: commande.tempsPreparationEstime,
+    heureAcceptee:
+      commande.heureAcceptee instanceof Date
+        ? commande.heureAcceptee.toISOString()
+        : commande.heureAcceptee,
+    heurePrete:
+      commande.heurePrete instanceof Date
+        ? commande.heurePrete.toISOString()
+        : commande.heurePrete,
+    heureServie:
+      commande.heureServie instanceof Date
+        ? commande.heureServie.toISOString()
+        : commande.heureServie,
     createdAt:
       commande.createdAt instanceof Date
         ? commande.createdAt.toISOString()

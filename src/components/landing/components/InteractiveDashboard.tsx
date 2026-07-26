@@ -223,7 +223,7 @@ export default function InteractiveDashboard() {
               <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>
             <h3 className="font-display font-bold text-lg text-brand-dark">
-              Console Intelligente RestauCI
+              Console intelligente Toutci
             </h3>
           </div>
         </div>
@@ -613,7 +613,7 @@ export default function InteractiveDashboard() {
                   <div>
                     <h4 className="text-base font-bold text-brand-dark flex items-center gap-2">
                       <ChefHat className="h-5 w-5 text-brand-green" />
-                      Moniteur de Cuisine RestauCI
+                      Moniteur de cuisine Toutci
                     </h4>
                     <p className="text-xs text-brand-dark/60 mt-1">
                       Visualisez et configurez l&apos;évolution des commandes en
@@ -801,7 +801,7 @@ export default function InteractiveDashboard() {
                                 {order.items}
                               </p>
                               <div className="flex justify-between items-center pt-2 border-t border-gray-100 text-[10px] text-brand-dark/50">
-                                <span>Encaissé via RestauCI POS</span>
+                                <span>Encaissé via Toutci</span>
                                 <span className="font-mono text-emerald-600 font-bold">
                                   {formatEuro(order.amount)}
                                 </span>
@@ -832,7 +832,7 @@ export default function InteractiveDashboard() {
                     Inventaire & Réapprovisionnement Automatique
                   </h4>
                   <p className="text-xs text-brand-dark/60 mt-1">
-                    L&apos;algorithme RestauCI surveille vos stocks réels.
+                    Toutci vous aide à surveiller vos stocks réels.
                     Cliquez sur &quot;Réapprovisionner&quot; pour simuler une
                     livraison de marchandises.
                   </p>

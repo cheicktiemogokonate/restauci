@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Check, MoreHorizontal, Package } from "lucide-react";
+import { Check, MoreHorizontal, Package, XCircle } from "lucide-react";
+import type { StatutCommande } from "@/lib/db/types";
 
 interface TrackingStep {
   id: string;
@@ -14,9 +15,11 @@ interface TrackingStep {
 
 interface OrderTrackingProps {
   steps: TrackingStep[];
+  status: StatutCommande;
 }
 
-export function OrderTracking({ steps }: OrderTrackingProps) {
+export function OrderTracking({ steps, status }: OrderTrackingProps) {
+  const isCancelled = status === "annulee";
   return (
     <Card className="border border-border/60 shadow-sm rounded-2xl">
       <CardHeader className="flex flex-row items-center justify-between pb-4 pt-6">
@@ -32,13 +35,25 @@ export function OrderTracking({ steps }: OrderTrackingProps) {
         </Button>
       </CardHeader>
       <CardContent>
+        {isCancelled && (
+          <Alert variant="destructive" className="mb-5 border-destructive/30 bg-destructive/5">
+            <XCircle className="h-4 w-4" />
+            <AlertTitle>Commande annulée</AlertTitle>
+            <AlertDescription>
+              Le parcours s&apos;est arrêté avant sa finalisation.
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="relative pt-2">
           {steps.map((step, index) => (
             <div key={step.id} className="flex gap-4 pb-8 last:pb-0">
               {/* Time Info */}
               <div className="w-24 shrink-0 pt-0.5 text-left">
                 {(step.completed || step.current) && (
-                  <p className="text-[12px] text-muted-foreground leading-tight">
+                  <p className={cn(
+                    "text-[12px] leading-tight",
+                    step.current ? "font-semibold text-foreground" : "text-muted-foreground",
+                  )}>
                     {step.date}
                     <br />
                     {step.time}
@@ -78,14 +93,21 @@ export function OrderTracking({ steps }: OrderTrackingProps) {
 
               {/* Content */}
               <div className="flex-1 pt-1.5">
-                <p
-                  className={cn(
-                    "font-medium text-[14px]",
-                    !step.completed && !step.current && "text-muted-foreground",
+                <div className="flex flex-wrap items-center gap-2">
+                  <p
+                    className={cn(
+                      "font-medium text-[14px]",
+                      !step.completed && !step.current && "text-muted-foreground",
+                    )}
+                  >
+                    {step.label}
+                  </p>
+                  {step.current && (
+                    <Badge className="h-5 rounded-full bg-brand-green/10 px-2 text-[10px] font-semibold text-brand-green hover:bg-brand-green/10">
+                      Étape en cours
+                    </Badge>
                   )}
-                >
-                  {step.label}
-                </p>
+                </div>
               </div>
             </div>
           ))}
@@ -94,3 +116,5 @@ export function OrderTracking({ steps }: OrderTrackingProps) {
     </Card>
   );
 }
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";

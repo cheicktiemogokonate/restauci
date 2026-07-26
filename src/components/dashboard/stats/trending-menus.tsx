@@ -37,6 +37,7 @@ function MenuCard({ item, index }: { item: PlatTop; index: number }) {
             src={(item.photoUrl || item.image)!}
             alt={item.nom}
             fill
+            sizes="128px"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (

@@ -27,11 +27,11 @@ export function RevenueChart({
     <Card className="col-span-full lg:col-span-2">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="text-base font-semibold">
+          <CardTitle className="text-sm font-semibold sm:text-base">
             Chiffre d&apos;affaires
           </CardTitle>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-bold">
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-xl font-bold sm:text-2xl">
               {formatPrix(totalRevenue)}
             </span>
           </div>
@@ -39,13 +39,13 @@ export function RevenueChart({
       </CardHeader>
       <CardContent className="pt-4">
         {!hasData ? (
-          <div className="h-50 sm:h-[250px] flex items-center justify-center border-2 border-dashed rounded-lg">
+          <div className="h-50 sm:h-62.5 flex items-center justify-center border-2 border-dashed rounded-lg">
             <p className="text-muted-foreground text-sm">
               Données insuffisantes
             </p>
           </div>
         ) : (
-          <div className="h-50 sm:h-[250px] w-full">
+          <div className="h-48 w-full sm:h-62.5">
             <ResponsiveContainer>
               <AreaChart
                 data={data}

@@ -23,7 +23,7 @@ export default function TrustedBy() {
     <section className="py-12 border-y border-[#EAEAEA] bg-white bg-radial from-transparent to-gray-50/40 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h3 className="text-center text-[11px] font-bold uppercase tracking-[0.15em] text-gray-400 mb-8">
-          Ils propulsent leur croissance avec RestauCI
+          Ils propulsent leur croissance avec Toutci
         </h3>
         
         {/* Continuous looping partner logos */}
@@ -45,7 +45,7 @@ export default function TrustedBy() {
         {/* Interactive Curved Loop Ribbon */}
         <div className="w-full relative mt-4 h-[120px] overflow-visible flex items-center justify-center">
           <CurvedLoop 
-            marqueeText="RESTAUCI ✦ SMART POS ✦ GESTION SIMPLIFIÉE ✦ COMMANDE COMPTOIR ✦ PILOTAGE EN DIRECT ✦ FIABILITÉ ASSURÉE ✦"
+            marqueeText="TOUTCI ✦ MARKETPLACE LOCAL ✦ COMMANDES EN DIRECT ✦ VISIBILITÉ GARANTIE ✦ PAIEMENT SIMPLE ✦ BOUAKÉ D'ABORD ✦"
             speed={1.5}
             curveAmount={100}
             interactive={true}

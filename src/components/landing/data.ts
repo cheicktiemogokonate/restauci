@@ -44,9 +44,8 @@ export interface TrustedLogo {
 
 export const navigationLinks: NavigationLink[] = [
   { name: "Accueil", href: "#hero" },
-  { name: "Fonctionnalités", href: "#features" },
-  { name: "Avantages", href: "#benefits" },
-  { name: "Témoignages", href: "#testimonials" },
+  { name: "Fonctionnement", href: "#about" },
+  { name: "Tarifs", href: "#pricing" },
   { name: "Contact", href: "#footer" },
 ];
 
@@ -83,65 +82,62 @@ export const benefitsData: Benefit[] = [
 
 export const featureGridData: FeatureGridItem[] = [
   {
-    id: "f1",
-    iconName: "ShoppingBag",
-    title: "Commandes et menu unifiés",
-    description:
-      "Gérez votre carte, vos plats et vos offres spéciales depuis un seul tableau de bord intuitif.",
-  },
-  {
     id: "f2",
     iconName: "Layers",
-    title: "Gestion intelligente des stocks",
+    title: "Une fiche qui vous rend visible",
     description:
-      "Anticipez les ruptures et gérez vos approvisionnements avant que les ingrédients ne manquent.",
+      "Votre menu, vos photos et vos horaires sont visibles par les clients Toutci.",
   },
   {
-    id: "f3",
-    iconName: "Calendar",
-    title: "Réservations et salle",
+    id: "f1",
+    iconName: "ShoppingBag",
+    title: "Commandes centralisées",
     description:
-      "Pilotez vos réservations, votre plan de salle et votre service depuis une interface claire.",
+      "Recevez vos commandes en temps réel, sans les manquer ni les mélanger.",
   },
   {
     id: "f4",
     iconName: "BarChart3",
-    title: "Tableaux de bord opérationnels",
+    title: "Suivi de vos ventes",
     description:
-      "Visualisez vos performances, vos marges et vos ventes en temps réel pour prendre des décisions rapides.",
+      "Visualisez ce qui se vend, quand, et combien vous encaissez.",
+  },
+  {
+    id: "f3",
+    iconName: "Calendar",
+    title: "Horaires et services",
+    description:
+      "Gérez vos horaires et les modes sur place, à emporter ou en livraison.",
   },
 ];
 
 export const testimonialData: Testimonial[] = [
   {
     id: "t1",
-    title: "RestauCI nous a apporté une clarté immédiate.",
-    text: "La gestion des stocks et la synchronisation entre la salle et la cuisine sont devenues fluides en quelques jours.",
-    avatar:
-      "https://images.unsplash.com/photo-1502685104226-ee32379fefbe?w=100&h=100&fit=crop&q=80",
-    name: "Céline R.",
-    role: "Gérante",
-    restaurant: "Bistro du Quai",
+    title: "Des clients qu'on n'aurait jamais eus autrement.",
+    text: "Toutci nous a permis d'être visibles sans rien changer à notre façon de travailler en cuisine.",
+    avatar: "",
+    name: "",
+    role: "Restaurateur partenaire",
+    restaurant: "Bouaké",
   },
   {
     id: "t2",
-    title: "Notre équipe est plus rapide et mieux organisée.",
-    text: "Les alertes de stock et la file de cuisine nous ont permis d’éviter des erreurs coûteuses.",
-    avatar:
-      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop&q=80",
-    name: "Jules M.",
-    role: "Chef",
-    restaurant: "Brasserie Gaston",
+    title: "Nos commandes arrivent directement, sans les appels.",
+    text: "Toutci centralise tout, ça libère du temps en cuisine et évite les erreurs de commande.",
+    avatar: "",
+    name: "",
+    role: "Restaurateur partenaire",
+    restaurant: "Bouaké",
   },
   {
     id: "t3",
-    title: "Un outil facile à prendre en main pour nos serveurs.",
-    text: "Tout est centralisé, et les rapports journaliers sont clairs et utiles pour piloter le service.",
-    avatar:
-      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&q=80",
-    name: "Amélie S.",
-    role: "Responsable salle",
-    restaurant: "Café L’Étoile",
+    title: "On est passé de zéro présence en ligne à plusieurs commandes par jour.",
+    text: "Avant Toutci, personne ne savait qu'on existait en dehors du quartier. Aujourd'hui les clients nous trouvent facilement et commandent directement.",
+    avatar: "",
+    name: "",
+    role: "Restaurateur partenaire",
+    restaurant: "Bouaké",
   },
 ];
 
@@ -203,5 +199,60 @@ export const dishesData: Dish[] = [
     rating: 4.8,
     category: "Plats de poisson",
     salesCount: 89,
+  },
+];
+
+export const pricingPlans = [
+  {
+    planKey: "decouverte",
+    name: "Découverte",
+    priceMonthly: null, // pas de cycle mensuel — plan gratuit à vie
+    priceYearly: 0,
+    commissionPercent: 15,
+    description:
+      "Pour tester Toutci sans risque et démarrer votre présence en ligne.",
+    features: [
+      "Fiche restaurant publiée après validation",
+      "Gestion des commandes en temps réel",
+      "Paiement de vos gains au cycle standard",
+      "Jusqu'à 20 plats, 5 catégories",
+    ],
+    popular: false,
+    ctaText: "Commencer gratuitement",
+  },
+  {
+    planKey: "partenaire_fier",
+    name: "Partenaire Fier",
+    priceMonthly: null, // pas de cycle mensuel — annuel uniquement
+    priceYearly: 50000,
+    commissionPercent: 10,
+    description:
+      "Pour être vu en premier et bénéficier du meilleur taux de commission.",
+    features: [
+      "Tout ce qu'offre Croissance",
+      'Badge "Partenaire" sur votre fiche',
+      "Placement prioritaire dans les résultats de recherche",
+      "Paiement de vos gains accéléré",
+      "Support client prioritaire",
+    ],
+    popular: true,
+    ctaText: "Devenir Partenaire Fier",
+  },
+  {
+    planKey: "croissance",
+    name: "Croissance",
+    priceMonthly: null, // pas de cycle mensuel — annuel uniquement
+    priceYearly: 25000,
+    commissionPercent: 12,
+    description:
+      "Pour les restaurants prêts à lever leurs limites et réduire leur commission.",
+    features: [
+      "Tout ce qu'offre Découverte",
+      "Menu et catégories illimités",
+      "Commission réduite dès le paiement",
+      "Activation après validation de l’offre",
+    ],
+    popular: false,
+    ctaText: "Passer à Croissance",
   },
 ];

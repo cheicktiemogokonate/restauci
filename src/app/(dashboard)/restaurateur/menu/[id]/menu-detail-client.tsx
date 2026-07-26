@@ -5,21 +5,20 @@ import MenuInfoPanel from "@/components/dashboard/menu/menu-info-panel";
 import PlatEditDialog from "@/components/dashboard/menu/plat-edit-dialog";
 import PlatStatsPanel from "@/components/dashboard/menu/plat-stats-panel";
 import SimilarDishes from "@/components/dashboard/menu/similar-dishes";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { toggleDisponibilitePlatAction } from "@/lib/actions/menu";
 import type { PlatAvecCategorie } from "@/lib/db/types";
 import { formatPrix } from "@/lib/utils/format";
-import { ImageIcon, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, ImageIcon, Pencil, Trash2 } from "lucide-react";
 import Image from "next/image";
-import { useState } from "react";
+import Link from "next/link";
+import { useOptimistic, useState, useTransition } from "react";
+import { toast } from "sonner";
 
 interface CategorieOption {
   id: string;
   nom: string;
-}
-
-interface NutritionItem {
-  label: string;
-  value: string;
-  unit: string;
 }
 
 interface MenuDetailClientProps {
@@ -27,8 +26,6 @@ interface MenuDetailClientProps {
   categories: CategorieOption[];
   similarPlats: PlatAvecCategorie[];
   tags: string[];
-  allergenes: string[];
-  nutrition: NutritionItem[];
 }
 
 export default function MenuDetailClient({
@@ -36,28 +33,43 @@ export default function MenuDetailClient({
   categories,
   similarPlats,
   tags,
-  allergenes,
-  nutrition,
 }: MenuDetailClientProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isAvailabilityPending, startAvailabilityTransition] = useTransition();
+  const [optimisticDisponibilite, setOptimisticDisponibilite] = useOptimistic(
+    plat.disponible,
+  );
+
+  const handleDisponibiliteChange = (disponible: boolean) => {
+    startAvailabilityTransition(async () => {
+      setOptimisticDisponibilite(disponible);
+      const result = await toggleDisponibilitePlatAction(plat.id, disponible);
+
+      if (result.error) {
+        setOptimisticDisponibilite(!disponible);
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success(disponible ? "Plat rendu disponible." : "Plat masqué du menu.");
+    });
+  };
 
   return (
     <>
-      <div className="flex min-h-screen bg-gray-50 font-sans">
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 px-6 py-6 flex flex-col gap-0">
-            {/* <div className="mb-4">
-              <Link
-                href="/restaurateur/menu"
-                className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
-              >
-                ← Retour à la carte
+      <div className="flex min-h-screen bg-muted/20 font-sans">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex flex-1 flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6">
+            <Button asChild variant="ghost" className="w-fit text-muted-foreground hover:text-foreground">
+              <Link href="/restaurateur/menu">
+                <ArrowLeft className="h-4 w-4" />
+                Retour à la carte
               </Link>
-            </div> */}
+            </Button>
 
-            <div className="flex gap-5 items-center flex-col md:flex-row">
-              <div className="flex-1 min-w-0 flex flex-col gap-5">
+            <div className="flex flex-col items-stretch gap-5 xl:flex-row">
+              <div className="flex min-w-0 flex-1 flex-col gap-5">
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                   <div className="relative h-72 bg-gray-100">
                     {plat.photoUrl ? (
@@ -84,14 +96,6 @@ export default function MenuDetailClient({
                       </div>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => setEditOpen(true)}
-                      className="absolute top-4 right-4 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-lg flex items-center justify-center shadow-sm hover:bg-white transition-colors"
-                      title="Modifier le plat"
-                    >
-                      <Pencil className="w-4 h-4 text-gray-700" />
-                    </button>
                   </div>
 
                   <div className="px-6 pt-5 pb-4">
@@ -144,7 +148,7 @@ export default function MenuDetailClient({
                         </span>{" "}
                         commandes
                       </div>
-                      {!plat.disponible && (
+                      {!optimisticDisponibilite && (
                         <span className="text-xs font-semibold text-zinc-600 bg-zinc-100 px-2.5 py-1 rounded-full">
                           Indisponible
                         </span>
@@ -164,65 +168,42 @@ export default function MenuDetailClient({
                       </p>
                     </div>
 
-                    {allergenes.length > 0 && (
+                    <div className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-muted/30 px-3.5 py-3">
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-800 mb-3">
-                          Allergènes
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                          {allergenes.map((a) => (
-                            <span
-                              key={a}
-                              className="flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-100 px-2.5 py-1.5 rounded-lg"
-                            >
-                              ⚠️ {a}
-                            </span>
-                          ))}
-                        </div>
+                        <p className="text-sm font-semibold text-foreground">Visible à la commande</p>
+                        <p className="text-xs text-muted-foreground">
+                          {optimisticDisponibilite
+                            ? "Les clients peuvent commander ce plat."
+                            : "Ce plat est masqué pour les clients."}
+                        </p>
                       </div>
-                    )}
+                      <Switch
+                        checked={optimisticDisponibilite}
+                        onCheckedChange={handleDisponibiliteChange}
+                        disabled={isAvailabilityPending}
+                        aria-label={`Rendre ${plat.nom} ${optimisticDisponibilite ? "indisponible" : "disponible"}`}
+                        className="data-checked:bg-brand-green"
+                      />
+                    </div>
 
-                    {nutrition.length > 0 && (
-                      <div>
-                        <h3 className="text-sm font-semibold text-gray-800 mb-3">
-                          Valeurs nutritionnelles
-                        </h3>
-                        <div className="grid grid-cols-4 gap-3">
-                          {nutrition.map((n) => (
-                            <div
-                              key={n.label}
-                              className="bg-gray-50 rounded-xl p-3 text-center"
-                            >
-                              <p className="text-xs text-gray-500 mb-1">
-                                {n.label}
-                              </p>
-                              <p className="text-lg font-bold text-gray-900">
-                                {n.value}
-                              </p>
-                              <p className="text-xs text-gray-400">{n.unit}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <button
+                    <Button
                       type="button"
                       onClick={() => setEditOpen(true)}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-green-700 hover:bg-green-800 text-white text-sm font-semibold transition-colors shadow-sm"
+                      className="h-11 w-full rounded-xl bg-brand-green text-white hover:bg-brand-green/90"
                     >
-                      <Pencil className="w-4 h-4" />
+                      <Pencil className="h-4 w-4" />
                       Modifier le plat
-                    </button>
+                    </Button>
 
-                    <button
+                    <Button
                       type="button"
+                      variant="destructive"
                       onClick={() => setDeleteOpen(true)}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-sm font-semibold transition-colors"
+                      className="h-11 w-full rounded-xl"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="h-4 w-4" />
                       Supprimer le plat
-                    </button>
+                    </Button>
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-5">
@@ -239,7 +220,7 @@ export default function MenuDetailClient({
                 </div>
               </div>
 
-              <div className="w-80 shrink-0 flex flex-col gap-5">
+              <div className="flex w-full shrink-0 flex-col gap-5 xl:w-80">
                 <PlatStatsPanel
                   nombreCommandes={plat.nombreCommandes ?? 0}
                   noteMoyenne={plat.noteMoyenne ?? 0}
@@ -247,7 +228,7 @@ export default function MenuDetailClient({
                 />
                 <SimilarDishes plats={similarPlats} />
                 <MenuInfoPanel
-                  disponible={plat.disponible}
+                  disponible={optimisticDisponibilite}
                   createdAt={plat.createdAt}
                   updatedAt={plat.updatedAt}
                 />

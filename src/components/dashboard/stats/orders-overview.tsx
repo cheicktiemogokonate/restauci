@@ -27,10 +27,10 @@ export function OrdersOverview({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="text-base font-semibold">
+          <CardTitle className="text-sm font-semibold sm:text-base">
             Aperçu des commandes
           </CardTitle>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="mt-1 flex items-center gap-2">
             <span className="text-xs font-medium text-brand-green">Total</span>
             <span className="text-lg font-bold text-brand-green">
               {totalOrders}
@@ -46,7 +46,7 @@ export function OrdersOverview({
             </p>
           </div>
         ) : (
-          <div className="h-45 w-full">
+          <div className="h-44 w-full sm:h-48">
             <ResponsiveContainer>
               <BarChart
                 data={data}

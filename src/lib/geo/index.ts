@@ -90,7 +90,7 @@ export async function calculerItineraire(
 
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { "User-Agent": "RestauCI/1.0 (contact@restauci.ci)" },
+      headers: { "User-Agent": "Toutci/1.0" },
     });
     clearTimeout(timeoutId);
 
@@ -156,7 +156,7 @@ export async function geocoder(
 
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { "User-Agent": "RestauCI/1.0 (contact@restauci.ci)" },
+      headers: { "User-Agent": "Toutci/1.0" },
     });
     clearTimeout(timeoutId);
 

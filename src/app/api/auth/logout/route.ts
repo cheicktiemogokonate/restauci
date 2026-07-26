@@ -11,10 +11,11 @@ export async function POST(request: NextRequest) {
     await clearAuthCookie();
 
     authLogger.info({ ip: request.headers.get("x-forwarded-for")?.split(",")[0] ?? "unknown" }, "Logout successful");
-    return NextResponse.json(
-      { success: true },
-      { status: 200 }
-    );
+    if (request.headers.get("accept")?.includes("text/html")) {
+      return NextResponse.redirect(new URL("/login", request.url), 303);
+    }
+
+    return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
     authLogger.error(
       { 

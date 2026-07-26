@@ -1,10 +1,24 @@
-import { formatPrix } from "@/lib/utils/format";
-import { Coffee, Info, Leaf, Search, Utensils, X } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
-import { Dish } from "../types";
+"use client";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/motion/tabs";
 import { usePanierStore } from "@/lib/client-app/stores/panier-store";
-import { Restaurant } from "@/types";
+import { formatPrix } from "@/lib/utils/format";
+import type { Restaurant } from "@/types";
+import { Check, Minus, Plus, Search, UtensilsCrossed, X } from "lucide-react";
+import Image from "next/image";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import type { Dish } from "../types";
 
 interface MenuModalProps {
   isOpen: boolean;
@@ -14,210 +28,102 @@ interface MenuModalProps {
 }
 
 export default function MenuModal({ isOpen, onClose, dishes, restaurant }: MenuModalProps) {
-  const [selectedCategory, setSelectedCategory] = useState<
-    "all" | "plats" | "boissons" | "desserts"
-  >("all");
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const ajouterItem = usePanierStore((s) => s.ajouterItem);
+  const ajouterItem = usePanierStore((state) => state.ajouterItem);
+
+  const categories = useMemo(() => {
+    const seen = new Set<string>();
+    return dishes.filter((dish) => {
+      if (seen.has(dish.categoryId)) return false;
+      seen.add(dish.categoryId);
+      return true;
+    }).map((dish) => ({ id: dish.categoryId, name: dish.categoryName }));
+  }, [dishes]);
 
   const filteredDishes = dishes.filter((dish) => {
-    const matchesCategory =
-      selectedCategory === "all" || dish.category === selectedCategory;
-    const matchesSearch =
-      dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dish.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const query = searchQuery.trim().toLowerCase();
+    const matchesCategory = selectedCategory === "all" || dish.categoryId === selectedCategory;
+    const matchesSearch = !query || dish.name.toLowerCase().includes(query) || dish.description.toLowerCase().includes(query);
     return matchesCategory && matchesSearch;
   });
 
+  const handleAdd = (dish: Dish) => {
+    if (!restaurant.accepteCommandes) return;
+
+    ajouterItem(
+      { id: restaurant.id, nom: restaurant.nom, slug: restaurant.slug },
+      { platId: dish.id, nom: dish.name, prix: dish.price, photoUrl: dish.image },
+    );
+    toast.success(`${dish.name} ajouté au panier`, { icon: <Check className="size-4" /> });
+  };
+
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-          />
-
-          {/* Modal Container */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ type: "spring", duration: 0.5 }}
-            className="relative w-full max-w-4xl h-[85vh] overflow-hidden rounded-3xl bg-white shadow-2xl flex flex-col"
-          >
-            {/* Header */}
-            <div className="bg-[#0b663b] px-6 py-5 text-white flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold tracking-tight">
-                  Notre Carte Complète
-                </h3>
-                <p className="text-sm text-emerald-100/80 font-light mt-0.5">
-                  Une immersion de saveurs authentiques ivoiriennes
-                </p>
-              </div>
-              <button
-                onClick={onClose}
-                className="rounded-full bg-black/10 p-2 text-white/90 hover:bg-black/20 hover:text-white transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent showCloseButton={false} className="flex h-[min(46rem,calc(100dvh-2rem))] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
+        <DialogHeader className="border-b bg-primary px-5 py-4 text-primary-foreground sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <DialogTitle className="text-lg font-bold text-primary-foreground">Menu de {restaurant.nom}</DialogTitle>
+              <DialogDescription className="mt-1 text-primary-foreground/75">Choisissez vos plats puis ajoutez-les au panier.</DialogDescription>
             </div>
+            <DialogClose asChild>
+              <Button variant="ghost" size="icon-sm" className="shrink-0 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" aria-label="Fermer le menu">
+                <X />
+              </Button>
+            </DialogClose>
+          </div>
+        </DialogHeader>
 
-            {/* Menu Filters / Search Subheader */}
-            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between">
-              {/* Category Toggles */}
-              <div className="flex bg-gray-200/50 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
-                {[
-                  { id: "all", label: "Tout", icon: Utensils },
-                  { id: "plats", label: "Plats Typiques", icon: Utensils },
-                  {
-                    id: "boissons",
-                    label: "Boissons & Cocktails",
-                    icon: Coffee,
-                  },
-                  { id: "desserts", label: "Desserts", icon: Leaf },
-                ].map((cat) => {
-                  const Icon = cat.icon;
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() =>
-                        setSelectedCategory(
-                          cat.id as "all" | "plats" | "boissons" | "desserts",
-                        )
-                      }
-                      className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition whitespace-nowrap cursor-pointer ${
-                        selectedCategory === cat.id
-                          ? "bg-[#0b663b] text-white shadow-sm"
-                          : "text-gray-600 hover:text-gray-900"
-                      }`}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      {cat.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Search Bar */}
-              <div className="relative w-full md:w-64">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Rechercher un plat..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0b663b]/15 focus:border-[#0b663b] transition"
-                />
-              </div>
+        <div className="border-b bg-background px-5 py-4 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Tabs value={selectedCategory} onValueChange={setSelectedCategory} variant="underline" className="min-w-0 overflow-x-auto scrollbar-hide">
+              <TabsList className="w-max">
+                <TabsTrigger value="all">Tout ({dishes.length})</TabsTrigger>
+                {categories.map((category) => (
+                  <TabsTrigger key={category.id} value={category.id}>{category.name}</TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <div className="relative w-full shrink-0 sm:w-64">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Rechercher un plat" className="h-10 pl-9" />
             </div>
-
-            {/* Content List */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 bg-gray-50/20">
-              {filteredDishes.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {filteredDishes.map((dish) => (
-                    <div
-                      key={dish.id}
-                      className="bg-white p-4 rounded-2xl border border-gray-100/80 shadow-sm flex gap-4 hover:shadow-md transition hover:border-[#0b663b]/10 group"
-                    >
-                      {/* Image */}
-                      <div className="h-24 w-24 rounded-xl overflow-hidden bg-gray-100 shrink-0 relative">
-                        <img
-                          src={dish.image}
-                          alt={dish.name}
-                          className="h-full w-full object-cover group-hover:scale-105 transition duration-500"
-                          referrerPolicy="no-referrer"
-                        />
-                        {dish.isPopular && (
-                          <span className="absolute top-1.5 left-1.5 bg-[#e2b34a] text-black text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
-                            Populaire
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Info text */}
-                      <div className="flex-1 flex flex-col justify-between">
-                        <div>
-                          <div className="flex justify-between items-start gap-2">
-                            <h4 className="font-bold text-gray-950 text-sm group-hover:text-[#0b663b] transition leading-tight">
-                              {dish.name}
-                            </h4>
-                            <span className="font-bold text-[#0b663b] text-sm whitespace-nowrap">
-                              {formatPrix(dish.price)}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500 font-light mt-1.5 line-clamp-2">
-                            {dish.description}
-                          </p>
-                        </div>
-                        {/* Tags or details */}
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="text-[10px] uppercase font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">
-                            {dish.category === "plats"
-                              ? "Spécialité"
-                              : dish.category === "boissons"
-                                ? "Rafraîchissant"
-                                : "Gourmand"}
-                          </span>
-                        </div>
-                        <div className="mt-3 flex justify-end">
-                          <button
-                            onClick={() => {
-                              ajouterItem(
-                                { id: restaurant.id, nom: restaurant.nom, slug: restaurant.slug },
-                                {
-                                  platId: dish.id,
-                                  nom: dish.name,
-                                  prix: dish.price,
-                                  photoUrl: dish.image,
-                                }
-                              );
-                            }}
-                            className="bg-[#0b663b] text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-[#074728] transition active:scale-95"
-                          >
-                            Ajouter
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center text-gray-400">
-                  <Utensils className="h-12 w-12 stroke-1 text-gray-300 mb-2" />
-                  <p className="text-sm font-medium">
-                    Aucun plat ne correspond à vos critères.
-                  </p>
-                  <button
-                    onClick={() => {
-                      setSearchQuery("");
-                      setSelectedCategory("all");
-                    }}
-                    className="text-xs font-semibold text-[#0b663b] hover:underline mt-2"
-                  >
-                    Réinitialiser les filtres
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom notification */}
-            <div className="bg-white border-t border-gray-100 p-4 text-center text-xs text-gray-400 flex items-center justify-center gap-1.5">
-              <Info className="h-4 w-4 text-[#0b663b]" />
-              <span>
-                Nos plats sont préparés à la commande à partir de produits frais
-                et locaux.
-              </span>
-            </div>
-          </motion.div>
+          </div>
+          {!restaurant.accepteCommandes ? <p className="mt-3 text-sm font-medium text-amber-700">Les commandes sont momentanément suspendues. Vous pouvez tout de même consulter la carte.</p> : null}
         </div>
-      )}
-    </AnimatePresence>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-muted/25 px-5 py-5 sm:px-6">
+          {filteredDishes.length ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {filteredDishes.map((dish) => (
+                <article key={dish.id} className="flex min-w-0 gap-3 border-b border-border/70 pb-3 sm:border sm:bg-background sm:p-3 sm:shadow-xs">
+                  <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-muted">
+                    <Image src={dish.image} alt={dish.name} fill sizes="80px" className="object-cover" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="text-sm font-semibold leading-5">{dish.name}</h3>
+                      <span className="shrink-0 text-sm font-bold text-primary">{formatPrix(dish.price)}</span>
+                    </div>
+                    {dish.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{dish.description}</p> : null}
+                    <Button type="button" size="sm" className="mt-3 h-8" disabled={!restaurant.accepteCommandes} onClick={() => handleAdd(dish)}>
+                      <Plus /> Ajouter
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="flex min-h-56 flex-col items-center justify-center text-center">
+              <span className="flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground"><UtensilsCrossed className="size-5" /></span>
+              <h3 className="mt-4 font-semibold">Aucun plat trouvé</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Essayez une autre recherche ou une autre catégorie.</p>
+              <Button variant="outline" size="sm" className="mt-4" onClick={() => { setSearchQuery(""); setSelectedCategory("all"); }}><Minus /> Réinitialiser</Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

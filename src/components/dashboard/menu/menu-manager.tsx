@@ -1,15 +1,17 @@
 import { Pagination } from "@/components/dashboard/pagination";
-import type { Categorie, CreneauHoraire } from "@/types";
+import { Button } from "@/components/ui/button";
+import type { Categorie } from "@/types";
 import type { PlatAvecCategorie } from "@/types/dashboard";
-import { Plus, UtensilsCrossed } from "lucide-react";
+import { Eye, EyeOff, Plus, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
+import CategoryOrganizerDialog, { type MenuCategory } from "./category-organizer-dialog";
 import MenuCard from "./menu-card";
 import MenuFilters from "./menu-filters";
 
 interface MenuManagerProps {
-  categories: Categorie[];
-  creneaux: CreneauHoraire[];
+  categories: (Categorie & { platCount: number })[];
   initialPlats: PlatAvecCategorie[];
+  menuStats: { total: number; disponibles: number; indisponibles: number };
   totalPlats: number;
   currentPage: number;
   limit: number;
@@ -21,6 +23,7 @@ interface MenuManagerProps {
 export default function MenuManager({
   categories,
   initialPlats,
+  menuStats,
   totalPlats,
   currentPage,
   limit,
@@ -31,25 +34,33 @@ export default function MenuManager({
   return (
     <div className="flex flex-1 flex-col min-h-full overflow-hidden bg-background">
       <main className="flex-1 overflow-y-auto p-6 lg:p-8">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Ma carte</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Gérez l&apos;ensemble de vos plats
-            </p>
+        <div className="mb-8 overflow-hidden rounded-3xl border border-brand-green/10 bg-gradient-to-br from-brand-green/[0.08] via-background to-background p-5 sm:p-7">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand-green">Service & carte</p>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Ma carte</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Gardez les plats commandables, sans ralentir le service.</p>
+            </div>
+            <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
+              <CategoryOrganizerDialog categories={categories as MenuCategory[]} />
+              <Button asChild size="lg" className="w-full sm:w-auto">
+                <Link href="/restaurateur/menu/new">
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Ajouter un plat</span>
+                  <span className="sm:hidden">Ajouter</span>
+                </Link>
+              </Button>
+            </div>
           </div>
-          <Link
-            href="/restaurateur/menu/new"
-            className="flex h-11 items-center gap-2 px-6 bg-brand-green hover:bg-brand-green/90 text-white rounded-xl font-semibold"
-          >
-            <Plus className="h-4 w-4" />
-            Ajouter un plat
-          </Link>
+          <div className="mt-6 grid grid-cols-3 divide-x divide-border/70 rounded-2xl border border-border/70 bg-background/75">
+            <div className="px-3 py-3 sm:px-5"><p className="text-lg font-bold">{menuStats.total}</p><p className="text-xs text-muted-foreground">Au menu</p></div>
+            <div className="px-3 py-3 sm:px-5"><p className="flex items-center gap-1.5 text-lg font-bold text-brand-green"><Eye className="h-4 w-4" />{menuStats.disponibles}</p><p className="text-xs text-muted-foreground">Disponibles</p></div>
+            <div className="px-3 py-3 sm:px-5"><p className="flex items-center gap-1.5 text-lg font-bold text-muted-foreground"><EyeOff className="h-4 w-4" />{menuStats.indisponibles}</p><p className="text-xs text-muted-foreground">Masqués</p></div>
+          </div>
         </div>
 
         <MenuFilters
           categories={categories}
-          totalPlats={totalPlats}
           currentQ={currentQ}
           currentCategorie={currentCategorie}
           currentDispo={currentDispo}
@@ -71,13 +82,12 @@ export default function MenuManager({
                 : "Commencez par ajouter votre premier plat à la carte."}
             </p>
             {!currentQ && !currentCategorie && currentDispo === "all" && (
-              <Link
-                href="/restaurateur/menu/new"
-                className="flex h-11 items-center gap-2 px-6 bg-brand-green hover:bg-brand-green/90 text-white rounded-xl font-semibold"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Ajouter un plat
-              </Link>
+              <Button asChild size="lg">
+                <Link href="/restaurateur/menu/new">
+                  <Plus className="h-4 w-4" />
+                  Ajouter un plat
+                </Link>
+              </Button>
             )}
           </div>
         ) : (

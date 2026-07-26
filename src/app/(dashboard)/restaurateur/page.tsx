@@ -8,17 +8,18 @@ import { RecentOrdersSection } from "@/components/dashboard/stats/recent-orders-
 import { RevenueSection } from "@/components/dashboard/stats/revenue-section";
 import { StatsSection } from "@/components/dashboard/stats/stats-section";
 import { TrendingSection } from "@/components/dashboard/stats/trending-section";
+import { StatsShell } from "@/components/dashboard/stats/stats-shell";
 
-// Composants statiques (pas de fetch — affichés immédiatement)
-import { OrderTypes } from "@/components/dashboard/stats/order-types";
-import { OrdersOverview } from "@/components/dashboard/stats/orders-overview";
-import { TopCategories } from "@/components/dashboard/stats/top-categories";
+import {
+  OrdersOverviewSection,
+  OrderTypesSection,
+  TopCategoriesSection,
+} from "@/components/dashboard/stats/dashboard-secondary-sections";
 
 // Skeletons (fallback pendant le chargement de chaque section)
 import {
   ChartSkeleton,
   RecentOrdersSkeleton,
-  StatsCardsSkeleton,
   WidgetSkeleton,
 } from "@/components/dashboard/stats/skeletons";
 
@@ -31,27 +32,33 @@ export default async function RestaurateurDashboardPage() {
   if (!restaurant) redirect("/onboarding");
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden w-[100vw-260px]">
-      <main className="flex-1 overflow-y-auto mt-4">
-        <div className="container mx-auto p-4 lg:p-6 space-y-6">
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6 space-y-4 sm:space-y-6">
           {/* Section KPIs — streame indépendamment */}
-          <Suspense fallback={<StatsCardsSkeleton />}>
+          <Suspense fallback={<StatsShell restaurantId={restaurant.id} />}>
             <StatsSection restaurantId={restaurant.id} />
           </Suspense>
 
           {/* Graphique + Catégories */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <Suspense fallback={<ChartSkeleton />}>
               <RevenueSection restaurantId={restaurant.id} />
             </Suspense>
-            <TopCategories />
+            <Suspense fallback={<WidgetSkeleton />}>
+              <TopCategoriesSection restaurantId={restaurant.id} />
+            </Suspense>
           </div>
 
           {/* Widgets KPI secondaires */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <OrdersOverview />
-            <OrderTypes />
-            <div className="lg:col-span-1 xl:col-span-1">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <Suspense fallback={<WidgetSkeleton />}>
+              <OrdersOverviewSection restaurantId={restaurant.id} />
+            </Suspense>
+            <Suspense fallback={<WidgetSkeleton />}>
+              <OrderTypesSection restaurantId={restaurant.id} />
+            </Suspense>
+            <div className="md:col-span-2 xl:col-span-1">
               <Suspense fallback={<WidgetSkeleton />}>
                 <TrendingSection restaurantId={restaurant.id} />
               </Suspense>

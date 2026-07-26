@@ -58,15 +58,16 @@ async function apiFetch<T>(
   return json ?? { success: false, error: "Réponse invalide du serveur" };
 }
 
-export async function tryRefreshToken(): Promise<boolean> {
-  const { refreshToken } = useAuthStore.getState();
-  if (!refreshToken) return false;
+let refreshPromise: Promise<boolean> | null = null;
 
-  try {
+export function tryRefreshToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
     const response = await fetch("/api/v1/client/auth/refresh", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify({}),
     });
 
     const json = await response.json();
@@ -74,10 +75,14 @@ export async function tryRefreshToken(): Promise<boolean> {
       useAuthStore.getState().setAccessToken(json.data.accessToken);
       return true;
     }
-  } catch {
-    // Échec silencieux — le logout sera géré par l'appelant
-  }
-  return false;
+    } catch {
+      // Échec silencieux — le logout sera géré par l'appelant
+    }
+    return false;
+  })().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
 }
 
 // ─── HELPERS PAR MÉTHODE ─────────────────────────────────────────────────────
@@ -96,3 +101,15 @@ export const clientApi = {
     }),
   delete: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
 };
+
+export async function logoutClient() {
+  try {
+    await apiFetch<{ loggedOut: boolean }>(
+      "/auth/logout",
+      { method: "POST" },
+      false,
+    );
+  } finally {
+    useAuthStore.getState().logout();
+  }
+}

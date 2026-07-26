@@ -1,5 +1,5 @@
 import { getStatsDashboard } from "@/lib/db/queries";
-import { StatsCards } from "./stats-cards";
+import { StatsShell } from "./stats-shell";
 import type { StatsDashboard } from "@/types/dashboard";
 
 interface StatsSectionProps {
@@ -26,5 +26,11 @@ export async function StatsSection({ restaurantId }: StatsSectionProps) {
       dbStats.commandesEnCours.find((c) => c.statut === "prete")?.count ?? 0,
   };
 
-  return <StatsCards stats={stats} />;
+  return (
+    <StatsShell
+      key={JSON.stringify(stats)}
+      restaurantId={restaurantId}
+      initialStats={stats}
+    />
+  );
 }

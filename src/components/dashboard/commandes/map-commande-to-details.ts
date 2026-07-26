@@ -25,6 +25,21 @@ export interface TrackingStep {
   current?: boolean;
 }
 
+export interface DriverDetails {
+  assigned: boolean;
+  name: string;
+  status: "en_ligne" | "hors_ligne" | "en_livraison";
+  phone: string | null;
+  vehicleType: string | null;
+  vehicleNumber: string | null;
+  avatar: string;
+}
+
+export interface DeliveryTrackingDetails {
+  status: "en_attente" | "assignee" | "en_route" | "livree" | "echouee";
+  assignedAt: Date | null;
+}
+
 export interface CommandeDetailsView {
   id: string;
   displayId: string;
@@ -36,6 +51,9 @@ export interface CommandeDetailsView {
   modeCommande: Commande["modeCommande"];
   items: OrderDetailItem[];
   subtotal: number;
+  fraisLivraison: number;
+  remise: number;
+  noteClient: string | null;
   total: number;
   client: {
     name: string;
@@ -43,6 +61,7 @@ export interface CommandeDetailsView {
     phone: string;
     email: string;
     address: string;
+    tableNumber: string | null;
     avatar: string;
   };
   delivery: {
@@ -58,14 +77,8 @@ export interface CommandeDetailsView {
     arrivalDate: string;
   };
   tracking: TrackingStep[];
-  driver: {
-    name: string;
-    status: "en_ligne" | "hors_ligne" | "en_livraison";
-    phone: string;
-    vehicleType: string;
-    vehicleNumber: string;
-    avatar: string;
-  } | null;
+  driver: DriverDetails | null;
+  deliveryTracking: DeliveryTrackingDetails | null;
 }
 
 function formatDate(date: Date): string {
@@ -94,19 +107,7 @@ function formatShortDate(date: Date): string {
 export function mapStatutToDetailsStatus(
   statut: Commande["statut"]
 ): OrderDetailsHeaderProps["status"] {
-  switch (statut) {
-    case "recue":
-    case "en_preparation":
-      return "en_cours";
-    case "prete":
-      return "prete";
-    case "servie":
-      return "livree";
-    case "annulee":
-      return "annulee";
-    default:
-      return "en_cours";
-  }
+  return statut;
 }
 
 export function mapModeToOrderType(
@@ -122,7 +123,11 @@ export function mapModeToOrderType(
   }
 }
 
-function buildTracking(commande: Commande, created: Date): TrackingStep[] {
+function buildTracking(
+  commande: Commande,
+  created: Date,
+  deliveryTracking: DeliveryTrackingDetails | null,
+): TrackingStep[] {
   const { statut, modeCommande, updatedAt, heureAcceptee, heurePrete, heureServie } = commande;
   const isLivraison = modeCommande === "livraison";
 
@@ -131,7 +136,9 @@ function buildTracking(commande: Commande, created: Date): TrackingStep[] {
         "Commande reçue",
         "En préparation",
         "Prête pour la livraison",
-        "En livraison",
+        deliveryTracking?.status === "assignee"
+          ? "Livreur assigné"
+          : "En livraison",
         "Livrée",
       ]
     : ["Commande reçue", "En préparation", "Prête", "Servie"];
@@ -140,7 +147,12 @@ function buildTracking(commande: Commande, created: Date): TrackingStep[] {
     annulee: -1,
     recue: 0,
     en_preparation: 1,
-    prete: isLivraison ? 3 : 2,
+    // Une commande prête attend encore le livreur : elle ne doit pas faire
+    // croire qu'elle est déjà "en livraison".
+    prete:
+      isLivraison && deliveryTracking?.status === "assignee"
+        ? 3
+        : 2,
     servie: labels.length - 1,
   };
 
@@ -160,6 +172,8 @@ function buildTracking(commande: Commande, created: Date): TrackingStep[] {
       stepDate = new Date(heureAcceptee);
     } else if (index === 2 && heurePrete) {
       stepDate = new Date(heurePrete);
+    } else if (index === 3 && isLivraison && deliveryTracking?.assignedAt) {
+      stepDate = new Date(deliveryTracking.assignedAt);
     } else if (index === labels.length - 1 && heureServie) {
       stepDate = new Date(heureServie);
     } else if (current) {
@@ -182,20 +196,23 @@ function buildTracking(commande: Commande, created: Date): TrackingStep[] {
 
 export function commandeToDetailsView(
   commande: Commande,
-  restaurant: Restaurant
+  restaurant: Restaurant,
+  platPhotos: ReadonlyMap<string, string | null> = new Map(),
+  driverDetails: DriverDetails | null = null,
+  deliveryTracking: DeliveryTrackingDetails | null = null,
 ): CommandeDetailsView {
   const created = new Date(commande.createdAt);
-  const orderNote = commande.noteClient?.trim();
-
   const items: OrderDetailItem[] = commande.items.map((item, index) => ({
     id: `${commande.id}-${index}`,
     name: item.nom,
     category: "Plat",
     quantity: item.quantite,
-    notes: index === 0 && orderNote ? orderNote : undefined,
+    notes: item.note,
     unitPrice: item.prix,
     total: item.prix * item.quantite,
-    image: PLACEHOLDER_IMAGE,
+    // Le snapshot de commande garantit le nom et le prix historiques ; la
+    // photo est enrichie depuis le plat courant lorsqu'elle est disponible.
+    image: platPhotos.get(item.platId) ?? PLACEHOLDER_IMAGE,
   }));
 
   const customerAddress =
@@ -221,6 +238,9 @@ export function commandeToDetailsView(
     modeCommande: commande.modeCommande,
     items,
     subtotal: commande.sousTotal,
+    fraisLivraison: commande.fraisLivraison,
+    remise: commande.remise,
+    noteClient: commande.noteClient?.trim() || null,
     total: commande.total,
     client: {
       name: commande.nomClient,
@@ -228,6 +248,7 @@ export function commandeToDetailsView(
       phone: commande.telephoneClient || "—",
       email: "—",
       address: customerAddress,
+      tableNumber: commande.numeroTable,
       avatar: CLIENT_AVATAR,
     },
     delivery: {
@@ -242,15 +263,17 @@ export function commandeToDetailsView(
       arrivalTime: formatTime(estimated),
       arrivalDate: formatShortDate(estimated),
     },
-    tracking: buildTracking(commande, created),
+    tracking: buildTracking(commande, created, deliveryTracking),
+    deliveryTracking,
     driver:
       commande.modeCommande === "livraison"
-        ? {
-            name: "Non assigné",
+        ? driverDetails ?? {
+            assigned: false,
+            name: "Aucun livreur assigné",
             status: "hors_ligne",
-            phone: commande.telephoneClient || "—",
-            vehicleType: "—",
-            vehicleNumber: "—",
+            phone: null,
+            vehicleType: null,
+            vehicleNumber: null,
             avatar: DRIVER_AVATAR,
           }
         : null,

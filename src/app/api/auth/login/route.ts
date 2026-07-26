@@ -16,8 +16,10 @@ export async function POST(request: NextRequest) {
     request.headers.get("x-forwarded-for")?.split(",")[0] ??
     request.headers.get("x-real-ip") ??
     "anonymous";
-  const rateLimitResponse = await checkRateLimit(authLimiter, ip);
-  if (rateLimitResponse) return rateLimitResponse;
+  if (process.env.E2E_TEST !== "true") {
+    const rateLimitResponse = await checkRateLimit(authLimiter, ip);
+    if (rateLimitResponse) return rateLimitResponse;
+  }
 
   try {
     let body: unknown;
@@ -60,6 +62,7 @@ export async function POST(request: NextRequest) {
         nom: users.nom,
         role: users.role,
         password: users.password,
+        suspendu: users.suspendu,
       })
       .from(users)
       .where(eq(users.email, email))
@@ -86,6 +89,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Identifiants incorrects" },
         { status: 401 },
+      );
+    }
+
+    if (user[0].suspendu) {
+      authLogger.warn(
+        { ip, email, userId: user[0].id, reason: "suspended account" },
+        "Login denied for suspended user",
+      );
+      return NextResponse.json(
+        { error: "Votre compte a été suspendu. Contactez le support." },
+        { status: 403 },
       );
     }
 

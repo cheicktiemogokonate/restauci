@@ -13,12 +13,11 @@ export async function GET() {
   const spec = {
     openapi: "3.0.0",
     info: {
-      title: "RestauCI API v1",
-      description: "API REST pour l'application mobile RestauCI",
+      title: "Toutci API v1",
+      description: "API REST pour l'application Toutci",
       version: "1.0.0",
       contact: {
-        name: "RestauCI Support",
-        email: "support@restauci.ci",
+        name: "Support Toutci",
       },
     },
     servers: [

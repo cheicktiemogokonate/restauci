@@ -3,10 +3,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { parsePage } from "@/lib/config/pagination";
 import { db } from "@/lib/db";
 import { getPlats } from "@/lib/db/queries";
-import { categories, creneauxHoraires, restaurants } from "@/lib/db/schema";
-import type { Categorie, CreneauHoraire } from "@/types";
+import { categories, plats, restaurants } from "@/lib/db/schema";
+import type { Categorie } from "@/types";
 import type { PlatAvecCategorie } from "@/types/dashboard";
-import { asc, eq } from "drizzle-orm";
+import { asc, count, eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
 const PLATS_LIMIT = 12;
@@ -41,17 +41,26 @@ export default async function RestaurateurMenuPage({
   if (params.dispo === "available") disponible = true;
   if (params.dispo === "unavailable") disponible = false;
 
-  const [categoriesList, creneauxList, platsPage] = await Promise.all([
+  const [categoriesList, platsPage, menuStats] = await Promise.all([
     db
-      .select()
+      .select({
+        id: categories.id,
+        restaurantId: categories.restaurantId,
+        creneauId: categories.creneauId,
+        nom: categories.nom,
+        description: categories.description,
+        imageUrl: categories.imageUrl,
+        ordre: categories.ordre,
+        visible: categories.visible,
+        createdAt: categories.createdAt,
+        updatedAt: categories.updatedAt,
+        platCount: count(plats.id),
+      })
       .from(categories)
+      .leftJoin(plats, eq(plats.categorieId, categories.id))
       .where(eq(categories.restaurantId, restaurant.id))
+      .groupBy(categories.id)
       .orderBy(asc(categories.nom)),
-    db
-      .select()
-      .from(creneauxHoraires)
-      .where(eq(creneauxHoraires.restaurantId, restaurant.id))
-      .orderBy(asc(creneauxHoraires.nom)),
     getPlats({
       restaurantId: restaurant.id,
       page,
@@ -60,14 +69,22 @@ export default async function RestaurateurMenuPage({
       categorieId,
       disponible,
     }),
+    db
+      .select({
+        total: count(),
+        disponibles: sql<number>`count(*) filter (where ${plats.disponible})`,
+        indisponibles: sql<number>`count(*) filter (where not ${plats.disponible})`,
+      })
+      .from(plats)
+      .where(eq(plats.restaurantId, restaurant.id)),
   ]);
 
   return (
     <MenuManager
-      categories={categoriesList as Categorie[]}
-      creneaux={creneauxList as CreneauHoraire[]}
-      initialPlats={platsPage.items as PlatAvecCategorie[]}
       totalPlats={platsPage.total}
+      categories={categoriesList as (Categorie & { platCount: number })[]}
+      initialPlats={platsPage.items as PlatAvecCategorie[]}
+      menuStats={menuStats[0] ?? { total: 0, disponibles: 0, indisponibles: 0 }}
       currentPage={page}
       limit={PLATS_LIMIT}
       currentQ={search}

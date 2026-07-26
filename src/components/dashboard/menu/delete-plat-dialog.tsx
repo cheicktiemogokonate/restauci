@@ -12,6 +12,7 @@ import { deletePlatAction } from "@/lib/actions/menu";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
 interface DeletePlatDialogProps {
   platId: string;
@@ -45,6 +46,7 @@ export default function DeletePlatDialog({
     }
 
     onOpenChange(false);
+    toast.success("Plat supprimé de la carte.");
     if (redirectTo) {
       router.push(redirectTo);
     } else {
@@ -72,7 +74,7 @@ export default function DeletePlatDialog({
               handleDelete();
             }}
             disabled={isDeleting}
-            className="bg-red-600 hover:bg-red-700 text-white"
+            variant="destructive"
           >
             {isDeleting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
             Supprimer

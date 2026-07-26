@@ -1,6 +1,18 @@
 "use client";
 
+import { EmptyState } from "@/components/admin/ui/empty-state";
+import { StatusBadge } from "@/components/admin/ui/status-badge";
+import {
+  CenterMorphModal,
+  CenterMorphModalContent,
+} from "@/components/motion/center-morph-modal";
+import { Input } from "@/components/motion/input";
+import { StatefulButton } from "@/components/motion/stateful-button";
+import { Table, type TableColumn } from "@/components/motion/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/motion/tabs";
 import { CustomAvatar } from "@/components/shared/avatar-fallback";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   reactiverClientAction,
   reactiverUserAction,
@@ -16,16 +28,37 @@ import {
   Search,
   UserCheck,
   Users,
-  UserX,
-  X,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { FormEvent, useState, useTransition } from "react";
+import { toast } from "sonner";
 
 interface UsersAdminTableProps {
   type: string;
-  data: { items: any[]; total: number; page: number; totalPages: number };
+  data: {
+    items: UserAdminRow[];
+    total: number;
+    page: number;
+    totalPages: number;
+  };
   search?: string;
+}
+
+interface UserAdminRow {
+  id: string;
+  nom: string;
+  telephone: string;
+  email: string | null;
+  createdAt: Date;
+  actif?: boolean;
+  suspendu?: boolean;
+  totalDepense?: number;
+  restaurantId?: string | null;
+  restaurantNom?: string | null;
+  planNom?: string | null;
+  statutAbonnement?: string | null;
+  dateEcheance?: Date | null;
 }
 
 export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
@@ -49,303 +82,405 @@ export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
     navigate(params);
   };
 
+  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const query = String(formData.get("search") ?? "").trim();
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (query) params.set("search", query);
+    else params.delete("search");
+    params.delete("page");
+    navigate(params);
+  };
+
   const handleSuspendre = () => {
     if (!motifModal || motif.trim().length < 5) return;
+
     startTransition(async () => {
-      if (motifModal.type === "user")
-        await suspendreUserAction(motifModal.id, motif);
-      else await suspendreClientAction(motifModal.id, motif);
-      setMotifModal(null);
-      setMotif("");
+      try {
+        const result =
+          motifModal.type === "user"
+            ? await suspendreUserAction(motifModal.id, motif)
+            : await suspendreClientAction(motifModal.id, motif);
+        if (result.error) throw new Error(result.error);
+        toast.success(`${motifModal.nom} a été suspendu.`);
+        setMotifModal(null);
+        setMotif("");
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "La suspension a échoué.",
+        );
+      }
     });
   };
 
-  const handleReactiver = (id: string, t: "user" | "client") => {
+  const handleReactiver = (id: string, targetType: "user" | "client") => {
     startTransition(async () => {
-      if (t === "user") await reactiverUserAction(id);
-      else await reactiverClientAction(id);
+      try {
+        if (targetType === "user") await reactiverUserAction(id);
+        else await reactiverClientAction(id);
+        toast.success("Compte réactivé.");
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "La réactivation a échoué.",
+        );
+      }
     });
   };
 
   const isClient = type === "clients";
+  const columns: TableColumn<UserAdminRow>[] = [
+    {
+      key: "nom",
+      header: "Utilisateur",
+      sortable: true,
+      width: "220px",
+      cell: (item) => {
+        const suspendu = isClient ? !item.actif : item.suspendu;
+        return (
+          <div className="flex items-center gap-3">
+            <CustomAvatar
+              fallbackText={item.nom}
+              alt={item.nom}
+              size="sm"
+              className="shrink-0"
+              fallbackClassName={cn(
+                "font-semibold",
+                suspendu
+                  ? "bg-red-100 text-red-600"
+                  : "bg-blue-100 text-blue-700",
+              )}
+            />
+            <span className="truncate font-semibold text-gray-900">
+              {item.nom}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "contact",
+      header: "Contact",
+      width: "220px",
+      sortValue: (item) => item.email ?? item.telephone ?? "",
+      cell: (item) => (
+        <div>
+          <p className="truncate text-gray-700">{item.telephone}</p>
+          {item.email ? (
+            <p className="mt-0.5 truncate text-xs text-gray-400">
+              {item.email}
+            </p>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: isClient ? "totalDepense" : "restaurantNom",
+      header: isClient ? "Total dépensé" : "Restaurant & offre",
+      sortable: true,
+      width: isClient ? "150px" : "280px",
+      align: isClient ? "right" : "left",
+      cell: (item) =>
+        isClient ? (
+          <span className="font-semibold text-gray-900">
+            {formatPrix(item.totalDepense ?? 0)}
+          </span>
+        ) : item.restaurantId ? (
+          <div className="space-y-1">
+            <Link
+              href={`/admin/restaurants/${item.restaurantId}`}
+              className="block truncate font-semibold text-gray-900 hover:text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              title={`Voir ${item.restaurantNom}`}
+            >
+              {item.restaurantNom}
+            </Link>
+            <div className="flex items-center gap-1.5 overflow-hidden">
+              <StatusBadge variant={item.planNom ? "info" : "neutral"}>
+                {item.planNom ?? "Aucune offre active"}
+              </StatusBadge>
+              {item.statutAbonnement ? (
+                <StatusBadge variant="success">Abonnement actif</StatusBadge>
+              ) : null}
+            </div>
+            {item.dateEcheance ? (
+              <p className="truncate text-xs text-gray-400">
+                Échéance : {formatDate(item.dateEcheance)}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <span className="text-xs text-gray-400">
+            Aucun restaurant associé
+          </span>
+        ),
+    },
+    {
+      key: "statut",
+      header: "Statut",
+      sortable: true,
+      width: "125px",
+      sortValue: (item) =>
+        isClient
+          ? item.actif
+            ? "actif"
+            : "suspendu"
+          : item.suspendu
+            ? "suspendu"
+            : "actif",
+      cell: (item) => {
+        const suspendu = isClient ? !item.actif : item.suspendu;
+        return (
+          <StatusBadge variant={suspendu ? "danger" : "success"}>
+            {suspendu ? "Suspendu" : "Actif"}
+          </StatusBadge>
+        );
+      },
+    },
+    {
+      key: "createdAt",
+      header: "Inscrit le",
+      sortable: true,
+      width: "130px",
+      sortValue: (item) => new Date(item.createdAt).getTime(),
+      cell: (item) => (
+        <span className="text-xs text-gray-400">
+          {formatDate(item.createdAt)}
+        </span>
+      ),
+    },
+    {
+      key: "action",
+      header: "Action",
+      width: "130px",
+      align: "right",
+      cell: (item) => {
+        const suspendu = isClient ? !item.actif : item.suspendu;
+        return suspendu ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={isPending}
+            onClick={() =>
+              handleReactiver(item.id, isClient ? "client" : "user")
+            }
+            className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900"
+          >
+            Réactiver
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            disabled={isPending}
+            onClick={() =>
+              setMotifModal({
+                id: item.id,
+                nom: item.nom,
+                type: isClient ? "client" : "user",
+              })
+            }
+          >
+            Suspendre
+          </Button>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="space-y-5">
-      {/* Tabs + Recherche */}
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
-        <div className="flex items-center gap-1.5 bg-gray-100/80 p-1 rounded-xl w-fit">
-          {[
-            { value: "restaurateurs", label: "Restaurateurs", icon: UserCheck },
-            { value: "clients", label: "Clients", icon: Users },
-          ].map((tab) => {
-            const isActive = type === tab.value;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => changeType(tab.value)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  isActive
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            defaultValue={search ?? ""}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const params = new URLSearchParams(searchParams.toString());
-                e.currentTarget.value
-                  ? params.set("search", e.currentTarget.value)
-                  : params.delete("search");
-                params.delete("page");
-                navigate(params);
-              }
-            }}
-            placeholder="Rechercher par nom ou email..."
-            className="pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl bg-white shadow-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-72"
-          />
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/50">
-              <th className="text-left px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                Utilisateur
-              </th>
-              <th className="text-left px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider hidden md:table-cell">
-                Contact
-              </th>
-              {isClient && (
-                <th className="text-left px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider hidden lg:table-cell">
-                  Total dépensé
-                </th>
-              )}
-              <th className="text-left px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                Statut
-              </th>
-              <th className="text-left px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider hidden sm:table-cell">
-                Inscrit le
-              </th>
-              <th className="text-right px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                Action
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {data.items.map((item) => {
-              const suspendu = isClient ? !item.actif : item.suspendu;
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <Tabs
+          value={type}
+          onValueChange={changeType}
+          variant="underline"
+          className="max-w-full overflow-x-auto scrollbar-hide"
+        >
+          <TabsList className="h-11 min-w-max gap-0">
+            {[
+              {
+                value: "restaurateurs",
+                label: "Restaurateurs",
+                icon: UserCheck,
+              },
+              { value: "clients", label: "Clients", icon: Users },
+            ].map((tab) => {
+              const Icon = tab.icon;
               return (
-                <tr
-                  key={item.id}
-                  className="hover:bg-gray-50/50 transition-colors"
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="h-11 gap-1.5 px-4 text-sm"
+                  indicatorClassName="h-0.5 bg-emerald-600"
                 >
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <CustomAvatar
-                        fallbackText={item.nom}
-                        alt={item.nom}
-                        size="sm"
-                        className="shrink-0"
-                        fallbackClassName={cn(
-                          "font-semibold",
-                          suspendu
-                            ? "bg-red-100 text-red-600"
-                            : "bg-blue-100 text-blue-700",
-                        )}
-                      />
-                      <span className="font-semibold text-gray-900">
-                        {item.nom}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 hidden md:table-cell">
-                    <p className="text-gray-700">{item.telephone}</p>
-                    {item.email && (
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {item.email}
-                      </p>
-                    )}
-                  </td>
-                  {isClient && (
-                    <td className="px-5 py-4 hidden lg:table-cell font-semibold text-gray-900">
-                      {formatPrix(item.totalDepense ?? 0)}
-                    </td>
-                  )}
-                  <td className="px-5 py-4">
-                    {suspendu ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-100">
-                        <UserX className="w-3 h-3" /> Suspendu
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                        <UserCheck className="w-3 h-3" /> Actif
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-4 text-gray-400 text-xs hidden sm:table-cell">
-                    {formatDate(item.createdAt)}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    {suspendu ? (
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={() =>
-                          handleReactiver(item.id, isClient ? "client" : "user")
-                        }
-                        className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                      >
-                        Réactiver
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setMotifModal({
-                            id: item.id,
-                            nom: item.nom,
-                            type: isClient ? "client" : "user",
-                          })
-                        }
-                        className="text-xs font-semibold text-red-600 hover:text-red-800 px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 transition-colors"
-                      >
-                        Suspendre
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                  <Icon className="size-4" />
+                  {tab.label}
+                </TabsTrigger>
               );
             })}
-          </tbody>
-        </table>
+          </TabsList>
+        </Tabs>
 
-        {data.items.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-              <Users className="w-7 h-7 text-gray-400" />
-            </div>
-            <p className="text-gray-500 font-medium">
-              Aucun utilisateur trouvé
-            </p>
-            <p className="text-gray-400 text-xs mt-1">
-              Essayez de modifier votre recherche
-            </p>
-          </div>
-        )}
+        <form onSubmit={handleSearch} className="flex w-full gap-2 sm:w-auto">
+          <Input
+            id="users-search"
+            name="search"
+            type="search"
+            aria-label="Rechercher un utilisateur"
+            defaultValue={search ?? ""}
+            placeholder="Nom, email ou téléphone"
+            leftIcon={<Search />}
+            className="min-w-0 flex-1 sm:w-64"
+            classNames={{ field: "h-10 rounded-xl bg-white shadow-sm" }}
+          />
+          <Button className="h-auto" type="submit">
+            Rechercher
+          </Button>
+        </form>
       </div>
 
-      {/* Pagination */}
+      <Table
+        data={data.items}
+        columns={columns}
+        getRowId={(item) => item.id}
+        defaultSort={{ key: "createdAt", direction: "desc" }}
+        resizable
+        reorderable
+        rowHeight={isClient ? 64 : 92}
+        height={Math.min(
+          Math.max(data.items.length * (isClient ? 64 : 92) + 48, 180),
+          520,
+        )}
+        className="rounded-xl bg-white"
+        emptyState={
+          <EmptyState
+            icon={<Users className="size-7" aria-hidden="true" />}
+            title="Aucun utilisateur trouvé"
+            description="Essayez de modifier votre recherche."
+          />
+        }
+      />
+
       {data.totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-gray-500" aria-live="polite">
             <span className="font-medium text-gray-800">{data.total}</span>{" "}
             résultats · page{" "}
             <span className="font-medium text-gray-800">{data.page}</span> /{" "}
             {data.totalPages}
           </p>
           <div className="flex gap-1.5">
-            {data.page > 1 && (
-              <button
-                type="button"
-                onClick={() => {
-                  const params = new URLSearchParams(searchParams.toString());
-                  params.set("page", String(data.page - 1));
-                  navigate(params);
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" /> Précédent
-              </button>
-            )}
-            {data.page < data.totalPages && (
-              <button
-                type="button"
-                onClick={() => {
-                  const params = new URLSearchParams(searchParams.toString());
-                  params.set("page", String(data.page + 1));
-                  navigate(params);
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors"
-              >
-                Suivant <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="default"
+              disabled={data.page <= 1}
+              onClick={() => {
+                const params = new URLSearchParams(searchParams.toString());
+                params.set("page", String(data.page - 1));
+                navigate(params);
+              }}
+            >
+              <ChevronLeft aria-hidden="true" /> Précédent
+            </Button>
+            <Button
+              type="button"
+              size="default"
+              disabled={data.page >= data.totalPages}
+              onClick={() => {
+                const params = new URLSearchParams(searchParams.toString());
+                params.set("page", String(data.page + 1));
+                navigate(params);
+              }}
+            >
+              Suivant <ChevronRight aria-hidden="true" />
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Modal suspension */}
-      {motifModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-red-100 rounded-xl">
-                  <AlertTriangle className="w-5 h-5 text-red-600" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-gray-900">
-                    Suspendre ce compte
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {motifModal.nom}
-                  </p>
-                </div>
+      <CenterMorphModal
+        open={Boolean(motifModal)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMotifModal(null);
+            setMotif("");
+          }
+        }}
+      >
+        <CenterMorphModalContent
+          ariaLabel="Suspendre ce compte"
+          ariaDescribedBy="suspension-account-description"
+          className="max-w-md rounded-2xl"
+        >
+          <div className="space-y-4 p-6">
+            <div className="flex items-start gap-3 pr-8">
+              <div className="rounded-xl bg-red-100 p-2.5">
+                <AlertTriangle
+                  className="size-5 text-red-600"
+                  aria-hidden="true"
+                />
               </div>
-              <button
-                onClick={() => setMotifModal(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="space-y-1">
+                <h2 className="font-bold text-gray-900">Suspendre ce compte</h2>
+                <p className="text-sm text-muted-foreground">
+                  {motifModal?.nom}
+                </p>
+              </div>
             </div>
-            <p className="text-sm text-gray-500 mb-3">
+            <p
+              id="suspension-account-description"
+              className="text-sm text-gray-500"
+            >
               Ce compte sera immédiatement suspendu. Un motif est obligatoire.
             </p>
-            <textarea
-              value={motif}
-              onChange={(e) => setMotif(e.target.value)}
-              placeholder="Motif de la suspension (minimum 5 caractères)..."
-              className="w-full border border-gray-200 rounded-xl p-3 text-sm h-24 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-300 resize-none"
-            />
-            <div className="flex gap-2 mt-4">
-              <button
-                type="button"
-                disabled={isPending || motif.trim().length < 5}
-                onClick={handleSuspendre}
-                className="flex-1 py-2.5 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700 disabled:opacity-40 transition-colors"
+            <div className="space-y-2">
+              <label
+                htmlFor="suspension-reason"
+                className="text-sm font-medium text-gray-700"
               >
-                {isPending ? "En cours..." : "Confirmer la suspension"}
-              </button>
-              <button
+                Motif de la suspension
+              </label>
+              <Textarea
+                id="suspension-reason"
+                value={motif}
+                onChange={(event) => setMotif(event.target.value)}
+                placeholder="Minimum 5 caractères..."
+                disabled={isPending}
+                aria-describedby="suspension-reason-help"
+              />
+              <p id="suspension-reason-help" className="text-xs text-gray-400">
+                {motif.trim().length}/5 caractères minimum
+              </p>
+            </div>
+            <div className="-mx-6 -mb-6 flex justify-end gap-2 border-t border-gray-100 bg-gray-50/50 px-6 py-4">
+              <Button
                 type="button"
+                variant="outline"
+                disabled={isPending}
                 onClick={() => {
                   setMotifModal(null);
                   setMotif("");
                 }}
-                className="flex-1 py-2.5 border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors"
               >
                 Annuler
-              </button>
+              </Button>
+              <StatefulButton
+                variant="destructive"
+                state={isPending ? "loading" : "idle"}
+                loadingText="Suspension…"
+                disabled={isPending || motif.trim().length < 5}
+                onClick={handleSuspendre}
+              >
+                Confirmer la suspension
+              </StatefulButton>
             </div>
           </div>
-        </div>
-      )}
+        </CenterMorphModalContent>
+      </CenterMorphModal>
     </div>
   );
 }

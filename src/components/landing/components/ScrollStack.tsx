@@ -1,5 +1,5 @@
 "use client";
-import React, { useLayoutEffect, useRef, useCallback, RefObject } from "react";
+import React, { useLayoutEffect, useRef, useCallback } from "react";
 import Lenis from "lenis";
 import "./ScrollStack.css";
 

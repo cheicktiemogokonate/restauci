@@ -1,11 +1,13 @@
 import { getClientSession } from "@/lib/api/auth-client";
 import { apiResponse } from "@/lib/api/response";
 import { db } from "@/lib/db";
-import { commandes, restaurants } from "@/lib/db/schema";
+import { commandes, livraisons, restaurants } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
 import { checkRateLimit, clientApiLimiter } from "@/lib/rate-limit";
 import { and, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
+import { after } from "next/server";
+import { pushSseEvent } from "@/lib/realtime/sse-push";
 
 const log = createLogger("v1-client-commande-detail");
 
@@ -70,18 +72,38 @@ export async function GET(
       .where(eq(restaurants.id, commande.restaurantId))
       .limit(1);
 
+    const livraison =
+      commande.modeCommande === "livraison"
+        ? await db.query.livraisons.findFirst({
+            where: eq(livraisons.commandeId, commande.id),
+            columns: {
+              statut: true,
+              heureDepart: true,
+              heureLivree: true,
+            },
+          })
+        : null;
+    const timelineEtapes: readonly string[] =
+      commande.modeCommande === "livraison"
+        ? (["recue", "en_preparation", "prete", "en_route", "servie"] as const)
+        : STATUT_ETAPES;
+    const effectiveStatus =
+      commande.statut === "servie"
+        ? "servie"
+        : livraison?.statut === "en_route"
+          ? "en_route"
+          : commande.statut;
+
     // Construire la timeline de suivi
-    const etapes = STATUT_ETAPES.map((etape) => {
+    const etapes = timelineEtapes.map((etape) => {
       const estFait =
-        STATUT_ETAPES.indexOf(etape) <=
-        STATUT_ETAPES.indexOf(
-          commande.statut as (typeof STATUT_ETAPES)[number],
-        );
+        timelineEtapes.indexOf(etape) <= timelineEtapes.indexOf(effectiveStatus);
 
       const timestamps: Record<string, Date | null> = {
         recue: commande.createdAt,
         en_preparation: commande.heureAcceptee,
         prete: commande.heurePrete,
+        en_route: livraison?.heureDepart ?? null,
         servie: commande.heureServie,
       };
 
@@ -89,7 +111,7 @@ export async function GET(
         etape,
         label: STATUT_LABELS_CLIENT[etape] ?? etape,
         fait: estFait && commande.statut !== "annulee",
-        actif: etape === commande.statut,
+        actif: etape === effectiveStatus,
         timestamp: timestamps[etape] ?? null,
       };
     });
@@ -97,7 +119,11 @@ export async function GET(
     return apiResponse.success({
       ...commande,
       restaurant: restaurant ?? null,
-      statutLabel: STATUT_LABELS_CLIENT[commande.statut] ?? commande.statut,
+      statutLabel:
+        effectiveStatus === "en_route"
+          ? "En livraison"
+          : STATUT_LABELS_CLIENT[commande.statut] ?? commande.statut,
+      livraisonStatut: livraison?.statut ?? null,
       estAnnulee: commande.statut === "annulee",
       timeline: commande.statut === "annulee" ? [] : etapes,
     });
@@ -105,6 +131,67 @@ export async function GET(
     log.error(
       { err, clientId: (await session).clientId },
       "Erreur lecture commande client",
+    );
+    return apiResponse.internalError();
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  const { session, error } = await getClientSession(request);
+  if (error) return error;
+
+  const rl = await checkRateLimit(clientApiLimiter, (await session).clientId);
+  if (rl) return rl;
+  const { id } = await params;
+
+  try {
+    const [commande] = await db
+      .update(commandes)
+      .set({ statut: "annulee", updatedAt: new Date() })
+      .where(
+        and(
+          eq(commandes.id, id),
+          eq(commandes.clientId, (await session).clientId),
+          eq(commandes.statut, "recue"),
+        ),
+      )
+      .returning({
+        id: commandes.id,
+        numero: commandes.numero,
+        restaurantId: commandes.restaurantId,
+      });
+
+    if (!commande) {
+      return apiResponse.error(
+        "Cette commande ne peut plus être annulée. Contactez le restaurant.",
+        "CONFLICT",
+        { status: 409 },
+      );
+    }
+
+    after(async () => {
+      await pushSseEvent(commande.restaurantId, "statut", {
+        statut: "annulee",
+        commandeId: commande.id,
+        lienId: commande.id,
+        numero: commande.numero,
+        timestamp: new Date().toISOString(),
+      }).catch((err) =>
+        log.error({ err, commandeId: commande.id }, "Notification annulation échouée"),
+      );
+    });
+
+    return apiResponse.success({
+      id: commande.id,
+      statut: "annulee",
+    });
+  } catch (err) {
+    log.error(
+      { err, clientId: (await session).clientId, commandeId: id },
+      "Erreur annulation commande client",
     );
     return apiResponse.internalError();
   }

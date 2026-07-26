@@ -7,6 +7,7 @@ import { checkRateLimit, mobileApiLimiter } from "@/lib/rate-limit";
 import { getCommandeById }            from "@/lib/db/queries";
 import { updateStatutCommande }       from "@/lib/db/mutations";
 import { createLogger }               from "@/lib/logger";
+import { canRestaurateurSetCommandeStatus } from "@/types/commandes";
 
 const log = createLogger("v1-restaurateur-commande-detail");
 
@@ -57,11 +58,27 @@ export async function PATCH(
     const commande = await getCommandeById(id, session.restaurantId);
     if (!commande) return apiResponse.notFound("Commande");
 
+    if (!canRestaurateurSetCommandeStatus(commande.modeCommande, data.statut)) {
+      return apiResponse.error(
+        "Une livraison est clôturée après confirmation de remise ou de livraison.",
+        "VALIDATION_ERROR",
+        { status: 422 },
+      );
+    }
+
     const updated = await updateStatutCommande(
       id,
       session.restaurantId,
       data.statut
     );
+
+    if (!updated) {
+      return apiResponse.error(
+        "Cette commande a déjà été mise à jour. Actualisez-la avant de réessayer.",
+        "CONFLICT",
+        { status: 409 },
+      );
+    }
 
     log.info(
       { commandeId: id, statut: data.statut },

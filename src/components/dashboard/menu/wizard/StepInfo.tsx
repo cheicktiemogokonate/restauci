@@ -1,6 +1,8 @@
 "use client";
 
-import { DollarSign, Loader2, Trash2, Upload } from "lucide-react";
+import { Banknote, Loader2, Trash2, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Image from "next/image";
 import React, { useRef, useState } from "react";
 import type { PlatWizardData } from "./types";
 
@@ -131,7 +133,7 @@ export default function StepInfo({
           Prix (FCFA) *
         </label>
         <div className="relative">
-          <DollarSign className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
+          <Banknote className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
           <input
             type="text"
             name="prix"
@@ -140,6 +142,7 @@ export default function StepInfo({
             placeholder="Ex: 3500"
             className={`${inputCls} pl-9`}
           />
+          <span className="absolute right-3 top-2.5 text-xs font-semibold text-zinc-400">FCFA</span>
         </div>
       </div>
 
@@ -151,22 +154,24 @@ export default function StepInfo({
         <div className="relative border-2 border-dashed border-zinc-200 rounded-xl min-h-40 flex flex-col items-center justify-center overflow-hidden group">
           {formData.image ? (
             <>
-              <img
+              <Image
                 src={formData.image}
                 alt="Photo du plat"
                 referrerPolicy="no-referrer"
                 className="absolute inset-0 w-full h-full object-cover rounded-xl"
+                fill
               />
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-3 transition-opacity rounded-xl">
-                <button
+                <Button
                   type="button"
+                  variant="destructive"
+                  size="icon"
                   onClick={removeImage}
                   disabled={uploading}
-                  className="p-2 bg-white/95 rounded-lg text-red-500 hover:bg-white transition-colors disabled:opacity-50"
-                  title="Supprimer"
+                  aria-label="Supprimer la photo"
                 >
                   <Trash2 className="w-4 h-4" />
-                </button>
+                </Button>
                 <label className="cursor-pointer px-3 py-2 bg-white/95 rounded-lg text-xs font-semibold text-zinc-700 hover:bg-white transition-colors">
                   Changer
                   {fileInput}

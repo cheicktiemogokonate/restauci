@@ -13,7 +13,7 @@ export function TopCategories({ data = [] }: TopCategoriesProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-base font-semibold">
+        <CardTitle className="text-sm font-semibold sm:text-base">
           Top Catégories
         </CardTitle>
       </CardHeader>
@@ -26,7 +26,7 @@ export function TopCategories({ data = [] }: TopCategoriesProps) {
           </div>
         ) : (
           <>
-            <div className="h-45 w-full">
+            <div className="h-44 w-full sm:h-52">
               <ResponsiveContainer>
                 <PieChart>
                   <Pie
@@ -45,14 +45,14 @@ export function TopCategories({ data = [] }: TopCategoriesProps) {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-2">
+            <div className="mt-3 flex flex-wrap justify-start gap-x-3 gap-y-2 sm:justify-center">
               {data.map((item) => (
                 <div key={item.name} className="flex items-center gap-1.5">
                   <div
                     className="h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: item.color }}
                   />
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground sm:text-xs">
                     {item.name} {item.value}%
                   </span>
                 </div>

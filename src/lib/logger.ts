@@ -46,7 +46,7 @@ export const logger = pino({
   // Infos de base ajoutées à chaque log
   base: {
     env:     env.NODE_ENV,
-    service: "restauci-api",
+    service: "toutci-api",
   },
 });
 

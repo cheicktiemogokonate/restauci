@@ -1,6 +1,7 @@
 import { formatPrix } from "@/lib/utils/format";
 import { ChevronLeft, ChevronRight, ImageIcon, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import Image from "next/image";
 import React, { useState } from "react";
 import { Dish } from "../types";
 
@@ -90,11 +91,13 @@ export default function GallerySection({
                 onClick={() => setActivePhotoIndex(idx)}
                 className="relative aspect-square rounded-2xl overflow-hidden shadow-xs cursor-pointer group border border-gray-100"
               >
-                <img
+                <Image
                   src={img.url}
                   alt={img.title}
                   className="w-full h-full object-cover group-hover:scale-105 duration-500 select-none"
                   referrerPolicy="no-referrer"
+                  fill
+                  sizes="(max-width: 640px) 50vw, 33vw"
                 />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center">
                   <span className="bg-white/90 text-gray-950 text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 shadow-md">
@@ -140,11 +143,13 @@ export default function GallerySection({
                 >
                   {/* Image */}
                   <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden bg-gray-50 shrink-0">
-                    <img
+                    <Image
                       src={dish.image}
                       alt={dish.name}
                       className="h-full w-full object-cover group-hover:scale-105 transition duration-500"
                       referrerPolicy="no-referrer"
+                      width={80}
+                      height={80}
                       onError={(e) => {
                         (e.target as HTMLImageElement).src =
                           "/assets/images/hero_bg_1781800187268.jpg";
@@ -223,11 +228,13 @@ export default function GallerySection({
                 <ChevronLeft className="h-6 w-6" />
               </button>
 
-              <img
+              <Image
                 src={IMAGES[activePhotoIndex].url}
                 alt={IMAGES[activePhotoIndex].title}
                 className="max-w-full max-h-[75vh] object-contain rounded-2xl select-none"
                 referrerPolicy="no-referrer"
+                width={1200}
+                height={900}
               />
 
               {/* Next */}

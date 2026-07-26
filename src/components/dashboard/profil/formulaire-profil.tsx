@@ -1,11 +1,22 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { updateRestaurantAction } from "@/lib/actions/restaurant";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { RestaurantLocationPicker } from "@/components/dashboard/profil/restaurant-location-picker";
+import {
+  setRestaurantOnlineAction,
+  setRestaurantOrderAcceptanceAction,
+  updateRestaurantAction,
+} from "@/lib/actions/restaurant";
 import type { Restaurant } from "@/types";
-import { Loader2, Upload, X } from "lucide-react";
+import { CirclePause, Loader2, Power, Upload, X } from "lucide-react";
+import Image from "next/image";
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 
 const modesCommandeOptions = [
   { value: "sur_place", label: "Sur place" },
@@ -19,6 +30,7 @@ export default function FormulaireProfil({
   restaurant: Restaurant;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [isServicePending, startServiceTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -30,6 +42,79 @@ export default function FormulaireProfil({
   const [bannerUrl, setBannerUrl] = useState<string | null>(
     restaurant.banniereUrl ?? null,
   );
+  const [enLigne, setEnLigne] = useState(restaurant.enLigne ?? false);
+  const [accepteCommandes, setAccepteCommandes] = useState(
+    restaurant.accepteCommandes ?? true,
+  );
+  const [modesCommande, setModesCommande] = useState<string[]>(
+    restaurant.modesCommande ?? ["sur_place"],
+  );
+  const [adresse, setAdresse] = useState(restaurant.adresse ?? "");
+  const [ville, setVille] = useState(restaurant.ville ?? "");
+  const [pays, setPays] = useState(restaurant.pays ?? "");
+  const [coordinates, setCoordinates] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(() =>
+    typeof restaurant.latitude === "number" &&
+    typeof restaurant.longitude === "number"
+      ? { lat: restaurant.latitude, lng: restaurant.longitude }
+      : null,
+  );
+
+  const handleOnlineChange = (nextEnLigne: boolean) => {
+    const previousEnLigne = enLigne;
+    const previousAccepteCommandes = accepteCommandes;
+
+    startServiceTransition(async () => {
+      setEnLigne(nextEnLigne);
+      setAccepteCommandes(nextEnLigne);
+      const result = await setRestaurantOnlineAction(nextEnLigne);
+
+      if (result.error) {
+        setEnLigne(previousEnLigne);
+        setAccepteCommandes(previousAccepteCommandes);
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success(
+        nextEnLigne
+          ? "Restaurant en ligne : les commandes sont ouvertes."
+          : "Restaurant hors ligne : aucune commande ne peut passer.",
+      );
+    });
+  };
+
+  const handleOrderAcceptanceChange = (nextAccepteCommandes: boolean) => {
+    const previousAccepteCommandes = accepteCommandes;
+
+    startServiceTransition(async () => {
+      setAccepteCommandes(nextAccepteCommandes);
+      const result = await setRestaurantOrderAcceptanceAction(
+        nextAccepteCommandes,
+      );
+
+      if (result.error) {
+        setAccepteCommandes(previousAccepteCommandes);
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success(
+        nextAccepteCommandes
+          ? "Les nouvelles commandes sont acceptées."
+          : "Les nouvelles commandes sont suspendues.",
+      );
+    });
+  };
+
+  const handleModeCommandeChange = (mode: string, checked: boolean) => {
+    setModesCommande((current) => {
+      if (checked) return [...new Set([...current, mode])];
+      return current.filter((item) => item !== mode);
+    });
+  };
 
   const uploadFile = async (file: File) => {
     const formData = new FormData();
@@ -51,6 +136,16 @@ export default function FormulaireProfil({
   const handleSubmit = (formData: FormData) => {
     if (logoUrl) formData.set("logoUrl", logoUrl);
     if (bannerUrl) formData.set("banniereUrl", bannerUrl);
+    formData.set("adresse", adresse);
+    formData.set("ville", ville);
+    formData.set("pays", pays);
+    if (coordinates) {
+      formData.set("latitude", String(coordinates.lat));
+      formData.set("longitude", String(coordinates.lng));
+    } else {
+      formData.delete("latitude");
+      formData.delete("longitude");
+    }
 
     setError(null);
     setSuccess(null);
@@ -116,22 +211,75 @@ export default function FormulaireProfil({
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-      <h2 className="text-xl font-semibold mb-4">Profil du Restaurant</h2>
-      <p className="text-gray-500 mb-6">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
+      <h2 className="mb-2 text-xl font-semibold text-foreground">Profil du restaurant</h2>
+      <p className="mb-6 text-muted-foreground">
         Gérez les informations de base et les réglages spécifiques de{" "}
         {restaurant.nom}
       </p>
 
+      <section className="mb-8 overflow-hidden rounded-2xl border border-brand-green/15 bg-brand-green/[0.035] p-4 sm:p-5">
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-green/10 text-brand-green">
+            {enLigne ? <Power className="h-4 w-4" /> : <CirclePause className="h-4 w-4" />}
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">État du service</h3>
+            <p className="text-sm text-muted-foreground">
+              {enLigne
+                ? accepteCommandes
+                  ? "Votre restaurant est visible et reçoit des commandes."
+                  : "Votre restaurant est visible, mais les commandes sont suspendues."
+                : "Votre restaurant est hors ligne et invisible aux clients."}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background/80 p-3.5">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">Restaurant en ligne</p>
+              <p className="text-xs text-muted-foreground">Hors ligne, il est masqué et aucune commande ne passe.</p>
+            </div>
+            <Switch
+              checked={enLigne}
+              onCheckedChange={handleOnlineChange}
+              disabled={isServicePending}
+              aria-label="Mettre le restaurant en ligne"
+              className="data-checked:bg-brand-green"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background/80 p-3.5">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">Accepter les commandes</p>
+              <p className="text-xs text-muted-foreground">Suspend les nouvelles commandes tout en restant visible.</p>
+            </div>
+            <Switch
+              checked={accepteCommandes}
+              onCheckedChange={handleOrderAcceptanceChange}
+              disabled={isServicePending || !enLigne}
+              aria-label="Accepter les nouvelles commandes"
+              className="data-checked:bg-brand-green"
+            />
+          </div>
+        </div>
+      </section>
+
       <form action={handleSubmit} className="space-y-6">
+        <section className="space-y-5 rounded-2xl border border-border/70 bg-background p-4 sm:p-5">
+          <div>
+            <h3 className="font-semibold text-foreground">Informations publiques</h3>
+            <p className="text-sm text-muted-foreground">Ce que les clients voient pour identifier votre restaurant.</p>
+          </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
-            <label className="text-sm font-medium">Nom</label>
+            <Label>Nom</Label>
             <Input name="nom" defaultValue={restaurant.nom} required />
           </div>
 
           <div className="grid gap-2">
-            <label className="text-sm font-medium">Téléphone</label>
+            <Label>Téléphone</Label>
             <Input
               name="telephone"
               defaultValue={restaurant.telephone}
@@ -141,25 +289,25 @@ export default function FormulaireProfil({
         </div>
 
         <div className="grid gap-2">
-          <label className="text-sm font-medium">Adresse</label>
-          <Input name="adresse" defaultValue={restaurant.adresse} required />
-        </div>
-
-        <div className="grid gap-2">
-          <label className="text-sm font-medium">Description</label>
-          <textarea
+          <Label>Description</Label>
+          <Textarea
             name="description"
             defaultValue={restaurant.description ?? ""}
-            className="w-full rounded-md border border-gray-200 p-2 text-sm"
             rows={3}
           />
         </div>
+        </section>
 
+        <section className="space-y-5 rounded-2xl border border-border/70 bg-background p-4 sm:p-5">
+          <div>
+            <h3 className="font-semibold text-foreground">Commandes et livraison</h3>
+            <p className="text-sm text-muted-foreground">Les règles appliquées aux commandes reçues par votre restaurant.</p>
+          </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
-            <label className="text-sm font-medium">
+            <Label>
               Frais de livraison (FCFA)
-            </label>
+            </Label>
             <Input
               type="number"
               name="fraisLivraison"
@@ -170,9 +318,9 @@ export default function FormulaireProfil({
           </div>
 
           <div className="grid gap-2">
-            <label className="text-sm font-medium">
+            <Label>
               Commande minimum (FCFA)
-            </label>
+            </Label>
             <Input
               type="number"
               name="commandeMinimum"
@@ -185,9 +333,9 @@ export default function FormulaireProfil({
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
-            <label className="text-sm font-medium">
+            <Label>
               Temps de préparation moyen (min)
-            </label>
+            </Label>
             <Input
               type="number"
               name="tempsPreparationMoyen"
@@ -198,77 +346,69 @@ export default function FormulaireProfil({
           </div>
 
           <div className="grid gap-2">
-            <label className="text-sm font-medium">Modes de commande</label>
-            <div className="flex flex-wrap gap-3 rounded-md border border-gray-200 p-3">
+            <Label>Modes de commande</Label>
+            <div className="flex flex-wrap gap-x-5 gap-y-3 rounded-lg border border-input bg-muted/20 p-3">
               {modesCommandeOptions.map((option) => (
-                <label
+                <div
                   key={option.value}
                   className="flex items-center gap-2 text-sm"
                 >
-                  <input
-                    type="checkbox"
-                    name="modesCommande"
-                    value={option.value}
-                    defaultChecked={restaurant.modesCommande?.includes(
-                      option.value,
-                    )}
-                    className="h-4 w-4 rounded border-gray-300"
+                  <Checkbox
+                    id={`mode-${option.value}`}
+                    checked={modesCommande.includes(option.value)}
+                    onCheckedChange={(checked) =>
+                      handleModeCommandeChange(option.value, checked === true)
+                    }
                   />
-                  {option.label}
-                </label>
+                  <Label htmlFor={`mode-${option.value}`}>{option.label}</Label>
+                </div>
               ))}
             </div>
+            {modesCommande.map((mode) => (
+              <input key={mode} type="hidden" name="modesCommande" value={mode} />
+            ))}
           </div>
         </div>
+        </section>
 
+        <section className="space-y-5 rounded-2xl border border-border/70 bg-background p-4 sm:p-5">
+          <div>
+            <h3 className="font-semibold text-foreground">Contact et localisation</h3>
+            <p className="text-sm text-muted-foreground">Les coordonnées utilisées par les clients et pour les livraisons.</p>
+          </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
-            <label className="text-sm font-medium">Email</label>
+            <Label>Email</Label>
             <Input name="email" defaultValue={restaurant.email ?? ""} />
           </div>
 
           <div className="grid gap-2">
-            <label className="text-sm font-medium">Site web</label>
+            <Label>Site web</Label>
             <Input name="siteWeb" defaultValue={restaurant.siteWeb ?? ""} />
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">Ville</label>
-            <Input name="ville" defaultValue={restaurant.ville ?? ""} />
-          </div>
+        <RestaurantLocationPicker
+          adresse={adresse}
+          ville={ville}
+          pays={pays}
+          coordinates={coordinates}
+          onAdresseChange={setAdresse}
+          onVilleChange={setVille}
+          onPaysChange={setPays}
+          onCoordinatesChange={setCoordinates}
+        />
+        </section>
 
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">Pays</label>
-            <Input name="pays" defaultValue={restaurant.pays ?? ""} />
+        <section className="space-y-5 rounded-2xl border border-border/70 bg-background p-4 sm:p-5">
+          <div>
+            <h3 className="font-semibold text-foreground">Identité de la carte</h3>
+            <p className="text-sm text-muted-foreground">Les éléments qui accompagnent votre restaurant sur les écrans publics.</p>
           </div>
-
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">Latitude, Longitude</label>
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                step="any"
-                name="latitude"
-                defaultValue={restaurant.latitude ?? ""}
-                placeholder="lat"
-              />
-              <Input
-                type="number"
-                step="any"
-                name="longitude"
-                defaultValue={restaurant.longitude ?? ""}
-                placeholder="lng"
-              />
-            </div>
-          </div>
-        </div>
-
         <div className="grid gap-2">
-          <label className="text-sm font-medium">
+          <Label>
             Cuisines (séparées par des virgules)
-          </label>
+          </Label>
           <Input
             name="cuisines"
             defaultValue={(restaurant.cuisines || []).join(", ")}
@@ -278,74 +418,57 @@ export default function FormulaireProfil({
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="grid gap-2">
-            <label className="text-sm font-medium">Facebook</label>
+            <Label>Facebook</Label>
             <Input name="facebook" defaultValue={restaurant.facebook ?? ""} />
           </div>
           <div className="grid gap-2">
-            <label className="text-sm font-medium">Instagram</label>
+            <Label>Instagram</Label>
             <Input name="instagram" defaultValue={restaurant.instagram ?? ""} />
           </div>
           <div className="grid gap-2">
-            <label className="text-sm font-medium">WhatsApp</label>
+            <Label>WhatsApp</Label>
             <Input name="whatsapp" defaultValue={restaurant.whatsapp ?? ""} />
           </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
-            <span className="text-sm font-medium">Accepter les commandes</span>
-            <input
-              type="checkbox"
-              name="accepteCommandes"
-              defaultChecked={restaurant.accepteCommandes ?? true}
-              className="h-4 w-4 rounded border-gray-300"
-            />
-          </label>
-
-          <label className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
-            <span className="text-sm font-medium">Restaurant en ligne</span>
-            <input
-              type="checkbox"
-              name="enLigne"
-              defaultChecked={restaurant.enLigne ?? false}
-              className="h-4 w-4 rounded border-gray-300"
-            />
-          </label>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-lg border border-gray-200 p-4">
+          <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Logo du restaurant</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Affiché dans les cartes et l’en-tête
                 </p>
               </div>
               {logoUrl ? (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => setLogoUrl(null)}
-                  className="rounded-full border border-gray-200 p-1 text-gray-500 hover:text-red-600"
+                  className="rounded-full border border-border text-muted-foreground hover:text-destructive"
                 >
                   <X className="h-4 w-4" />
-                </button>
+                  <span className="sr-only">Retirer le logo</span>
+                </Button>
               ) : null}
             </div>
 
             {logoUrl ? (
-              <img
+              <Image
                 src={logoUrl}
                 alt="Logo du restaurant"
-                className="mb-3 h-24 w-24 rounded-lg object-cover border"
+                className="mb-3 h-24 w-24 rounded-xl border border-border object-cover"
+                width={96}
+                height={96}
               />
             ) : (
-              <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
+              <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-xl border border-dashed border-border bg-background text-sm text-muted-foreground">
                 Aucun logo
               </div>
             )}
 
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <Label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-input px-3 py-2 text-foreground hover:bg-muted/50">
               {uploadingLogo ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -360,41 +483,46 @@ export default function FormulaireProfil({
                   handleImageUpload("logo", event.target.files?.[0] ?? null)
                 }
               />
-            </label>
+            </Label>
           </div>
 
-          <div className="rounded-lg border border-gray-200 p-4">
+          <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Bannière du restaurant</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Visible sur la page publique du restaurant
                 </p>
               </div>
               {bannerUrl ? (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => setBannerUrl(null)}
-                  className="rounded-full border border-gray-200 p-1 text-gray-500 hover:text-red-600"
+                  className="rounded-full border border-border text-muted-foreground hover:text-destructive"
                 >
                   <X className="h-4 w-4" />
-                </button>
+                  <span className="sr-only">Retirer la bannière</span>
+                </Button>
               ) : null}
             </div>
 
             {bannerUrl ? (
-              <img
+              <Image
                 src={bannerUrl}
                 alt="Bannière du restaurant"
-                className="mb-3 h-24 w-full rounded-lg object-cover border"
+                className="mb-3 h-24 w-full rounded-xl border border-border object-cover"
+                width={800}
+                height={96}
               />
             ) : (
-              <div className="mb-3 flex h-24 w-full items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
+              <div className="mb-3 flex h-24 w-full items-center justify-center rounded-xl border border-dashed border-border bg-background text-sm text-muted-foreground">
                 Aucune bannière
               </div>
             )}
 
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <Label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-input px-3 py-2 text-foreground hover:bg-muted/50">
               {uploadingBanner ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -411,9 +539,10 @@ export default function FormulaireProfil({
                   handleImageUpload("banner", event.target.files?.[0] ?? null)
                 }
               />
-            </label>
+            </Label>
           </div>
         </div>
+        </section>
 
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
@@ -422,7 +551,8 @@ export default function FormulaireProfil({
         <Button
           type="submit"
           disabled={isPending}
-          className="bg-[#2d7d46] hover:bg-[#2d7d46]/90 text-white"
+          size="lg"
+          className="w-full sm:w-auto"
         >
           {isPending ? "Sauvegarde..." : "Sauvegarder"}
         </Button>

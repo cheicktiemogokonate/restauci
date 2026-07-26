@@ -1,3 +1,4 @@
+import Image from "next/image";
 import {
   CheckCircle,
   Clock,
@@ -30,11 +31,13 @@ export default function DashboardView({
         {/* Banner with Logo */}
         <div className="relative h-48 w-full bg-linear-to-r from-brand-500 to-brand-600 overflow-hidden">
           {config.general.bannerUrl ? (
-            <img
+            <Image
               src={config.general.bannerUrl}
               alt="Restaurant banner"
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover opacity-90"
+              fill
+              sizes="(max-width: 896px) 100vw, 896px"
             />
           ) : (
             <div className="w-full h-full opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] bg-size-[16px_16px]" />
@@ -46,11 +49,13 @@ export default function DashboardView({
             <div className="flex items-center space-x-4">
               <div className="w-20 h-20 bg-white rounded-2xl p-1 shadow-md shrink-0 flex items-center justify-center overflow-hidden border border-gray-100">
                 {config.general.logoUrl ? (
-                  <img
+                  <Image
                     src={config.general.logoUrl}
                     alt="Logo"
                     referrerPolicy="no-referrer"
                     className="max-h-full max-w-full object-contain rounded-xl"
+                    width={80}
+                    height={80}
                   />
                 ) : (
                   <span className="text-2xl font-black text-brand-500 font-display">
@@ -288,7 +293,7 @@ export default function DashboardView({
           {/* Bottom helper info */}
           <div className="pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 gap-4">
             <span>
-              RestauCI Onboarding Engine © 2026. Tous droits réservés.
+              Toutci © 2026. Tous droits réservés.
             </span>
             <div className="flex items-center space-x-4">
               <button

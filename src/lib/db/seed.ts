@@ -6,13 +6,13 @@
 import { hash } from "bcryptjs";
 import { db } from "./index";
 import {
-  abonnements,
   categories,
   clients,
   commandes,
   creneauxHoraires,
   plats,
   restaurants,
+  subscriptionPeriods,
   users,
 } from "./schema";
 
@@ -76,14 +76,24 @@ async function seed() {
   console.log("✅ Restaurant créé:", restaurant.nom);
 
   // ── 3. Abonnement ────────────────────────────────────────────────────────
-  await db.insert(abonnements).values({
-    restaurantId: restaurant.id,
-    plan: "pro",
-    statut: "actif",
-    maxPlats: 200,
-    maxCategories: 30,
-    dateFin: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-  });
+  // ── 3. Abonnement (nouveau système subscription_periods) ────────────────
+  const [proPlan] = await db.query.subscriptionPlans.findFirst({
+    where: (p, { eq }) => eq(p.code, "partenaire_fier"),
+  }).then((row) => row ? [row] : []);
+
+  if (proPlan) {
+    const dateEcheance = new Date();
+    dateEcheance.setFullYear(dateEcheance.getFullYear() + 1);
+    await db.insert(subscriptionPeriods).values({
+      restaurantId: restaurant.id,
+      planCode: "partenaire_fier",
+      tauxCommissionBpsFige: proPlan.tauxCommissionBps,
+      prixPayeFcfa: proPlan.prixAnnuelFcfa,
+      dateDebut: new Date(),
+      dateEcheance,
+      statut: "active",
+    });
+  }
 
   // ── 4. Créneaux horaires ─────────────────────────────────────────────────
   await db

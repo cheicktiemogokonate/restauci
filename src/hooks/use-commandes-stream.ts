@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SseEvent } from "@/types/commandes";
 
-const MAX_RETRIES = 5;
 const BASE_RETRY_DELAY = 1000;
 const MAX_RETRY_DELAY = 30000;
 
@@ -20,6 +19,7 @@ export function useCommandesStream(
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryCountRef = useRef(0);
   const retryTimeoutRef = useRef<number | undefined>(undefined);
+  const lastEventIdRef = useRef<string | null>(null);
 
   // Stocker les callbacks dans des refs pour éviter de recréer `connect`
   // à chaque re-render (ce qui causerait une boucle de reconnexions)
@@ -42,8 +42,11 @@ export function useCommandesStream(
         return;
       }
 
+      const query = new URLSearchParams({ restaurantId });
+      if (lastEventIdRef.current) query.set("cursor", lastEventIdRef.current);
+
       const es = new EventSource(
-        `/api/commandes/stream?restaurantId=${restaurantId}`,
+        `/api/commandes/stream?${query.toString()}`,
         { withCredentials: true },
       );
 
@@ -57,6 +60,7 @@ export function useCommandesStream(
       // Écouter tous les types d'événements nommés envoyés par le serveur
       const handleNamedEvent = (type: string) => (e: MessageEvent) => {
         try {
+          if (e.lastEventId) lastEventIdRef.current = e.lastEventId;
           const data = JSON.parse(e.data as string);
           onEventRef.current({ type: type as SseEvent["type"], data });
         } catch {
@@ -69,6 +73,7 @@ export function useCommandesStream(
       es.addEventListener("commande_annulee",  handleNamedEvent("commande_annulee"));
       es.addEventListener("nouveau_avis",      handleNamedEvent("nouveau_avis"));
       es.addEventListener("statut",            handleNamedEvent("statut"));
+      es.addEventListener("livreur_assigne",   handleNamedEvent("livreur_assigne"));
 
       // Fallback : événement générique `message` (au cas où le serveur en envoie)
       es.addEventListener("message", handleNamedEvent("message"));
@@ -88,16 +93,14 @@ export function useCommandesStream(
         es.close();
 
         const nextRetry = retryCountRef.current + 1;
-        if (nextRetry > MAX_RETRIES) {
-          onErrorRef.current?.("Nombre max de reconnexions atteint");
-          return;
-        }
-
         retryCountRef.current = nextRetry;
         setRetryCount(nextRetry);
 
+        // Reconnexion indéfinie avec backoff exponentiel plafonné à
+        // MAX_RETRY_DELAY. Ne jamais abandonner : une coupure réseau ou
+        // un déploiement Vercel ne doit pas forcer un rechargement manuel.
         const delay = Math.min(
-          BASE_RETRY_DELAY * Math.pow(2, nextRetry - 1),
+          BASE_RETRY_DELAY * Math.pow(2, Math.min(nextRetry - 1, 10)),
           MAX_RETRY_DELAY,
         );
 
@@ -129,6 +132,21 @@ export function useCommandesStream(
         clearTimeout(retryTimeoutRef.current);
       }
     };
+  }, [connect, enabled]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (
+        document.visibilityState === "visible" &&
+        enabled &&
+        !eventSourceRef.current
+      ) {
+        connect();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibility);
   }, [connect, enabled]);
 
   return { isConnected, retryCount };

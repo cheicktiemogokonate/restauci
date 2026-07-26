@@ -29,35 +29,12 @@ export default async function MenuDetailPage({ params }: PageProps) {
     getSimilarPlats(plat.id, restaurant.id, plat.categorieId),
   ]);
 
-  const nutrition = plat.nutrition
-    ? [
-        {
-          label: "Calories",
-          value: String(plat.nutrition.calories),
-          unit: "kcal",
-        },
-        {
-          label: "Protéines",
-          value: String(plat.nutrition.proteines),
-          unit: "g",
-        },
-        { label: "Lipides", value: String(plat.nutrition.lipides), unit: "g" },
-        {
-          label: "Glucides",
-          value: String(plat.nutrition.glucides),
-          unit: "g",
-        },
-      ]
-    : [];
-
   return (
     <MenuDetailClient
       plat={plat}
       categories={categoriesList}
       similarPlats={similarPlats}
       tags={plat.tags ?? []}
-      allergenes={plat.allergenes ?? []}
-      nutrition={nutrition}
     />
   );
 }

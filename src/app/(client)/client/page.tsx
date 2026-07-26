@@ -4,6 +4,8 @@ import { ClientTopBar } from "@/components/client-app/client-top-bar";
 import { PanierFlottant } from "@/components/client-app/panier-flottant";
 import { RestaurantBottomSheet } from "@/components/client-app/restaurant-bottom-sheet";
 import { type RestaurantMapPin } from "@/components/client-app/restaurant-map";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { useDebounce } from "@/lib/client-app/hooks/use-debounce";
 import { useGeolocation } from "@/lib/client-app/hooks/use-geolocation";
 import { useRestaurantDetail } from "@/lib/client-app/hooks/use-restaurant-detail";
@@ -12,6 +14,7 @@ import {
   type RestaurantProche,
 } from "@/lib/client-app/hooks/use-restaurants-proches";
 import dynamic from "next/dynamic";
+import { AlertCircle, RefreshCw, SearchX } from "lucide-react";
 import { useState } from "react";
 
 // Lazy-load the map component — MapLibre GL is ~1 MB, no need to block initial paint
@@ -38,7 +41,7 @@ export default function AccueilClientPage() {
   const [search, setSearch] = useState("");
   const [cuisine, setCuisine] = useState<string | null>(null);
   const debouncedSearch = useDebounce(search, 400);
-  const { restaurants, isLoading } = useRestaurantsProches({
+  const { restaurants, isLoading, error, recharger } = useRestaurantsProches({
     lat: geo.lat,
     lng: geo.lng,
     search: debouncedSearch || undefined,
@@ -108,6 +111,30 @@ export default function AccueilClientPage() {
         cuisine={cuisine}
         onCuisineChange={setCuisine}
       />
+
+      {!isLoading && error ? (
+        <div className="pointer-events-none absolute inset-x-4 top-1/2 z-20 -translate-y-1/2">
+          <Alert variant="destructive" className="pointer-events-auto mx-auto max-w-sm bg-background/95 shadow-xl backdrop-blur-md">
+            <AlertCircle />
+            <AlertTitle>Restaurants indisponibles</AlertTitle>
+            <AlertDescription className="pr-2">{error}</AlertDescription>
+            <Button type="button" variant="outline" size="sm" onClick={() => void recharger()} className="mt-3 w-fit">
+              <RefreshCw /> Réessayer
+            </Button>
+          </Alert>
+        </div>
+      ) : null}
+
+      {!isLoading && !error && restaurants.length === 0 ? (
+        <div className="pointer-events-none absolute inset-x-4 top-1/2 z-20 -translate-y-1/2">
+          <Alert className="pointer-events-auto mx-auto max-w-sm bg-background/95 shadow-xl backdrop-blur-md">
+            <SearchX className="text-primary" />
+            <AlertTitle>Aucun restaurant trouvé</AlertTitle>
+            <AlertDescription>Essayez une autre recherche ou élargissez votre sélection.</AlertDescription>
+            {(search || cuisine) ? <Button type="button" variant="outline" size="sm" onClick={() => { setSearch(""); setCuisine(null); }} className="mt-3 w-fit">Réinitialiser les filtres</Button> : null}
+          </Alert>
+        </div>
+      ) : null}
 
       {/* Panier flottant */}
       <PanierFlottant />

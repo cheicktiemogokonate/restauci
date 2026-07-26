@@ -1,33 +1,38 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { clientApi } from "@/lib/client-app/api-client";
+import { CheckCircle2, MapPin, Search } from "lucide-react";
+import { useState, useTransition } from "react";
 
 interface Adresse {
   adresse: string;
-  lat:     number;
-  lng:     number;
+  lat: number;
+  lng: number;
 }
 
 interface AdresseLivraisonPickerProps {
-  value:    Adresse | null;
+  value: Adresse | null;
   onChange: (adresse: Adresse | null) => void;
 }
 
 export function AdresseLivraisonPicker({ value, onChange }: AdresseLivraisonPickerProps) {
   const [saisie, setSaisie] = useState(value?.adresse ?? "");
-  const [error, setError]   = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleGeocoder = () => {
-    if (saisie.trim().length < 3) return;
+    if (saisie.trim().length < 3) {
+      setError("Saisissez au moins 3 caractères pour rechercher une adresse.");
+      return;
+    }
     setError(null);
 
     startTransition(async () => {
-      const result = await clientApi.get<{
-        adresse: string; lat: number; lng: number;
-      }>(`/geo/geocode?q=${encodeURIComponent(saisie)}`);
-
+      const result = await clientApi.get<Adresse>(`/geo/geocode?q=${encodeURIComponent(saisie)}`);
       if (result.success && result.data) {
         onChange(result.data);
         setSaisie(result.data.adresse);
@@ -39,36 +44,41 @@ export function AdresseLivraisonPicker({ value, onChange }: AdresseLivraisonPick
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-4">
-      <label className="text-sm font-semibold text-gray-900 block mb-2">
-        Adresse de livraison
-      </label>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={saisie}
-          onChange={(e) => setSaisie(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleGeocoder()}
-          placeholder="Ex: Cocody Riviera 3, Abidjan"
-          className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
-        />
-        <button
-          type="button"
-          onClick={handleGeocoder}
-          disabled={isPending}
-          className="px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl disabled:opacity-50"
-        >
-          {isPending ? "..." : "Valider"}
-        </button>
-      </div>
-      {value && (
-        <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-          ✓ Adresse confirmée
-        </p>
-      )}
-      {error && (
-        <p className="text-xs text-red-600 mt-2">{error}</p>
-      )}
-    </div>
+    <section aria-labelledby="delivery-address-label" className="border-b py-5">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <MapPin className="size-4" />
+          </span>
+          <div>
+            <Label id="delivery-address-label" htmlFor="delivery-address">Adresse de livraison</Label>
+            <p className="mt-0.5 text-xs text-muted-foreground">Elle permet de calculer votre livraison.</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            id="delivery-address"
+            value={saisie}
+            onChange={(event) => setSaisie(event.target.value)}
+            onKeyDown={(event) => event.key === "Enter" && handleGeocoder()}
+            placeholder="Ex. Cocody Riviera 3, Abidjan"
+            className="h-10"
+          />
+          <Button type="button" onClick={handleGeocoder} disabled={isPending} className="h-10 shrink-0">
+            <Search />
+            <span className="hidden sm:inline">Rechercher</span>
+          </Button>
+        </div>
+        {value ? (
+          <Alert className="mt-3 border-primary/15 bg-primary/5 text-primary">
+            <CheckCircle2 />
+            <AlertDescription className="text-primary/85">Adresse confirmée : {value.adresse}</AlertDescription>
+          </Alert>
+        ) : null}
+        {error ? (
+          <Alert variant="destructive" className="mt-3">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+    </section>
   );
 }

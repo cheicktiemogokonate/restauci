@@ -1,6 +1,11 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { db, pool } from "../src/lib/db/index";
+// import { db, pool } from "../src/lib/db/index";
+
+import { drizzle } from "drizzle-orm/node-postgres";
 import { resolve } from "path";
+import { migrationPool } from "./db-pool";
+
+const db = drizzle(migrationPool);
 
 async function main() {
   console.log("Running migrations...");
@@ -11,7 +16,7 @@ async function main() {
     console.error("Error applying migrations", err);
     process.exit(1);
   } finally {
-    await pool.end();
+    await migrationPool.end();
   }
 }
 main();

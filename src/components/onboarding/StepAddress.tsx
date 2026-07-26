@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { MapPin, Phone, Mail, Globe, MessageSquare, ChevronRight, Sparkles } from "lucide-react";
+import { MapPin, Phone, Mail, Globe, MessageSquare, Sparkles } from "lucide-react";
 import { AddressContact } from "./types";
 import InteractiveMap from "./InteractiveMap";
 
@@ -9,17 +9,6 @@ interface StepAddressProps {
   onNext: () => void;
   onPrev: () => void;
 }
-
-const COMMUNES_LIST = [
-  "Marcory",
-  "Cocody",
-  "Plateau",
-  "Treachville",
-  "Yopougon",
-  "Koumassi",
-  "Port-Bouet",
-  "Adjamé"
-];
 
 export default function StepAddress({ data, updateData, onNext, onPrev }: StepAddressProps) {
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +60,7 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
           <MapPin className="w-6 h-6" />
         </div>
         <span className="text-xs font-mono text-gray-400 font-semibold uppercase tracking-wider block">
-          Étape 2/3
+          Étape 2/5
         </span>
         <h1 className="text-2xl font-bold font-display text-gray-900 tracking-tight leading-none mt-1">
           Adresse & Contact GPS
@@ -91,36 +80,36 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
         {/* Location Dropdowns */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
+            <label htmlFor="country" className="block text-sm font-semibold text-gray-900 mb-2">
               Pays *
             </label>
             <div className="relative">
               <select
+                id="country"
+                name="country"
                 disabled
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 text-gray-500 rounded-xl text-sm font-sans outline-none appearance-none cursor-not-allowed"
               >
                 <option>🇨🇮 Côte d&apos;Ivoire</option>
               </select>
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">
-              Plateforme hébergée exclusivement en Côte d&apos;Ivoire.
-            </p>
+            <p className="text-[10px] text-gray-400 mt-1">Zone de service actuelle.</p>
           </div>
 
           <div>
             <label htmlFor="city" className="block text-sm font-semibold text-gray-900 mb-2">
               Ville *
             </label>
-            <select
+            <input
+              id="city"
+              name="city"
+              type="text"
+              autoComplete="address-level2"
               value={data.city}
               onChange={(e) => updateData({ city: e.target.value })}
+              placeholder="Ex. Bouaké, Abidjan, Korhogo"
               className="w-full px-4 py-3 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800"
-            >
-              <option value="Abidjan">Abidjan</option>
-              <option value="Yamoussoukro">Yamoussoukro</option>
-              <option value="San-Pédro">San-Pédro</option>
-              <option value="Bouaké">Bouaké</option>
-            </select>
+            />
           </div>
         </div>
 
@@ -130,17 +119,15 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
             <label htmlFor="commune" className="block text-sm font-semibold text-gray-900 mb-2">
               Commune *
             </label>
-            <select
+            <input
+              id="commune"
+              name="commune"
+              type="text"
               value={data.commune}
               onChange={(e) => updateData({ commune: e.target.value })}
+              placeholder="Commune, sous-préfecture ou secteur"
               className="w-full px-4 py-3 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800"
-            >
-              {COMMUNES_LIST.map((comm) => (
-                <option key={comm} value={comm}>
-                  {comm}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           <div>
@@ -150,6 +137,7 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
             <input
               type="text"
               id="quarter"
+              name="address-level3"
               placeholder="Ex: Zone 4C, Deux-Plateaux Vallons"
               value={data.quarter}
               onChange={(e) => updateData({ quarter: e.target.value })}
@@ -166,6 +154,8 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
           <input
             type="text"
             id="fullAddress"
+            name="street-address"
+            autoComplete="street-address"
             placeholder="Ex: Boulevard de Marseille, en face du supermarché, Zone 4"
             value={data.fullAddress}
             onChange={(e) => updateData({ fullAddress: e.target.value })}
@@ -184,7 +174,7 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
             </label>
             <span className="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5" />
-              Cliquez n&apos;importe où sur la carte pour placer le repère
+              Déplacez le repère pour préciser la position
             </span>
           </div>
 
@@ -230,6 +220,8 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
                 <input
                   type="tel"
                   id="phone"
+                  name="tel"
+                  autoComplete="tel"
                   placeholder="+225 01 23 45 67 89"
                   value={data.phone}
                   onChange={(e) => updateData({ phone: e.target.value })}
@@ -250,6 +242,8 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
                 <input
                   type="email"
                   id="email"
+                  name="email"
+                  autoComplete="email"
                   placeholder="contact@monrestaurant.ci"
                   value={data.email}
                   onChange={(e) => updateData({ email: e.target.value })}
@@ -270,6 +264,7 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
                 <input
                   type="tel"
                   id="whatsapp"
+                  name="whatsapp"
                   placeholder="+225 01 23 45 67 89"
                   value={data.whatsapp}
                   onChange={(e) => updateData({ whatsapp: e.target.value })}
@@ -290,6 +285,7 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
                 <input
                   type="url"
                   id="website"
+                  name="url"
                   placeholder="https://www.monrestaurant.ci"
                   value={data.website}
                   onChange={(e) => updateData({ website: e.target.value })}

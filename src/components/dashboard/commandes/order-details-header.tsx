@@ -3,23 +3,36 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Printer, RefreshCw, Smartphone } from "lucide-react";
+import {
+  Armchair,
+  MapPin,
+  PackageCheck,
+  Printer,
+  RefreshCw,
+  Smartphone,
+} from "lucide-react";
 import React from "react";
+import type { StatutCommande } from "@/lib/db/types";
 
 export interface OrderDetailsHeaderProps {
   orderId: string;
-  status: "en_cours" | "prete" | "annulee" | "livree";
+  status: StatutCommande;
   date: string;
   time: string;
   orderType: "en_ligne" | "sur_place" | "a_emporter";
+  serviceContext: string;
   onPrint?: () => void;
   actions?: React.ReactNode;
 }
 
 const statusConfig = {
-  en_cours: {
-    label: "En cours",
-    className: "bg-[#e2f5e9] text-[#2d7d46] border-[#bfe8cd]",
+  recue: {
+    label: "À traiter",
+    className: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  en_preparation: {
+    label: "En préparation",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
   },
   prete: {
     label: "Prête",
@@ -29,14 +42,14 @@ const statusConfig = {
     label: "Annulée",
     className: "bg-red-50 text-red-700 border-red-200",
   },
-  livree: {
-    label: "Livrée",
-    className: "bg-blue-50 text-blue-700 border-blue-200",
+  servie: {
+    label: "Terminée",
+    className: "bg-muted text-muted-foreground border-border",
   },
 };
 
 const orderTypeLabels = {
-  en_ligne: "En ligne",
+  en_ligne: "Livraison",
   sur_place: "Sur place",
   a_emporter: "À emporter",
 };
@@ -47,10 +60,17 @@ export function OrderDetailsHeader({
   date,
   time,
   orderType,
+  serviceContext,
   onPrint,
   actions,
 }: OrderDetailsHeaderProps) {
-  const statusInfo = statusConfig[status] || statusConfig.en_cours;
+  const statusInfo = statusConfig[status];
+  const ServiceIcon =
+    orderType === "sur_place"
+      ? Armchair
+      : orderType === "a_emporter"
+        ? PackageCheck
+        : MapPin;
 
   return (
     <Card className="rounded-xl overflow-hidden w-full">
@@ -68,22 +88,26 @@ export function OrderDetailsHeader({
               {statusInfo.label}
             </Badge>
           </div>
-          <div className="flex items-center gap-2 text-[14px] text-muted-foreground mt-1.5">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] text-muted-foreground">
             <p>
               Passée le {date} à {time}
             </p>
-            <span className="flex items-center gap-1 text-[#2d7d46] font-medium ml-2">
+            <span className="flex items-center gap-1 font-medium text-[#2d7d46]">
               <Smartphone className="h-3.5 w-3.5" />
               {orderTypeLabels[orderType]}
+            </span>
+            <span className="flex items-center gap-1 text-foreground">
+              <ServiceIcon className="h-3.5 w-3.5 text-muted-foreground" />
+              {serviceContext}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
           {actions}
           <Button
             variant="outline"
-            className="gap-2 h-10 rounded-xl text-sm font-semibold border-border/80 text-foreground"
+            className="h-10 w-full gap-2 rounded-xl border-border/80 text-sm font-semibold text-foreground sm:w-auto"
             onClick={() => onPrint?.()}
           >
             <Printer className="h-4 w-4" />

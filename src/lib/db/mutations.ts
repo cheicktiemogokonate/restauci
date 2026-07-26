@@ -1,15 +1,11 @@
 import { db } from "./index";
 import { eq, and, sql } from "drizzle-orm";
 import { invalidateRestaurantCache } from "@/lib/cache";
-import { sendNotification } from "@/lib/notifications";
-import { redis } from "@/lib/cache/redis";
-import { calculerCommissionCommande } from "./mutations-admin";
 import {
   users,
   restaurants,
   categories,
   plats,
-  commandes,
   creneauxHoraires,
   clients,
   paiements,
@@ -18,9 +14,11 @@ import {
   promotions,
   avis,
   notifications,
-  abonnements,
-  type CommandeItemDB,
+  subscriptionRequests,
+  subscriptionPeriods,
 } from "./schema";
+export { createCommande, updateStatutCommande } from "./commandes-mutations";
+export type { CreateCommandeInput } from "./commandes-mutations";
 
 // ============================================================================
 // HELPERS
@@ -35,16 +33,6 @@ export function slugify(str: string): string {
     .replace(/[^a-z0-9-]/g, "")
     .replace(/-+/g, "-")
     .trim();
-}
-
-/** Génère un numéro de commande unique : CMD-20241025-XXXX */
-export function genererNumeroCommande(): string {
-  const date = new Date()
-    .toISOString()
-    .slice(0, 10)
-    .replace(/-/g, "");
-  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `CMD-${date}-${rand}`;
 }
 
 // ============================================================================
@@ -116,6 +104,21 @@ export interface CreateRestaurantInput {
   commandeMinimum?: number;
   modesCommande?: string[];
   cuisines?: string[];
+  facebook?: string;
+  instagram?: string;
+  whatsapp?: string;
+  schedule?: {
+    nom: string;
+    heureOuverture: string;
+    heureFermeture: string;
+    joursActifs: string[];
+  }[];
+  menu?: {
+    nom: string;
+    description?: string;
+    prix: number;
+    categorie: string;
+  }[];
 }
 
 export async function createRestaurant(input: CreateRestaurantInput) {
@@ -127,29 +130,114 @@ export async function createRestaurant(input: CreateRestaurantInput) {
   });
   if (existing) slug = `${slug}-${Date.now()}`;
 
-  const [restaurant] = await db
-    .insert(restaurants)
-    .values({
-      ...input,
-      slug,
-      fraisLivraison: input.fraisLivraison ?? 0,
-      commandeMinimum: input.commandeMinimum ?? 0,
-      modesCommande: input.modesCommande ?? ["sur_place"],
-      cuisines: input.cuisines ?? [],
-      actif: false,
-    })
-    .returning();
-
-  // Crée l'abonnement gratuit par défaut
-  await db.insert(abonnements).values({
-    restaurantId: restaurant.id,
-    plan: "gratuit",
-    statut: "essai",
-    maxPlats: 20,
-    maxCategories: 5,
+  // Récupérer le plan choisi à l'inscription (pendingPlanCode) ou 'decouverte'
+  const user = await db.query.users.findFirst({
+    where: (u, { eq }) => eq(u.id, input.userId),
   });
 
-  return restaurant;
+  const planCodeToApply = user?.pendingPlanCode || "decouverte";
+
+  // Récupérer les détails du plan dans le catalogue
+  const plan = await db.query.subscriptionPlans.findFirst({
+    where: (p, { eq }) => eq(p.code, planCodeToApply),
+  });
+
+  const { schedule = [], menu = [], ...restaurantInput } = input;
+
+  return db.transaction(async (tx) => {
+    const [restaurant] = await tx
+      .insert(restaurants)
+      .values({
+        ...restaurantInput,
+        slug,
+        fraisLivraison: input.fraisLivraison ?? 0,
+        commandeMinimum: input.commandeMinimum ?? 0,
+        modesCommande: input.modesCommande ?? ["sur_place"],
+        cuisines: input.cuisines ?? [],
+        actif: false,
+      })
+      .returning();
+
+    if (schedule.length > 0) {
+      await tx.insert(creneauxHoraires).values(
+        schedule.map((entry) => ({
+          restaurantId: restaurant.id,
+          nom: entry.nom,
+          heureOuverture: entry.heureOuverture,
+          heureFermeture: entry.heureFermeture,
+          joursActifs: entry.joursActifs,
+        })),
+      );
+    }
+
+    const categoriesByName = new Map<string, string>();
+    for (const [index, categoryName] of [
+      ...new Set(menu.map((item) => item.categorie.trim())),
+    ].entries()) {
+      const [category] = await tx
+        .insert(categories)
+        .values({
+          restaurantId: restaurant.id,
+          nom: categoryName,
+          ordre: index,
+        })
+        .returning({ id: categories.id });
+      categoriesByName.set(categoryName, category.id);
+    }
+
+    if (menu.length > 0) {
+      await tx.insert(plats).values(
+        menu.map((item, index) => ({
+          restaurantId: restaurant.id,
+          categorieId: categoriesByName.get(item.categorie.trim())!,
+          nom: item.nom,
+          description: item.description,
+          prix: item.prix,
+          ordre: index,
+        })),
+      );
+    }
+
+    if (plan) {
+      if (plan.code === "decouverte") {
+        await tx.insert(subscriptionPeriods).values({
+          restaurantId: restaurant.id,
+          planCode: plan.code,
+          tauxCommissionBpsFige: plan.tauxCommissionBps,
+          statut: "active",
+        });
+      } else {
+        await tx.insert(subscriptionRequests).values({
+          restaurantId: restaurant.id,
+          planCode: plan.code,
+          prixFigeFcfa: plan.prixAnnuelFcfa,
+          statut: "en_attente",
+        });
+
+        const decouvertePlan = await tx.query.subscriptionPlans.findFirst({
+          where: (p, { eq }) => eq(p.code, "decouverte"),
+        });
+
+        if (decouvertePlan) {
+          await tx.insert(subscriptionPeriods).values({
+            restaurantId: restaurant.id,
+            planCode: "decouverte",
+            tauxCommissionBpsFige: decouvertePlan.tauxCommissionBps,
+            statut: "active",
+          });
+        }
+      }
+    }
+
+    if (user?.pendingPlanCode) {
+      await tx
+        .update(users)
+        .set({ pendingPlanCode: null })
+        .where(eq(users.id, user.id));
+    }
+
+    return restaurant;
+  });
 }
 
 export async function updateRestaurant(
@@ -252,7 +340,8 @@ export async function deleteCreneau(id: string, restaurantId: string) {
         eq(creneauxHoraires.id, id),
         eq(creneauxHoraires.restaurantId, restaurantId)
       )
-    );
+    )
+    .returning({ id: creneauxHoraires.id });
 
   await invalidateRestaurantCache(restaurantId);
   return result;
@@ -271,7 +360,19 @@ export interface CreateCategorieInput {
   creneauId?: string | null;
 }
 
+import { checkPlanLimits } from "@/lib/subscription-plans";
+
 export async function createCategorie(input: CreateCategorieInput) {
+  const [{ value }] = await db
+    .select({ value: sql<number>`count(*)` })
+    .from(categories)
+    .where(eq(categories.restaurantId, input.restaurantId));
+
+  const limits = await checkPlanLimits(input.restaurantId, "categories", Number(value));
+  if (!limits) {
+    throw new Error("Limite de catégories atteinte pour votre offre actuelle.");
+  }
+
   const [categorie] = await db
     .insert(categories)
     .values({ ...input, ordre: input.ordre ?? 0 })
@@ -364,6 +465,16 @@ export interface CreatePlatInput {
 }
 
 export async function createPlat(input: CreatePlatInput) {
+  const [{ value }] = await db
+    .select({ value: sql<number>`count(*)` })
+    .from(plats)
+    .where(eq(plats.restaurantId, input.restaurantId));
+
+  const limits = await checkPlanLimits(input.restaurantId, "plats", Number(value));
+  if (!limits) {
+    throw new Error("Limite de plats atteinte pour votre offre actuelle.");
+  }
+
   const [plat] = await db
     .insert(plats)
     .values({
@@ -427,7 +538,8 @@ export async function deletePlat(id: string, restaurantId: string) {
         eq(plats.id, id),
         eq(plats.restaurantId, restaurantId)
       )
-    );
+    )
+    .returning({ id: plats.id });
 
   await invalidateRestaurantCache(restaurantId);
   return result;
@@ -454,170 +566,6 @@ export async function reordonnerPlats(
 
   await invalidateRestaurantCache(restaurantId);
   return result;
-}
-
-// ============================================================================
-// COMMANDES
-// ============================================================================
-
-export interface CreateCommandeInput {
-  restaurantId: string;
-  clientId?: string | null;
-  modeCommande: "sur_place" | "livraison" | "emporter";
-  nomClient: string;
-  telephoneClient?: string;
-  numeroTable?: string;
-  adresseLivraison?: string;
-  latitudeLivraison?: number;
-  longitudeLivraison?: number;
-  distanceKm?: number;
-  items: CommandeItemDB[];
-  sousTotal: number;
-  fraisLivraison?: number;
-  remise?: number;
-  total: number;
-  noteClient?: string;
-  tempsPreparationEstime?: number;
-}
-
-export async function createCommande(input: CreateCommandeInput) {
-  const numero = genererNumeroCommande();
-
-  const [commande] = await db
-    .insert(commandes)
-    .values({
-      ...input,
-      numero,
-      statut: "recue",
-      fraisLivraison: input.fraisLivraison ?? 0,
-      remise: input.remise ?? 0,
-    })
-    .returning();
-
-  // Incrémenter le compteur du restaurant
-  await db
-    .update(restaurants)
-    .set({
-      nombreCommandes: sql`${restaurants.nombreCommandes} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(restaurants.id, input.restaurantId));
-
-  // Incrémenter le compteur de chaque plat commandé
-  for (const item of input.items) {
-    await db
-      .update(plats)
-      .set({
-        nombreCommandes: sql`${plats.nombreCommandes} + ${item.quantite}`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(plats.id, item.platId),
-          eq(plats.restaurantId, input.restaurantId)
-        )
-      );
-  }
-
-  // Notification au restaurateur
-  const restaurateurUserId = await getUserIdFromRestaurant(input.restaurantId);
-  
-  // Notification via le service unifie (ne bloque pas si ca echoue)
-  sendNotification({
-    userId: restaurateurUserId,
-    restaurantId: input.restaurantId,
-    type: "nouvelle_commande",
-    titre: "Nouvelle commande !",
-    message: `Commande ${numero} de ${input.nomClient} — ${formatPrix(input.total)}`,
-    lienType: "commande",
-    lienId: commande.id,
-    data: {
-      numero,
-      total: input.total,
-      modeCommande: input.modeCommande,
-    },
-   }).catch((err) => {
-     // Log mais ne bloque pas — la commande est creee meme si la notif echoue
-     console.error("[createCommande] Notification error:", err);
-   });
-
-   // Notifier le client en temps réel via SSE (statut initial)
-   const queueKeyClient = `restauci:sse:client:queue:${commande.id}`;
-   await redis.rpush(queueKeyClient, JSON.stringify({
-     type: "statut",
-     data: { statut: "recue", commandeId: commande.id, timestamp: new Date().toISOString() },
-   }));
-   await redis.expire(queueKeyClient, 300); // expire dans 5 min
-
-   // L'événement SSE `nouvelle_commande` vers le dashboard restaurateur est
-   // déjà émis par sendNotification() ci-dessus via pushSseEvent — ne pas dupliquer.
-
-   await invalidateRestaurantCache(input.restaurantId);
-   return commande;
-}
-
-export async function updateStatutCommande(
-  id: string,
-  restaurantId: string,
-  statut: "recue" | "en_preparation" | "prete" | "servie" | "annulee"
-) {
-  const now = new Date();
-  const timestampFields: Record<string, Date> = {};
-
-  if (statut === "en_preparation") timestampFields.heureAcceptee = now;
-  if (statut === "prete")          timestampFields.heurePrete    = now;
-  if (statut === "servie")         timestampFields.heureServie   = now;
-
-  const [commande] = await db
-    .update(commandes)
-    .set({ statut, ...timestampFields, updatedAt: now })
-    .where(
-      and(
-        eq(commandes.id, id),
-        eq(commandes.restaurantId, restaurantId)
-      )
-    )
-    .returning();
-
-  // Notifier le restaurateur du changement de statut
-  sendNotification({
-    userId: await getUserIdFromRestaurant(restaurantId),
-    restaurantId,
-    type: statut === "annulee" ? "commande_annulee" : "commande_prete",
-    titre:
-      statut === "annulee"
-        ? "Commande annulée"
-        : statut === "en_preparation"
-          ? "Commande en préparation"
-          : statut === "prete"
-            ? "Commande prête"
-            : "Commande servie",
-    message: `La commande #${commande.numero} est maintenant ${statut.replace("_", " ")}.`,
-    lienType: "commande",
-    lienId: id,
-    data: { statut, numero: commande.numero, total: commande.total },
-   }).catch((err) => {
-     console.error("[updateStatutCommande] Notification error:", err);
-   });
-
-   // Notifier le client en temps réel via SSE (changement de statut)
-   const queueKeyClient = `restauci:sse:client:queue:${id}`;
-   await redis.rpush(queueKeyClient, JSON.stringify({
-     type: "statut",
-     data: { statut, commandeId: id, timestamp: new Date().toISOString() },
-   }));
-   await redis.expire(queueKeyClient, 300); // expire dans 5 min
-
-   await invalidateRestaurantCache(restaurantId);
-
-   // Calcul de la commission si la commande est servie
-   if (statut === "servie") {
-     await calculerCommissionCommande(id).catch((err) => {
-       console.error("[updateStatutCommande] Erreur calcul commission:", err);
-     });
-   }
-
-  return commande;
 }
 
 // ============================================================================
@@ -726,16 +674,46 @@ export async function updateLivreur(
   return livreur;
 }
 
-export async function assignerLivreur(commandeId: string, livreurId: string) {
+export interface AssignerLivreurInput {
+  commandeId: string;
+  livreurId: string;
+  adresse: string;
+  latitude: number;
+  longitude: number;
+  distanceKm?: number | null;
+}
+
+export async function assignerLivreur({
+  commandeId,
+  livreurId,
+  adresse,
+  latitude,
+  longitude,
+  distanceKm,
+}: AssignerLivreurInput) {
+  const now = new Date();
   const [livraison] = await db
-    .update(livraisons)
-    .set({
+    .insert(livraisons)
+    .values({
+      commandeId,
       livreurId,
       statut: "assignee",
-      heureAssignee: new Date(),
-      updatedAt: new Date(),
+      adresse,
+      latitude,
+      longitude,
+      distanceKm: distanceKm ?? null,
+      heureAssignee: now,
+      updatedAt: now,
     })
-    .where(eq(livraisons.commandeId, commandeId))
+    .onConflictDoUpdate({
+      target: livraisons.commandeId,
+      set: {
+        livreurId,
+        statut: "assignee",
+        heureAssignee: now,
+        updatedAt: now,
+      },
+    })
     .returning();
   return livraison;
 }
@@ -902,57 +880,4 @@ export async function marquerToutesLues(userId: string) {
         eq(notifications.lue, false)
       )
     );
-}
-
-// ============================================================================
-// ABONNEMENTS
-// ============================================================================
-
-export async function upgraderAbonnement(
-  restaurantId: string,
-  plan: "gratuit" | "starter" | "pro" | "entreprise"
-) {
-  const limites = {
-    gratuit:    { maxPlats: 20,  maxCategories: 5  },
-    starter:    { maxPlats: 50,  maxCategories: 10 },
-    pro:        { maxPlats: 200, maxCategories: 30 },
-    entreprise: { maxPlats: 999, maxCategories: 99 },
-  };
-
-  const dateFin = new Date();
-  dateFin.setMonth(dateFin.getMonth() + 1);
-
-  const [abonnement] = await db
-    .update(abonnements)
-    .set({
-      plan,
-      statut: "actif",
-      dateFin,
-      ...limites[plan],
-      updatedAt: new Date(),
-    })
-    .where(eq(abonnements.restaurantId, restaurantId))
-    .returning();
-
-  return abonnement;
-}
-
-// ============================================================================
-// UTILS INTERNES
-// ============================================================================
-
-async function getUserIdFromRestaurant(restaurantId: string): Promise<string> {
-  const restaurant = await db.query.restaurants.findFirst({
-    where: (r, { eq }) => eq(r.id, restaurantId),
-    columns: { userId: true },
-  });
-  return restaurant!.userId;
-}
-
-export function formatPrix(centimes: number): string {
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "XOF",
-    minimumFractionDigits: 0,
-  }).format(centimes);
 }

@@ -1,63 +1,40 @@
-import type { AdminSession } from "@/lib/auth/get-admin-session";
 import { Bell, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
-interface AdminNavbarProps {
-  admin: AdminSession;
-}
-
-export function AdminNavbar({ admin }: AdminNavbarProps) {
-  const initiales = admin.nom
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
+export function AdminNavbar() {
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 sticky top-0 z-10 shrink-0">
-      {/* Gauche : titre de page + badge mode admin */}
-      <div className="flex items-center gap-3">
-        {/* Info admin */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-            <span className="text-emerald-700 text-base font-bold">
-              {initiales}
-            </span>
-          </div>
-          <div className="hidden sm:flex flex-col items-start">
-            <span className="text-sm font-semibold text-gray-900 leading-tight">
-              {admin.nom}
-            </span>
-            <span className="text-[11px] text-gray-500 leading-tight">
-              {admin.email}
-            </span>
-          </div>
-        </div>
-      </div>
+    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b bg-white pr-4 pl-14 sm:pr-6 md:px-6">
+      <p className="text-sm font-medium text-muted-foreground">Administration</p>
 
       {/* Droite : notifications + profil */}
       <div className="flex items-center gap-3">
         {/* Cloche de notification */}
-        <button
-          aria-label="Notifications"
-          className="relative w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors"
+        <Button
+          asChild
+          variant="ghost"
+          size="icon"
+          className="relative text-muted-foreground"
         >
-          <Bell className="w-4 h-4" />
-          {/* Badge rouge si des restaurants sont en attente — géré côté page */}
-        </button>
+          <Link href="/admin/a-traiter" aria-label="Voir les actions à traiter">
+            <Bell className="w-4 h-4" />
+          </Link>
+        </Button>
 
         {/* Séparateur */}
         <div className="h-6 w-px bg-gray-200" />
 
         {/* Déconnexion */}
         <form action="/api/auth/logout" method="POST">
-          <button
+          <Button
             type="submit"
+            variant="ghost"
+            size="icon"
             aria-label="Se déconnecter"
-            className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors"
+            className="text-muted-foreground hover:bg-red-50 hover:text-red-700"
           >
             <LogOut className="w-4 h-4" />
-          </button>
+          </Button>
         </form>
       </div>
     </header>

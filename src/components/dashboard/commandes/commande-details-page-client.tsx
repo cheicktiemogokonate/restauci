@@ -16,12 +16,19 @@ interface CommandeDetailsPageClientProps {
   order: CommandeDetailsView;
   restaurantCoordinate: { longitude: number; latitude: number };
   customerCoordinate?: { longitude: number; latitude: number };
+  availableDrivers: Array<{
+    id: string;
+    name: string;
+    vehicle: string | null;
+    isOnline: boolean;
+  }>;
 }
 
 export default function CommandeDetailsPageClient({
   order,
   restaurantCoordinate,
   customerCoordinate,
+  availableDrivers,
 }: CommandeDetailsPageClientProps) {
   const showDriver = order.modeCommande === "livraison" && order.driver;
 
@@ -61,7 +68,6 @@ export default function CommandeDetailsPageClient({
       printWindow.close();
     }, 250);
   };
-
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <main className="flex-1 overflow-y-auto p-4 lg:p-6">
@@ -74,11 +80,19 @@ export default function CommandeDetailsPageClient({
               date={order.date}
               time={order.time}
               orderType={order.orderType}
+              serviceContext={
+                order.modeCommande === "sur_place"
+                  ? `Table ${order.client.tableNumber ?? "non renseignée"}`
+                  : order.modeCommande === "emporter"
+                    ? "Retrait au comptoir"
+                    : order.delivery.customerAddress
+              }
               onPrint={handlePrint}
               actions={
                 <OrderStatusMenu
                   commandeId={order.id}
                   currentStatus={order.rawStatus}
+                  modeCommande={order.modeCommande}
                 />
               }
             />
@@ -86,6 +100,9 @@ export default function CommandeDetailsPageClient({
             <OrderItemsTable
               items={order.items}
               subtotal={order.subtotal}
+              fraisLivraison={order.fraisLivraison}
+              remise={order.remise}
+              noteClient={order.noteClient}
               total={order.total}
             />
 
@@ -96,9 +113,11 @@ export default function CommandeDetailsPageClient({
                 phone={order.client.phone}
                 email={order.client.email}
                 address={order.client.address}
+                modeCommande={order.modeCommande}
+                tableNumber={order.client.tableNumber}
                 avatar={order.client.avatar}
               />
-              <OrderTracking steps={order.tracking} />
+              <OrderTracking steps={order.tracking} status={order.rawStatus} />
             </div>
           </div>
 
@@ -119,16 +138,23 @@ export default function CommandeDetailsPageClient({
               departureDate={order.delivery.departureDate}
               arrivalTime={order.delivery.arrivalTime}
               arrivalDate={order.delivery.arrivalDate}
+              modeCommande={order.modeCommande}
+              tableNumber={order.client.tableNumber}
             />
 
             {showDriver && order.driver && (
               <DriverInfo
+                commandeId={order.id}
+                assigned={order.driver.assigned}
                 name={order.driver.name}
                 status={order.driver.status}
                 phone={order.driver.phone}
                 vehicleType={order.driver.vehicleType}
                 vehicleNumber={order.driver.vehicleNumber}
                 avatar={order.driver.avatar}
+                availableDrivers={availableDrivers}
+                deliveryStatus={order.deliveryTracking?.status ?? null}
+                commandeStatus={order.rawStatus}
               />
             )}
           </div>

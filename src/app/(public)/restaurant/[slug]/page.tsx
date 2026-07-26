@@ -1,111 +1,112 @@
-import { getCategoriesRestaurant, getRestaurantBySlug } from "@/lib/db/queries";
+import { getCategoriesRestaurant, getCreneauxRestaurant, getRestaurantBySlug } from "@/lib/db/queries";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import RestaurantPageClient from "@/components/public-page/main";
-import { db } from "@/lib/db";
 import { type Plat } from "@/lib/db/types";
 import { isPlatDisponible } from "@/lib/utils/creneaux";
 
-export async function generateMetadata({
-  params,
-}: {
-  params: { slug: string } | Promise<{ slug: string }>;
-}) {
+const getPublicRestaurant = cache(async (slug: string) => getRestaurantBySlug(slug));
+
+type RestaurantPageProps = {
+  params: Promise<{ slug: string }>;
+};
+
+function getRestaurantDescription(name: string, description: string | null) {
+  const source = description?.replace(/\s+/g, " ").trim() || `Découvrez le menu et les services de ${name} sur Toutci.`;
+  return source.length > 155 ? `${source.slice(0, 152).trimEnd()}…` : source;
+}
+
+export async function generateMetadata({ params }: RestaurantPageProps): Promise<Metadata> {
   const { slug } = await params;
 
   // Fetch restaurant data for metadata
-  const restaurant = await getRestaurantBySlug(slug);
+  const restaurant = await getPublicRestaurant(slug);
 
   if (!restaurant || restaurant.actif === false) {
     return {
-      title: "Restaurant introuvable | Restau Platform",
+      title: "Restaurant introuvable",
     };
   }
 
+  const title = `${restaurant.nom} — Menu et commande en ligne`;
+  const description = getRestaurantDescription(restaurant.nom, restaurant.description);
+  const image = restaurant.banniereUrl || restaurant.logoUrl || "/assets/images/restaurant_exterior_night_1781800314693.jpg";
+  const canonicalUrl = `/restaurant/${restaurant.slug}`;
+
   return {
-    title: `${restaurant.nom} - Menu en ligne | Restau Platform`,
-    description:
-      restaurant.description ||
-      `Découvrez la carte et commandez en ligne chez ${restaurant.nom}. Plats frais et savoureux en livraison ou sur place.`,
-    // Add image for social sharing if available
-    ...(restaurant.logoUrl && {
-      openGraph: {
-        images: [
-          {
-            url:
-              restaurant.logoUrl ||
-              "/assets/images/restaurant_exterior_night_1781800314693.jpg",
-            width: 1200,
-            height: 630,
-            alt: `${restaurant.nom} - Restaurant`,
-          },
-        ],
-      },
-      twitter: {
-        card: "summary_large_image",
-        images: [
-          {
-            url:
-              restaurant.logoUrl ||
-              "/assets/images/restaurant_exterior_night_1781800314693.jpg",
-            alt: `${restaurant.nom} - Restaurant`,
-          },
-        ],
-      },
-    }),
+    title,
+    description,
+    alternates: { canonical: canonicalUrl },
+    openGraph: {
+      type: "website",
+      locale: "fr_CI",
+      url: canonicalUrl,
+      siteName: "Toutci",
+      title,
+      description,
+      images: [{ url: image, width: 1200, height: 630, alt: `Menu et informations de ${restaurant.nom}` }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [{ url: image, alt: `Menu et informations de ${restaurant.nom}` }],
+    },
   };
 }
 
-// Define the Dish interface as expected by MenuModal
+// Forme légère et sérialisable utilisée par le menu interactif.
 interface Dish {
   id: string;
   name: string;
   description: string;
   price: number; // in centimes (FCFA)
   image: string;
-  category: "plats" | "boissons" | "desserts";
+  categoryId: string;
+  categoryName: string;
   isPopular?: boolean;
 }
 
-export default async function RestaurantPage({
-  params,
-}: {
-  params: { slug: string } | Promise<{ slug: string }>;
-}) {
+export default async function RestaurantPage({ params }: RestaurantPageProps) {
   const { slug } = await params;
 
   // Fetch restaurant data
-  const restaurant = await getRestaurantBySlug(slug);
+  const restaurant = await getPublicRestaurant(slug);
 
   if (!restaurant || restaurant.actif === false) {
     notFound();
   }
 
-  // Fetch categories with their plats (includes plats already populated)
-  const categoriesWithPlats = await getCategoriesRestaurant(restaurant.id);
+  // Les deux sources sont indépendantes : les charger en parallèle raccourcit
+  // le temps d'affichage de la vitrine publique.
+  const [categoriesWithPlats, creneauxList] = await Promise.all([
+    getCategoriesRestaurant(restaurant.id),
+    getCreneauxRestaurant(restaurant.id).catch((error) => {
+      console.error("Failed to fetch creneauxHoraires:", error);
+      return [];
+    }),
+  ]);
+  const publicCategories = categoriesWithPlats
+    .filter((category) => category.visible)
+    .map((category) => ({
+      ...category,
+      plats: (category.plats ?? []).filter((plat) => plat.disponible),
+    }));
 
   // Flatten all plats from categories for availability checking
-  const platsList: Plat[] = categoriesWithPlats.flatMap(
+  const platsList: Plat[] = publicCategories.flatMap(
     (category) => category.plats ?? [],
   );
-
-  // Fetch opening hours for availability checking
-  let creneauxList: Awaited<ReturnType<typeof db.query.creneauxHoraires.findMany>> = [];
-  try {
-    creneauxList = await db.query.creneauxHoraires.findMany({
-      where: (c, { eq }) => eq(c.restaurantId, restaurant.id),
-    });
-  } catch (error) {
-    console.error("Failed to fetch creneauxHoraires:", error);
-  }
 
   // Filter plats based on availability (time/day)
   const availablePlats = platsList.filter((plat) => {
     // Find the category for this plat
-    const categorie = categoriesWithPlats.find(
+    const categorie = publicCategories.find(
       (cat) => cat.id === plat.categorieId,
     );
     return isPlatDisponible(plat, categorie, creneauxList);
@@ -113,26 +114,9 @@ export default async function RestaurantPage({
 
   // Convert Plat objects to Dish objects for MenuModal
   const dishes: Dish[] = availablePlats.map((plat) => {
-    // Map category nom to one of: "plats", "boissons", "desserts"
-    const categorieNom = categoriesWithPlats.find(
+    const category = publicCategories.find(
       (cat) => cat.id === plat.categorieId,
-    )?.nom;
-
-    let category: Dish["category"] = "plats"; // default
-    if (categorieNom) {
-      const lowerNom = categorieNom.toLowerCase();
-      if (lowerNom.includes("dessert") || lowerNom.includes("sweet")) {
-        category = "desserts";
-      } else if (
-        lowerNom.includes("boisson") ||
-        lowerNom.includes("drink") ||
-        lowerNom.includes("jus")
-      ) {
-        category = "boissons";
-      } else {
-        category = "plats"; // default to plats for food categories
-      }
-    }
+    );
 
     return {
       id: plat.id,
@@ -142,17 +126,48 @@ export default async function RestaurantPage({
       image:
         plat.photoUrl ||
         "/assets/images/dish_poulet_kedjenou_1781800228146.jpg", // Fallback image
-      category,
+      categoryId: plat.categorieId,
+      categoryName: category?.nom ?? "Autres",
       isPopular: plat.nombreCommandes > 10, // Consider popular if ordered more than 10 times
     };
   });
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "Restaurant",
+    name: restaurant.nom,
+    description: getRestaurantDescription(
+      restaurant.nom,
+      restaurant.description,
+    ),
+    url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/restaurant/${restaurant.slug}`,
+    telephone: restaurant.telephone,
+    image: restaurant.banniereUrl || restaurant.logoUrl || undefined,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: restaurant.adresse,
+      addressLocality: restaurant.ville || undefined,
+      addressCountry: "CI",
+    },
+    geo: {
+      "@type": "GeoCoordinates",
+      latitude: restaurant.latitude,
+      longitude: restaurant.longitude,
+    },
+    servesCuisine: restaurant.cuisines ?? undefined,
+  };
 
   // Client component wrapper for interactive state
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
+        }}
+      />
       <RestaurantPageClient
         restaurant={restaurant}
-        categoriesWithPlats={categoriesWithPlats}
+        categoriesWithPlats={publicCategories}
         dishes={dishes}
         creneauxList={JSON.parse(JSON.stringify(creneauxList))}
       />

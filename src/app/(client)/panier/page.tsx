@@ -1,268 +1,188 @@
 "use client";
 
 import { AdresseLivraisonPicker } from "@/components/client-app/adresse-livraison-picker";
+import { Tabs, TabsList, TabsTrigger } from "@/components/motion/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { usePanierRestaurant } from "@/lib/client-app/hooks/use-panier-restaurant";
 import { useRequireAuth } from "@/lib/client-app/hooks/use-require-auth";
 import { usePanierStore } from "@/lib/client-app/stores/panier-store";
 import { formatPrix } from "@/lib/utils/format";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { ArrowLeft, Bike, ChefHat, ClipboardList, Minus, Plus, ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
 
 type ModeCommande = "sur_place" | "livraison" | "emporter";
 
-export default function PanierPage() {
+const modeLabels: Record<ModeCommande, string> = {
+  livraison: "Livraison",
+  emporter: "À emporter",
+  sur_place: "Sur place",
+};
+
+const modeIcons = {
+  livraison: Bike,
+  emporter: ShoppingBag,
+  sur_place: UtensilsCrossed,
+};
+
+function parseAddress(value: string | null) {
+  if (!value) return null;
+
+  try {
+    const address = JSON.parse(value) as { adresse?: string; lat?: number; lng?: number };
+    return typeof address.adresse === "string" && typeof address.lat === "number" && typeof address.lng === "number"
+      ? { adresse: address.adresse, lat: address.lat, lng: address.lng }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function getModeCommande(value: string | null): ModeCommande {
+  return value === "sur_place" || value === "livraison" || value === "emporter" ? value : "livraison";
+}
+
+function PanierContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const requireAuth = useRequireAuth();
-
-  const items = usePanierStore((s) => s.items);
-  const sousTotal = usePanierStore((s) => s.sousTotal());
-  const changerQuantite = usePanierStore((s) => s.changerQuantite);
-  const retirerItem = usePanierStore((s) => s.retirerItem);
-  const restaurantNom = usePanierStore((s) => s.restaurantNom);
-  const restaurantSlug = usePanierStore((s) => s.restaurantSlug);
-
+  const reduceMotion = useReducedMotion();
+  const items = usePanierStore((state) => state.items);
+  const sousTotal = usePanierStore((state) => state.sousTotal());
+  const changerQuantite = usePanierStore((state) => state.changerQuantite);
+  const restaurantNom = usePanierStore((state) => state.restaurantNom);
+  const restaurantSlug = usePanierStore((state) => state.restaurantSlug);
   const { restaurant, isLoading } = usePanierRestaurant();
+  const checkoutMode = getModeCommande(searchParams.get("mode"));
+  const checkoutTable = searchParams.get("table") ?? "";
+  const checkoutAddressParam = searchParams.get("adresse");
+  const checkoutAddress = useMemo(() => parseAddress(checkoutAddressParam), [checkoutAddressParam]);
+  const checkoutNote = searchParams.get("note") ?? "";
+  const [modeCommande, setModeCommande] = useState<ModeCommande>(checkoutMode);
+  const [numeroTable, setNumeroTable] = useState(checkoutTable);
+  const [adresse, setAdresse] = useState<{ adresse: string; lat: number; lng: number } | null>(checkoutAddress);
+  const [noteClient, setNoteClient] = useState(checkoutNote);
 
-  const [modeCommande, setModeCommande] = useState<ModeCommande>("livraison");
-  const [numeroTable, setNumeroTable] = useState("");
-  const [adresse, setAdresse] = useState<{
-    adresse: string;
-    lat: number;
-    lng: number;
-  } | null>(null);
-  const [noteClient, setNoteClient] = useState("");
+  const modesDisponibles = (["livraison", "emporter", "sur_place"] as ModeCommande[]).filter(
+    (mode) => !restaurant || restaurant.modesCommande.includes(mode),
+  );
+  const modeCommandeEffectif = modesDisponibles.includes(modeCommande)
+    ? modeCommande
+    : (modesDisponibles[0] ?? "emporter");
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
-        <p className="text-2xl mb-2">🛒</p>
-        <p className="text-base font-semibold text-gray-900">
-          Votre panier est vide
-        </p>
-        <p className="text-sm text-gray-500 mt-1 mb-6">
-          Parcourez les restaurants pour commencer
-        </p>
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="px-6 py-2.5 bg-green-700 text-white text-sm font-semibold rounded-xl"
-        >
-          Découvrir les restaurants
-        </button>
-      </div>
+      <main className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+        <span className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary"><ShoppingBag className="size-6" /></span>
+        <h1 className="mt-4 text-xl font-bold tracking-tight">Votre panier est vide</h1>
+        <p className="mt-1 max-w-xs text-sm text-muted-foreground">Parcourez les restaurants pour composer votre prochaine commande.</p>
+        <Button className="mt-6" onClick={() => router.push("/client")}>Découvrir les restaurants</Button>
+      </main>
     );
   }
 
-  const fraisLivraison =
-    modeCommande === "livraison" ? (restaurant?.fraisLivraison ?? 0) : 0;
+  const fraisLivraison = modeCommandeEffectif === "livraison" ? (restaurant?.fraisLivraison ?? 0) : 0;
   const total = sousTotal + fraisLivraison;
-
-  const peutValider =
-    items.length > 0 && (modeCommande !== "livraison" || adresse !== null);
-  // &&
-  // (!restaurant?.commandeMinimum || sousTotal >= restaurant.commandeMinimum);
+  const commandeMinimumNonAtteinte = Boolean(restaurant?.commandeMinimum && sousTotal < restaurant.commandeMinimum);
+  const peutValider = !commandeMinimumNonAtteinte && (modeCommandeEffectif !== "livraison" || adresse !== null);
 
   const handleValider = () => {
     requireAuth(() => {
       router.push(
-        `/panier/confirmer?mode=${modeCommande}` +
-        (adresse
-          ? `&adresse=${encodeURIComponent(JSON.stringify(adresse))}`
-          : "") +
-        (numeroTable ? `&table=${encodeURIComponent(numeroTable)}` : "") +
-        (noteClient ? `&note=${encodeURIComponent(noteClient)}` : ""),
+        `/panier/confirmer?mode=${modeCommandeEffectif}` +
+          (adresse ? `&adresse=${encodeURIComponent(JSON.stringify(adresse))}` : "") +
+          (numeroTable ? `&table=${encodeURIComponent(numeroTable)}` : "") +
+          (noteClient ? `&note=${encodeURIComponent(noteClient)}` : ""),
       );
     });
   };
 
   return (
-    <div className="min-h-screen pb-32">
-      {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3.5 flex items-center gap-3 z-10">
-        <button type="button" onClick={() => router.back()} className="p-1">
-          <svg
-            className="w-5 h-5 text-gray-700"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
-            />
-          </svg>
-        </button>
-        <div>
-          <h1 className="text-base font-bold text-gray-900">Votre panier</h1>
-          <p className="text-xs text-gray-400">{restaurantNom}</p>
-        </div>
-      </div>
-
-      <div className="px-4 py-4 space-y-4">
-        {/* Mode de commande */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <p className="text-sm font-semibold text-gray-900 mb-3">
-            Mode de commande
-          </p>
-          <div className="flex gap-2">
-            {(["livraison", "emporter", "sur_place"] as ModeCommande[])
-              .filter(
-                (m) => !restaurant || restaurant.modesCommande.includes(m),
-              )
-              .map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setModeCommande(mode)}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${modeCommande === mode
-                      ? "bg-green-700 text-white"
-                      : "bg-gray-100 text-gray-600"
-                    }`}
-                >
-                  {mode === "livraison"
-                    ? "Livraison"
-                    : mode === "emporter"
-                      ? "À emporter"
-                      : "Sur place"}
-                </button>
-              ))}
+    <main className="min-h-screen bg-muted/30 pb-32">
+      <header className="sticky top-0 z-20 border-b bg-background/95 px-4 py-3 backdrop-blur-md">
+        <div className="mx-auto flex max-w-2xl items-center gap-3">
+          <Button asChild variant="ghost" size="icon"><Link href={restaurantSlug ? `/client/restaurant/${restaurantSlug}` : "/client"} aria-label="Retour au restaurant"><ArrowLeft /></Link></Button>
+          <div className="min-w-0">
+            <h1 className="text-base font-bold">Votre panier</h1>
+            <p className="truncate text-xs text-muted-foreground">{restaurantNom}</p>
           </div>
         </div>
+      </header>
 
-        {/* Adresse (si livraison) */}
-        {modeCommande === "livraison" && (
-          <AdresseLivraisonPicker value={adresse} onChange={setAdresse} />
-        )}
+      <div className="mx-auto max-w-2xl px-4 py-1">
+        <section aria-labelledby="order-mode-heading" className="border-b py-5">
+          <h2 id="order-mode-heading" className="mb-3 text-base font-semibold">Comment souhaitez-vous commander ?</h2>
+            <Tabs value={modeCommandeEffectif} onValueChange={(value) => setModeCommande(value as ModeCommande)} variant="segment" className="w-full">
+              <TabsList className={`grid h-11 w-full ${modesDisponibles.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+                {modesDisponibles.map((mode) => {
+                  const Icon = modeIcons[mode];
+                  return <TabsTrigger key={mode} value={mode} className="gap-1.5 px-2 text-xs sm:text-sm"><Icon className="size-3.5" />{modeLabels[mode]}</TabsTrigger>;
+                })}
+              </TabsList>
+            </Tabs>
+        </section>
 
-        {/* Numéro de table (si sur place) */}
-        {modeCommande === "sur_place" && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-4">
-            <label className="text-sm font-semibold text-gray-900 block mb-2">
-              Numéro de table
-            </label>
-            <input
-              type="text"
-              value={numeroTable}
-              onChange={(e) => setNumeroTable(e.target.value)}
-              placeholder="Ex: 12"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
-            />
-          </div>
-        )}
+        <AnimatePresence initial={false} mode="wait">
+          {modeCommandeEffectif === "livraison" ? (
+            <motion.div key="delivery" initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduceMotion ? 0 : -8 }}>
+              <AdresseLivraisonPicker value={adresse} onChange={setAdresse} />
+            </motion.div>
+          ) : modeCommandeEffectif === "sur_place" ? (
+            <motion.div key="table" initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduceMotion ? 0 : -8 }}>
+              <section className="border-b py-5"><Label htmlFor="table-number">Numéro de table</Label><Input id="table-number" value={numeroTable} onChange={(event) => setNumeroTable(event.target.value)} placeholder="Ex. 12" className="mt-2 h-10" /></section>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
-        {/* Liste des articles */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <p className="text-sm font-semibold text-gray-900 mb-3">Articles</p>
+        <section aria-labelledby="cart-items-heading" className="border-b py-5">
+          <h2 id="cart-items-heading" className="mb-4 flex items-center gap-2 text-base font-semibold"><ChefHat className="size-4 text-primary" />Votre sélection</h2>
           <div className="space-y-3">
-            {items.map((item) => (
-              <div key={item.platId} className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                  {item.photoUrl ? (
-                    <img
-                      src={item.photoUrl}
-                      alt={item.nom}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-lg">
-                      🍽
+            <AnimatePresence initial={false}>
+              {items.map((item, index) => (
+                <motion.div key={item.platId} layout initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? undefined : { opacity: 0, x: -16 }} className={index < items.length - 1 ? "border-b pb-3" : ""}>
+                  <div className="flex items-center gap-3">
+                    <div className="relative size-14 shrink-0 overflow-hidden rounded-xl bg-muted">
+                      {item.photoUrl ? <Image src={item.photoUrl} alt={item.nom} fill sizes="56px" className="object-cover" /> : <span className="flex size-full items-center justify-center text-lg">🍽️</span>}
                     </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">
-                    {item.nom}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {formatPrix(item.prix)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      changerQuantite(item.platId, item.quantite - 1)
-                    }
-                    className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-600"
-                  >
-                    −
-                  </button>
-                  <span className="text-sm font-semibold w-5 text-center">
-                    {item.quantite}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      changerQuantite(item.platId, item.quantite + 1)
-                    }
-                    className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-600"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            ))}
+                    <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{item.nom}</p><p className="mt-0.5 text-xs text-muted-foreground">{formatPrix(item.prix)} l’unité</p></div>
+                    <div className="flex items-center gap-1.5">
+                      <Button type="button" variant="outline" size="icon-sm" onClick={() => changerQuantite(item.platId, item.quantite - 1)} aria-label={`Retirer un ${item.nom}`}><Minus /></Button>
+                      <span className="w-5 text-center text-sm font-semibold">{item.quantite}</span>
+                      <Button type="button" variant="outline" size="icon-sm" onClick={() => changerQuantite(item.platId, item.quantite + 1)} aria-label={`Ajouter un ${item.nom}`}><Plus /></Button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
-        </div>
+        </section>
 
-        {/* Note pour le restaurant */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <label className="text-sm font-semibold text-gray-900 block mb-2">
-            Note pour le restaurant (optionnel)
-          </label>
-          <textarea
-            value={noteClient}
-            onChange={(e) => setNoteClient(e.target.value)}
-            placeholder="Ex: Pas trop épicé, merci"
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm h-20 resize-none"
-          />
-        </div>
+        <section className="border-b py-5"><Label htmlFor="restaurant-note">Note pour le restaurant <span className="font-normal text-muted-foreground">(facultatif)</span></Label><Textarea id="restaurant-note" value={noteClient} onChange={(event) => setNoteClient(event.target.value)} placeholder="Ex. Pas trop épicé, merci." className="mt-2 min-h-20 resize-none" /></section>
 
-        {/* Récap montants */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Sous-total</span>
-            <span className="text-gray-900 font-medium">
-              {formatPrix(sousTotal)}
-            </span>
-          </div>
-          {modeCommande === "livraison" && (
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Frais de livraison</span>
-              <span className="text-gray-900 font-medium">
-                {formatPrix(fraisLivraison)}
-              </span>
-            </div>
-          )}
-          <div className="border-t border-gray-100 pt-2 flex justify-between">
-            <span className="text-sm font-bold text-gray-900">Total</span>
-            <span className="text-base font-bold text-green-700">
-              {formatPrix(total)}
-            </span>
-          </div>
-        </div>
+        <section aria-label="Récapitulatif du total" className="space-y-2 border-b py-5 text-sm"><div className="flex justify-between text-muted-foreground"><span>Sous-total</span><span>{formatPrix(sousTotal)}</span></div>{modeCommandeEffectif === "livraison" ? <div className="flex justify-between text-muted-foreground"><span>Frais de livraison</span><span>{formatPrix(fraisLivraison)}</span></div> : null}<Separator className="my-3" /><div className="flex items-end justify-between"><span className="font-semibold">Total</span><span className="text-lg font-bold text-primary">{formatPrix(total)}</span></div></section>
 
-        {restaurant?.commandeMinimum &&
-          sousTotal < restaurant.commandeMinimum && (
-            <p className="text-xs text-amber-600 text-center">
-              Commande minimum : {formatPrix(restaurant.commandeMinimum)}
-            </p>
-          )}
+        {commandeMinimumNonAtteinte ? <Alert className="my-5"><ClipboardList /><AlertDescription>Commande minimum : {formatPrix(restaurant?.commandeMinimum ?? 0)}</AlertDescription></Alert> : null}
       </div>
 
-      {/* Bouton valider fixe en bas */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4">
-        <button
-          type="button"
-          disabled={!peutValider || isLoading}
-          onClick={handleValider}
-          className="w-full py-3.5 bg-green-700 text-white text-sm font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Continuer · {formatPrix(total)}
-        </button>
-      </div>
-    </div>
+      <footer className="fixed right-0 bottom-0 left-0 z-20 border-t bg-background/95 p-4 backdrop-blur-md">
+        <div className="mx-auto max-w-2xl"><Button type="button" size="lg" disabled={!peutValider || isLoading} onClick={handleValider} className="h-12 w-full rounded-xl">Continuer · {formatPrix(total)}</Button></div>
+      </footer>
+    </main>
+  );
+}
+
+export default function PanierPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-muted/30" />}>
+      <PanierContent />
+    </Suspense>
   );
 }

@@ -140,6 +140,8 @@ type MapProps = {
    * to enable controlled mode where the map viewport is driven by your state.
    */
   onViewportChange?: (viewport: MapViewport) => void;
+  /** Callback fired when the user selects a point on the map. */
+  onMapClick?: (point: { lng: number; lat: number }) => void;
   /** Show a loading indicator on the map */
   loading?: boolean;
 } & Omit<MapLibreGL.MapOptions, "container" | "style">;
@@ -175,6 +177,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     projection,
     viewport,
     onViewportChange,
+    onMapClick,
     loading = false,
     ...props
   },
@@ -195,6 +198,11 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   useEffect(() => {
     onViewportChangeRef.current = onViewportChange;
   }, [onViewportChange]);
+
+  const onMapClickRef = useRef(onMapClick);
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
 
   const mapStyles = useMemo(
     () => ({
@@ -252,10 +260,17 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       if (internalUpdateRef.current) return;
       onViewportChangeRef.current?.(getViewport(map));
     };
+    const handleMapClick = (event: MapLibreGL.MapMouseEvent) => {
+      onMapClickRef.current?.({
+        lng: event.lngLat.lng,
+        lat: event.lngLat.lat,
+      });
+    };
 
     map.on("load", loadHandler);
     map.on("styledata", styleDataHandler);
     map.on("move", handleMove);
+    map.on("click", handleMapClick);
     setMapInstance(map);
 
     return () => {
@@ -263,12 +278,12 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       map.off("load", loadHandler);
       map.off("styledata", styleDataHandler);
       map.off("move", handleMove);
+      map.off("click", handleMapClick);
       map.remove();
       setIsLoaded(false);
       setIsStyleLoaded(false);
       setMapInstance(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync controlled viewport to map
@@ -421,7 +436,6 @@ function MapMarker({
       draggable,
     }).setLngLat([longitude, latitude]);
     // We intentionally create the marker once and update its props later.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -588,7 +602,6 @@ function MarkerPopup({
       .setDOMContent(container);
 
     return popupInstance;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -600,7 +613,6 @@ function MarkerPopup({
     return () => {
       marker.setPopup(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map]);
 
   // Sync popup options when they change.
@@ -653,7 +665,6 @@ function MarkerTooltip({
     }).setMaxWidth("none");
 
     return tooltipInstance;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -674,7 +685,6 @@ function MarkerTooltip({
       marker.getElement()?.removeEventListener("mouseleave", handleMouseLeave);
       tooltip.remove();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map]);
 
   // Sync tooltip options when they change.
@@ -987,7 +997,6 @@ function MapPopup({
       .setLngLat([longitude, latitude]);
 
     return popupInstance;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1006,7 +1015,6 @@ function MapPopup({
         popup.remove();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map]);
 
   // Sync popup position and options when they change.
@@ -1115,7 +1123,6 @@ function MapRoute({
         // ignore
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, map]);
 
   // When coordinates change, update the source data
@@ -1433,7 +1440,6 @@ function MapArc<T extends MapArcDatum = MapArcDatum>({
         // ignore
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, map]);
 
   // Sync features when data / curvature / samples change.
@@ -1692,7 +1698,6 @@ function MapClusterLayer<
         // ignore
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, map, sourceId]);
 
   // Update source data when data prop changes (only for non-URL data)

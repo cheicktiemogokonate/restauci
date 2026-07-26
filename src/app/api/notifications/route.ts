@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { notifications } from "@/lib/db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
 
@@ -10,8 +10,8 @@ const log = createLogger("notifications");
 
 // GET query schema
 const getNotificationsSchema = z.object({
-  limit: z.string().default("20"),
-  offset: z.string().default("0"),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
 });
 
 // PATCH body schema
@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const parsed = getNotificationsSchema.safeParse({
-      limit: searchParams.get("limit"),
-      offset: searchParams.get("offset")
+      limit: searchParams.get("limit") ?? undefined,
+      offset: searchParams.get("offset") ?? undefined,
     });
     
     if (!parsed.success) {
@@ -39,8 +39,7 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    const limit = Math.max(1, Math.min(100, Number(parsed.data.limit)));
-    const offset = Math.max(0, Number(parsed.data.offset));
+    const { limit, offset } = parsed.data;
 
     const [notifList, { count }] = await db.transaction(async (tx) => {
       const list = await tx
@@ -113,8 +112,7 @@ export async function PATCH(req: NextRequest) {
         and(
           eq(notifications.userId, session.userId),
           eq(notifications.lue, false),
-          // Using IN clause equivalent with OR conditions
-          ...notificationIds.map(id => eq(notifications.id, id))
+          inArray(notifications.id, notificationIds)
         )
       );
 

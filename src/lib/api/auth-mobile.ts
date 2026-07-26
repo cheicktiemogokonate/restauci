@@ -1,6 +1,6 @@
 import { redis } from "@/lib/cache/redis";
 import { db } from "@/lib/db";
-import { restaurants } from "@/lib/db/schema";
+import { restaurants, users } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
@@ -66,9 +66,22 @@ export async function getMobileSession(
       };
     }
 
-    // Récupérer le restaurantId associé
+    const [user] = await db
+      .select({ id: users.id, role: users.role, suspendu: users.suspendu })
+      .from(users)
+      .where(eq(users.id, payload.userId as string))
+      .limit(1);
+
+    if (!user || user.suspendu) {
+      return {
+        session: null,
+        error: apiResponse.forbidden("Compte suspendu ou introuvable"),
+      };
+    }
+
+    // Récupérer le restaurantId associé au rôle actuel en base.
     let restaurantId: string | null = null;
-    if (payload.role === "restaurateur") {
+    if (user.role === "restaurateur") {
       const [restaurant] = await db
         .select({ id: restaurants.id })
         .from(restaurants)
@@ -79,8 +92,8 @@ export async function getMobileSession(
 
     return {
       session: {
-        userId: payload.userId as string,
-        role: payload.role as "restaurateur" | "admin",
+        userId: user.id,
+        role: user.role,
         restaurantId,
       },
       error: null,

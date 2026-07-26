@@ -9,6 +9,7 @@ import { clients }                  from "@/lib/db/schema";
 import { eq, or }                   from "drizzle-orm";
 import { signToken }                from "@/lib/auth";
 import { createLogger }             from "@/lib/logger";
+import { setClientRefreshCookie } from "@/lib/api/client-session-cookie";
 
 const log = createLogger("v1-client-register");
 
@@ -18,7 +19,7 @@ const registerSchema = z.object({
     .regex(/^\+?[0-9\s]{8,20}$/, "Numéro de téléphone invalide"),
   email:    z.string().email("Email invalide").optional(),
   password: z.string()
-    .min(6, "Le mot de passe doit contenir au moins 6 caractères")
+    .min(8, "Le mot de passe doit contenir au moins 8 caractères")
     .max(100),
 });
 
@@ -67,20 +68,21 @@ export async function POST(req: NextRequest) {
       });
 
     const [accessToken, refreshToken] = await Promise.all([
-      signToken({ clientId: client.id, type: "client" }, "24h"),
-      signToken({ clientId: client.id, type: "client-refresh" }, "30d"),
+      signToken({ clientId: client.id, type: "client" }, "15m"),
+      signToken({ clientId: client.id, type: "client-refresh" }, "7d"),
     ]);
 
     log.info({ clientId: client.id }, "Nouveau client inscrit");
 
-    return apiResponse.created({
+    const response = apiResponse.created({
       client,
       tokens: {
         accessToken,
-        refreshToken,
-        expiresIn: 24 * 3600,
+        expiresIn: 15 * 60,
       },
     });
+    setClientRefreshCookie(response, refreshToken, 7 * 24 * 3600);
+    return response;
   } catch (err) {
     log.error({ err }, "Erreur inscription client");
     return apiResponse.internalError();

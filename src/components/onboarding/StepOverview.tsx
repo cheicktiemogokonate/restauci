@@ -1,13 +1,12 @@
+import Image from "next/image";
 import {
   ArrowRight,
-  CheckCircle,
   Eye,
   Mail,
   Phone,
-  RefreshCw,
+  LoaderCircle,
   ShieldCheck,
 } from "lucide-react";
-import { useState } from "react";
 import { RestaurantConfig } from "./types";
 
 interface StepOverviewProps {
@@ -21,116 +20,24 @@ export default function StepOverview({
   config,
   onDeploy,
   onPrev,
+  isDeploying = false,
 }: StepOverviewProps) {
-  const [deploying, setDeploying] = useState(false);
-  const [deployStep, setDeployStep] = useState(0);
-
-  const deploymentSteps = [
-    "Initialisation du conteneur sécurisé...",
-    "Provisionnement de la base de données PostgreSQL...",
-    "Création du sous-domaine https://restauci.mesh/...",
-    "Génération du menu numérique responsive...",
-    "Déploiement finalisé avec succès !",
-  ];
-
-  const handleLaunchDeployment = () => {
-    setDeploying(true);
-    setDeployStep(0);
-
-    // Dynamic step increments
-    const interval = setInterval(() => {
-      setDeployStep((prev) => {
-        if (prev >= deploymentSteps.length - 1) {
-          clearInterval(interval);
-          setTimeout(() => {
-            onDeploy(); // Final transition to SaaS Live Dashboard
-          }, 1000);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 1200);
-  };
-
   return (
     <div className="flex-1 max-w-4xl p-8 lg:p-12 overflow-y-auto font-sans">
-      {/* Deploying Progress state */}
-      {deploying ? (
+      {isDeploying ? (
         <div className="min-h-125 flex flex-col items-center justify-center bg-white border border-gray-100 rounded-3xl p-8 shadow-xl text-center">
-          <div className="relative w-24 h-24 mb-8 flex items-center justify-center">
-            {/* Spinning ring */}
-            <div className="absolute inset-0 rounded-full border-4 border-emerald-50 border-t-brand-500 animate-spin" />
-
-            <svg
-              className="w-10 h-10 text-brand-500"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-            >
-              <path d="M6 18V20h12v-2" />
-              <path d="M5 10c0-2.3 1.5-4 4-4 1.2 0 2 .5 2.5 1 .5-.5 1.3-1 2.5-1 2.5 0 4 1.7 4 4 0 1-.2 1.5-1 2.2V16H5v-3.8c-.8-.7-1-1.2-1-2.2Z" />
-            </svg>
-          </div>
+          <LoaderCircle className="mb-8 h-16 w-16 animate-spin text-brand-500" />
 
           <span className="text-[10px] font-bold font-mono text-emerald-600 uppercase tracking-widest block mb-1">
-            Déploiement en cours
+            Enregistrement en cours
           </span>
           <h2 className="text-2xl font-bold font-display text-gray-950 tracking-tight">
             Création de votre restaurant...
           </h2>
 
-          <div className="max-w-md w-full mt-8 bg-gray-50 border border-gray-100 rounded-2xl p-6 relative overflow-hidden">
-            <div className="space-y-4">
-              {deploymentSteps.map((stepMessage, idx) => {
-                const isCurrent = idx === deployStep;
-                const isPrevious = idx < deployStep;
-                return (
-                  <div
-                    key={idx}
-                    className={`flex items-center text-left text-xs font-medium space-x-3 transition-opacity duration-300 ${
-                      isCurrent
-                        ? "opacity-100"
-                        : isPrevious
-                          ? "opacity-40"
-                          : "opacity-10"
-                    }`}
-                  >
-                    {isPrevious ? (
-                      <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                    ) : isCurrent ? (
-                      <RefreshCw className="w-4 h-4 text-brand-500 animate-spin shrink-0" />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full border border-gray-200 shrink-0" />
-                    )}
-                    <span
-                      className={
-                        isCurrent
-                          ? "text-gray-900 font-semibold"
-                          : "text-gray-600"
-                      }
-                    >
-                      {stepMessage}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Static Progress Bar */}
-            <div className="mt-8 h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-brand-500 rounded-full transition-all duration-1000"
-                style={{
-                  width: `${((deployStep + 1) / deploymentSteps.length) * 100}%`,
-                }}
-              />
-            </div>
-          </div>
-
           <p className="text-xs text-gray-400 mt-6 max-w-xs leading-relaxed">
-            Veuillez ne pas quitter ou recharger cette page. Vos configurations
-            de base sont en cours de sauvegarde.
+            Votre établissement, ses horaires et sa carte sont enregistrés de
+            façon atomique. Vous serez redirigé vers le tableau de bord.
           </p>
         </div>
       ) : (
@@ -141,7 +48,7 @@ export default function StepOverview({
               <Eye className="w-6 h-6" />
             </div>
             <span className="text-xs font-mono text-gray-400 font-semibold uppercase tracking-wider block">
-              Étape 4/4
+              Étape 5/5
             </span>
             <h1 className="text-3xl font-bold font-display text-gray-900 tracking-tight leading-none mt-1">
               Aperçu de la configuration
@@ -157,22 +64,26 @@ export default function StepOverview({
             <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-xs">
               {config.general.bannerUrl ? (
                 <div className="h-44 w-full relative">
-                  <img
+                  <Image
                     src={config.general.bannerUrl}
                     alt="Restau Banner"
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 50vw"
                   />
                   <div className="absolute inset-0 bg-linear-to-t from-black/60 via-black/10 to-transparent" />
                   <div className="absolute bottom-4 left-6 flex items-end space-x-4">
                     {/* Logo inside */}
                     <div className="w-16 h-16 bg-white rounded-xl p-1 shadow-md shrink-0 flex items-center justify-center overflow-hidden">
                       {config.general.logoUrl ? (
-                        <img
+                        <Image
                           src={config.general.logoUrl}
                           alt="Logo preview"
                           referrerPolicy="no-referrer"
                           className="max-h-full max-w-full object-contain rounded-lg"
+                          width={64}
+                          height={64}
                         />
                       ) : (
                         <svg
@@ -358,9 +269,8 @@ export default function StepOverview({
                   Saisie Vérifiée & Conforme
                 </span>
                 <p className="text-[11px] text-emerald-700 font-sans mt-0.5">
-                  RestauCI chiffre et sécurise les coordonnées de
-                  géolocalisation pour un référencement conforme aux
-                  réglementations de l&apos;UEMOA.
+                  Toutci enregistre ces informations afin de créer votre fiche
+                  restaurant et votre menu public.
                 </p>
               </div>
             </div>
@@ -371,6 +281,7 @@ export default function StepOverview({
             <button
               type="button"
               onClick={onPrev}
+              disabled={isDeploying}
               className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl inline-flex items-center space-x-2 transition-all cursor-pointer"
             >
               <svg
@@ -391,7 +302,8 @@ export default function StepOverview({
 
             <button
               type="button"
-              onClick={handleLaunchDeployment}
+              onClick={onDeploy}
+              disabled={isDeploying}
               className="px-6 py-2.5 bg-brand-green hover:bg-brand-600 text-white text-sm font-bold rounded-xl inline-flex items-center space-x-2 shadow-lg shadow-brand-500/20 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <span>Créer le restaurant</span>

@@ -1,12 +1,6 @@
-import {
-  ArrowUpRight,
-  Mail,
-  MapPin,
-  Phone,
-  Share2,
-  Utensils,
-} from "lucide-react";
+import { Mail, MapPin, Utensils } from "lucide-react";
 import BackgroundDecoration from "./BackgroundDecoration";
+import Link from "next/link";
 
 export default function Footer() {
   const years = new Date().getFullYear();
@@ -17,43 +11,22 @@ export default function Footer() {
 
   const columns = [
     {
-      title: "Produit",
+      title: "Plateforme",
       links: [
-        { name: "Caisse Enregistreuse POS", href: "#features" },
-        { name: "Gestion des Stocks", href: "#features" },
-        { name: "Moniteur Cuisine", href: "#about" },
-        { name: "Plan de Salle interactif", href: "#about" },
+        { name: "Fiche restaurant", href: "#features" },
+        { name: "Commandes en ligne", href: "#features" },
+        { name: "Suivi des ventes", href: "#features" },
+        { name: "Réservations & salle", href: "#features" },
         { name: "Grille de Tarifs", href: "#pricing" },
-      ],
-    },
-    {
-      title: "Ressources",
-      links: [
-        { name: "Documentation Technique", href: "#" },
-        { name: "Guides de Restauration", href: "#" },
-        { name: "Blog RestauCI", href: "#" },
-        { name: "Support Clientèle", href: "# pricing" },
-        { name: "Status des API", href: "#" },
-      ],
-    },
-    {
-      title: "Entreprise",
-      links: [
-        { name: "À Propos de Nous", href: "#" },
-        { name: "Carrières & Recrutement", href: "#" },
-        { name: "Presse / Médias", href: "#" },
-        { name: "Partenaires Metro / Food", href: "#" },
-        { name: "Contact Commercial", href: "#" },
       ],
     },
     {
       title: "Légal",
       links: [
-        { name: "Mentions Légales", href: "#" },
-        { name: "Politique de Confidentialité", href: "#" },
-        { name: "CGU & CGV", href: "#" },
-        { name: "Conformité NF525 (Caisse)", href: "#" },
-        { name: "Gestion des Cookies", href: "#" },
+        { name: "Mentions légales", href: "/mentions-legales" },
+        { name: "Politique de confidentialité", href: "/confidentialite" },
+        { name: "Conditions générales", href: "/conditions-generales" },
+        { name: "Gestion des cookies", href: "/cookies" },
       ],
     },
   ];
@@ -86,34 +59,30 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-12 pb-12 border-b border-[#EAEAEA]">
           {/* Brand Col */}
           <div className="lg:col-span-2 space-y-6">
-            <a href="#" className="flex items-center gap-2 group">
+            <Link href="/" className="flex items-center gap-2 group">
               <div className="w-10 h-10 rounded-xl bg-brand-green flex items-center justify-center">
                 <Utensils className="h-5.5 w-5.5 text-white" />
               </div>
               <span className="font-display font-extrabold text-2xl tracking-tight text-brand-dark">
-                Restau<span className="text-brand-green">CI</span>
+                Tout<span className="text-brand-green">ci</span>
               </span>
-            </a>
+            </Link>
 
             <p className="text-xs text-brand-dark/65 leading-relaxed max-w-sm">
-              La plateforme logicielle d&apos;administration de restaurant
-              certifiée NF525. Unifiez la salle, l&apos;inventaire et la cuisine
-              sous une seule interface intelligente.
+              Le marketplace qui connecte les restaurants et les clients de
+              Bouaké. Soyez visibles, recevez vos commandes et développez
+              votre activité localement.
             </p>
 
             {/* Address cards */}
             <div className="space-y-2 text-xs text-gray-500 font-medium">
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-brand-green shrink-0" />
-                <span>250 Boulevard Saint-Germain, 75007 Paris</span>
+                <span>Bouaké, Côte d&apos;Ivoire</span>
               </div>
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-brand-green shrink-0" />
-                <span>contact@restauci.com</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-brand-green shrink-0" />
-                <span>+33 1 84 60 20 10 (Gratuit)</span>
+                <span>contact@toutci.com</span>
               </div>
             </div>
           </div>
@@ -132,9 +101,6 @@ export default function Footer() {
                       className="text-xs text-brand-dark/65 hover:text-brand-green transition-colors flex items-center gap-0.5 group"
                     >
                       {link.name}
-                      {link.href === "#" && (
-                        <ArrowUpRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
                     </a>
                   </li>
                 ))}
@@ -146,41 +112,11 @@ export default function Footer() {
         {/* Bottom copyright notice panel */}
         <div className="pt-0 flex flex-col sm:flex-row items-center justify-between gap-4">
           {/* Trademark text */}
-          <div className="text-xs text-red-400">
-            &copy; {years} RestauCI Tous droits réservés.
+          <div className="text-xs text-brand-dark/50">
+            &copy; {years} Toutci. Tous droits réservés.
           </div>
 
-          {/* Social Icons links */}
           <div className="flex items-center gap-4">
-            <a
-              href="#"
-              className="p-2 rounded-lg bg-gray-50 hover:bg-brand-green/10 text-gray-400 hover:text-brand-green transition-all"
-              aria-label="Twitter"
-            >
-              <Share2 className="h-4 w-4" />
-            </a>
-            <a
-              href="#"
-              className="p-2 rounded-lg bg-gray-50 hover:bg-brand-green/10 text-gray-400 hover:text-brand-green transition-all"
-              aria-label="Facebook"
-            >
-              <Share2 className="h-4 w-4" />
-            </a>
-            <a
-              href="#"
-              className="p-2 rounded-lg bg-gray-50 hover:bg-brand-green/10 text-gray-400 hover:text-brand-green transition-all"
-              aria-label="Instagram"
-            >
-              <Share2 className="h-4 w-4" />
-            </a>
-            <a
-              href="#"
-              className="p-2 rounded-lg bg-gray-50 hover:bg-brand-green/10 text-gray-400 hover:text-brand-green transition-all"
-              aria-label="GitHub"
-            >
-              <Share2 className="h-4 w-4" />
-            </a>
-
             <button
               onClick={handleScrollToTop}
               className="ms-2 text-[10px] font-bold text-brand-green bg-brand-green/8 hover:bg-brand-green hover:text-white py-1.5 px-3 rounded-lg border border-brand-green/10 cursor-pointer transition-all"

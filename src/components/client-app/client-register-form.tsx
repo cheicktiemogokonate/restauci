@@ -1,127 +1,120 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { clientApi } from "@/lib/client-app/api-client";
+import { getSafeClientRedirect } from "@/lib/client-app/navigation";
 import { useAuthStore } from "@/lib/client-app/stores/auth-store";
+import { AlertCircle, LockKeyhole, Phone, UserRound } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useTransition } from "react";
 
 export function ClientRegisterForm() {
   const router = useRouter();
-  const setAuth = useAuthStore((s) => s.setAuth);
-
+  const searchParams = useSearchParams();
+  const setAuth = useAuthStore((state) => state.setAuth);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const redirectTo = getSafeClientRedirect(searchParams.get("redirect"));
+  const loginHref = redirectTo === "/client"
+    ? "/client/login"
+    : `/client/login?redirect=${encodeURIComponent(redirectTo)}`;
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setError(null);
-    setIsPending(true);
-
-    const formData = new FormData(e.currentTarget);
-    const nom = formData.get("nom") as string;
-    const telephone = formData.get("telephone") as string;
-    const password = formData.get("password") as string;
-
-    clientApi
-      .post<{
-        client: { id: string; nom: string; telephone: string };
-        tokens: { accessToken: string; refreshToken: string };
-      }>("/auth/register", { nom, telephone, password })
-      .then((result) => {
-        if (!result.success || !result.data) {
-          setError(result.error ?? "Une erreur est survenue");
-          return;
-        }
-
-        setAuth({
-          accessToken: result.data.tokens.accessToken,
-          refreshToken: result.data.tokens.refreshToken,
-          user: result.data.client,
-        });
-
-        router.push("/client");
-      })
-      .catch(() => {
-        setError("Une erreur est survenue");
-      })
-      .finally(() => {
-        setIsPending(false);
-      });
+    const formData = new FormData(event.currentTarget);
+    const nom = String(formData.get("nom") ?? "");
+    const telephone = String(formData.get("telephone") ?? "");
+    const password = String(formData.get("password") ?? "");
+    startTransition(async () => {
+      const result = await clientApi.post<{ client: { id: string; nom: string; telephone: string; email?: string | null }; tokens: { accessToken: string } }>("/auth/register", { nom, telephone, password });
+      if (!result.success || !result.data) {
+        setError(result.error ?? "Impossible de créer votre compte.");
+        return;
+      }
+      setAuth({ accessToken: result.data.tokens.accessToken, user: result.data.client });
+      router.push(redirectTo);
+    });
   };
 
   return (
-    <div className="w-full max-w-sm">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">
-        Créer un compte
-      </h1>
-      <p className="text-sm text-gray-500 mb-6">
-        Rejoignez RestauCI pour commander
+    <>
+      <h2 className="mt-2 text-3xl font-bold tracking-tight">Créer un compte</h2>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Créez votre compte pour passer et suivre vos commandes.
       </p>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
         <div>
-          <label className="text-sm font-medium text-gray-700 mb-1 block">
-            Nom complet
-          </label>
-          <input
-            type="text"
-            name="nom"
-            placeholder="Koné Adjoua"
-            required
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600/20"
-          />
+          <Label htmlFor="register-name">Nom complet</Label>
+          <div className="relative mt-2">
+            <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="register-name"
+              name="nom"
+              autoComplete="name"
+              placeholder="Koné Adjoua"
+              required
+              className="h-11 pl-9"
+            />
+          </div>
         </div>
-
         <div>
-          <label className="text-sm font-medium text-gray-700 mb-1 block">
-            Téléphone
-          </label>
-          <input
-            type="tel"
-            name="telephone"
-            placeholder="+225 07 XX XX XX XX"
-            required
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600/20"
-          />
+          <Label htmlFor="register-phone">Téléphone</Label>
+          <div className="relative mt-2">
+            <Phone className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="register-phone"
+              type="tel"
+              name="telephone"
+              autoComplete="tel"
+              inputMode="tel"
+              placeholder="+225 07 XX XX XX XX"
+              required
+              className="h-11 pl-9"
+            />
+          </div>
         </div>
-
         <div>
-          <label className="text-sm font-medium text-gray-700 mb-1 block">
-            Mot de passe
-          </label>
-          <input
-            type="password"
-            name="password"
-            required
-            minLength={6}
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600/20"
-          />
+          <Label htmlFor="register-password">Mot de passe</Label>
+          <div className="relative mt-2">
+            <LockKeyhole className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="register-password"
+              type="password"
+              name="password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+              className="h-11 pl-9"
+            />
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">8 caractères minimum.</p>
         </div>
-
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-            {error}
-          </p>
-        )}
-
-        <button
+        {error ? (
+          <Alert variant="destructive" role="alert">
+            <AlertCircle />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        <Button
           type="submit"
+          size="lg"
           disabled={isPending}
-          className="w-full py-3 bg-green-700 text-white text-sm font-semibold rounded-xl hover:bg-green-800 disabled:opacity-50 transition-colors"
+          className="h-12 w-full rounded-xl"
         >
-          {isPending ? "Création..." : "Créer mon compte"}
-        </button>
+          {isPending ? "Création du compte…" : "Créer mon compte"}
+        </Button>
       </form>
-
-      <p className="text-sm text-gray-500 text-center mt-6">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Déjà un compte ?{" "}
-        <a
-          href="/client/login"
-          className="text-green-700 font-medium hover:underline"
-        >
+        <Link href={loginHref} className="font-semibold text-primary hover:underline">
           Connectez-vous
-        </a>
+        </Link>
       </p>
-    </div>
+    </>
   );
 }

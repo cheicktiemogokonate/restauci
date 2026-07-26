@@ -1,6 +1,9 @@
 import { env } from "@/lib/env";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
 import type { JWTPayload } from "@/types";
 import bcryptjs from "bcryptjs";
+import { eq } from "drizzle-orm";
 import { jwtVerify, SignJWT } from "jose";
 import { cookies } from "next/headers";
 
@@ -85,7 +88,29 @@ export async function getCurrentUser(): Promise<JWTPayload | null> {
     }
 
     const payload = await verifyToken(token);
-    return payload as JWTPayload | null;
+    if (!payload || typeof payload.userId !== "string") return null;
+
+    // Le JWT ne fait qu'identifier la session : le rôle et l'état du compte
+    // doivent toujours provenir de la base pour qu'une suspension ou une
+    // rétrogradation prennent effet immédiatement.
+    const [user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        role: users.role,
+        suspendu: users.suspendu,
+      })
+      .from(users)
+      .where(eq(users.id, payload.userId))
+      .limit(1);
+
+    if (!user || user.suspendu) return null;
+
+    return {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    };
   } catch {
     return null;
   }

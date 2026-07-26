@@ -59,17 +59,39 @@ export async function getMyRestaurant(userId: string) {
   );
 }
 
+import { getEffectivePlan } from "@/lib/subscription-plans";
+import { subscriptionRequests } from "./schema";
+
+
 export async function getRestaurantById(id: string) {
-  return db.query.restaurants.findFirst({
+  const restaurant = await db.query.restaurants.findFirst({
     where: (r, { eq }) => eq(r.id, id),
-    with: { abonnement: true },
+    with: { abonnement: true }, // Legacy
   });
+
+  if (!restaurant) return null;
+
+  const planInfo = await getEffectivePlan(id);
+
+  const [pendingRequest] = await db
+    .select()
+    .from(subscriptionRequests)
+    .where(and(eq(subscriptionRequests.restaurantId, id), eq(subscriptionRequests.statut, "en_attente")))
+    .orderBy(desc(subscriptionRequests.createdAt))
+    .limit(1);
+
+  return {
+    ...restaurant,
+    effectivePlan: planInfo,
+    pendingRequest: pendingRequest || null,
+  };
 }
 
 export async function getRestaurantBySlug(slug: string) {
   return withCache(cacheKey.restaurantPublic(slug), TTL.RESTAURANT_PUBLIC, () =>
     db.query.restaurants.findFirst({
-      where: (r, { eq }) => eq(r.slug, slug),
+      where: (r, { and, eq }) =>
+        and(eq(r.slug, slug), eq(r.actif, true), eq(r.enLigne, true)),
     }),
   );
 }
@@ -276,7 +298,7 @@ export async function getCommandes({
           limit: validLimit,
           with: {
             paiement: true,
-            livraison: { with: { livreur: true } },
+            livraison: true,
           },
         }),
     ),
@@ -525,7 +547,7 @@ export async function getStatsDashboard(restaurantId: string) {
           and(
             eq(commandes.restaurantId, restaurantId),
             gte(commandes.createdAt, debutMois),
-            eq(commandes.statut, "servie"),
+            sql`${commandes.statut}::text = ${"servie"}`,
           ),
         ),
       // Commandes en cours (reçues + en préparation + prêtes)
@@ -551,28 +573,55 @@ export async function getStatsDashboard(restaurantId: string) {
   });
 }
 
+/** Répartition des commandes par type de commande */
+export async function getCommandesParMode(restaurantId: string) {
+  return withCache(
+    cacheKey.dashboardModes(restaurantId),
+    TTL.DASHBOARD,
+    async () => {
+      const result = await db
+        .select({
+          modeCommande: commandes.modeCommande,
+          count: count(),
+        })
+        .from(commandes)
+        .where(eq(commandes.restaurantId, restaurantId))
+        .groupBy(commandes.modeCommande);
+
+      return result.map((item) => ({
+        modeCommande: item.modeCommande as ModeCommande,
+        count: Number(item.count),
+      }));
+    },
+  );
+}
+
 /** Évolution des commandes par jour sur les N derniers jours */
 export async function getCommandesParJour(restaurantId: string, jours = 7) {
-  const dateDebut = new Date();
-  dateDebut.setDate(dateDebut.getDate() - jours);
+  return withCache(
+    cacheKey.dashboardDaily(restaurantId, jours),
+    TTL.DASHBOARD,
+    async () => {
+      const dateDebut = new Date();
+      dateDebut.setDate(dateDebut.getDate() - jours);
 
-  const result = await db
-    .select({
-      jour: sql<string>`DATE(${commandes.createdAt} AT TIME ZONE 'UTC')`,
-      count: count(),
-      total: sql<number>`COALESCE(SUM(${commandes.total}), 0)`,
-    })
-    .from(commandes)
-    .where(
-      and(
-        eq(commandes.restaurantId, restaurantId),
-        gte(commandes.createdAt, dateDebut),
-      ),
-    )
-    .groupBy(sql`DATE(${commandes.createdAt} AT TIME ZONE 'UTC')`)
-    .orderBy(sql`DATE(${commandes.createdAt} AT TIME ZONE 'UTC')`);
-
-  return result;
+      return db
+        .select({
+          jour: sql<string>`DATE(${commandes.createdAt} AT TIME ZONE 'UTC')`,
+          count: count(),
+          total: sql<number>`COALESCE(SUM(${commandes.total}), 0)`,
+        })
+        .from(commandes)
+        .where(
+          and(
+            eq(commandes.restaurantId, restaurantId),
+            gte(commandes.createdAt, dateDebut),
+          ),
+        )
+        .groupBy(sql`DATE(${commandes.createdAt} AT TIME ZONE 'UTC')`)
+        .orderBy(sql`DATE(${commandes.createdAt} AT TIME ZONE 'UTC')`);
+    },
+  );
 }
 
 /** Top plats les plus commandés */

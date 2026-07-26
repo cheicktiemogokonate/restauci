@@ -2,6 +2,7 @@
 
 import DeletePlatDialog from "@/components/dashboard/menu/delete-plat-dialog";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
+import { toast } from "sonner";
 
 interface MenuCardProps {
   plat: PlatAvecCategorie;
@@ -38,7 +40,13 @@ export default function MenuCard({ plat }: MenuCardProps) {
 
     startTransition(async () => {
       setOptimisticDispo(newDispo);
-      await toggleDisponibilitePlatAction(plat.id, newDispo);
+      const result = await toggleDisponibilitePlatAction(plat.id, newDispo);
+      if (result.error) {
+        setOptimisticDispo(!newDispo);
+        toast.error(result.error);
+        return;
+      }
+      toast.success(newDispo ? "Plat rendu disponible." : "Plat masqué du menu.");
     });
   };
 
@@ -105,6 +113,21 @@ export default function MenuCard({ plat }: MenuCardProps) {
             </div>
           </div>
         </Link>
+
+        <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full border border-white/50 bg-white/90 px-2.5 py-1.5 shadow-sm backdrop-blur-sm">
+          <Switch
+            checked={optimisticDispo}
+            onCheckedChange={handleToggleDispo}
+            onClick={(event) => event.stopPropagation()}
+            disabled={isPending}
+            size="sm"
+            aria-label={`Rendre ${plat.nom} ${optimisticDispo ? "indisponible" : "disponible"}`}
+            className="data-checked:bg-brand-green"
+          />
+          <span className="text-[11px] font-semibold text-foreground">
+            {optimisticDispo ? "En vente" : "Masqué"}
+          </span>
+        </div>
 
         <div className="absolute top-3 right-3">
           <DropdownMenu>

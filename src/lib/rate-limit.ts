@@ -117,7 +117,26 @@ export async function checkRateLimit(
   limiter: Ratelimit,
   identifier: string
 ): Promise<Response | null> {
-  const { success, limit, remaining, reset } = await limiter.limit(identifier);
+  let result;
+  try {
+    result = await limiter.limit(identifier);
+  } catch (error) {
+    apiLogger.error(
+      {
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      "Rate limiter unavailable",
+    );
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Service temporairement indisponible. Réessayez dans un instant.",
+        code: "SERVICE_UNAVAILABLE",
+      },
+      { status: 503, headers: { "Retry-After": "5" } },
+    );
+  }
+  const { success, limit, remaining, reset } = result;
 
   if (!success) {
     return new Response(

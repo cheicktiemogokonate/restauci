@@ -12,9 +12,11 @@
 
 # testing
 /coverage
+/test-results/
 
 # next.js
 /.next/
+/.next-e2e/
 /out/
 
 # production
@@ -44,3 +46,10 @@ next-env.d.ts
 fix-actif.ts
 fix-cache.ts
 insert-admin.ts
+
+# Temp and agent files
+findings.md
+progress.md
+task_plan.md
+.next-production-webpack-check-network/
+.vscode/mcp.json

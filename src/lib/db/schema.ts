@@ -74,6 +74,12 @@ export const typeNotificationEnum = pgEnum("type_notification", [
   "nouveau_avis",
   "promotion",
   "systeme",
+  "abonnement_valide",
+  "abonnement_refuse",
+  "echeance_proche",
+  "abonnement_regrade",
+  "abonnement_suspendu",
+  "abonnement_expire",
 ]);
 
 export const statutAbonnementEnum = pgEnum("statut_abonnement", [
@@ -88,6 +94,37 @@ export const planAbonnementEnum = pgEnum("plan_abonnement", [
   "starter",
   "pro",
   "entreprise",
+]);
+
+// ── Nouveau : code d'offre du catalogue (3 offres fixes)
+export const planCodeEnum = pgEnum("plan_code", [
+  "decouverte",
+  "croissance",
+  "partenaire_fier",
+]);
+
+// ── Statut d'une demande d'abonnement
+export const statutDemandeEnum = pgEnum("statut_demande_abonnement", [
+  "en_attente",
+  "validee",
+  "refusee",
+  "annulee",
+]);
+
+// ── Statut d'une période d'abonnement active
+export const statutPeriodeEnum = pgEnum("statut_periode_abonnement", [
+  "active",
+  "expiree",
+  "suspendue",
+  "annulee",
+]);
+
+// ── Moyen de règlement (paiement abonnement)
+export const moyenReglementEnum = pgEnum("moyen_reglement", [
+  "mobile_money",
+  "virement",
+  "especes",
+  "cheque",
 ]);
 
 // ============================================================================
@@ -115,6 +152,7 @@ export const users = pgTable(
     suspendu: boolean("suspendu").notNull().default(false),
     motifSuspension: text("motif_suspension"),
     suspenduAt: timestamp("suspendu_at", { withTimezone: true }),
+    pendingPlanCode: planCodeEnum("pending_plan_code"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -207,7 +245,168 @@ export const restaurants = pgTable(
 );
 
 // ============================================================================
-// ABONNEMENTS  (plan du restaurant)
+// CATALOGUE DES OFFRES (source de vérité — 3 lignes fixes, non supprimables)
+// ============================================================================
+
+export const subscriptionPlans = pgTable(
+  "subscription_plans",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    // Clé métier unique : decouverte | croissance | partenaire_fier
+    code: planCodeEnum("code").notNull().unique(),
+    nom: varchar("nom", { length: 100 }).notNull(),
+    description: text("description"),
+    // Tarif annuel en FCFA entiers (0 pour Découverte)
+    prixAnnuelFcfa: integer("prix_annuel_fcfa").notNull().default(0),
+    // Taux de commission en points de base (1500 = 15 %)
+    tauxCommissionBps: integer("taux_commission_bps").notNull(),
+    // Limites (null = illimité)
+    maxPlats: integer("max_plats"),        // null = illimité
+    maxCategories: integer("max_categories"), // null = illimité
+    // Affichage
+    ordre: integer("ordre").notNull().default(0),
+    actif: boolean("actif").notNull().default(true),
+    // Audit modification du catalogue
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedByAdminId: varchar("updated_by_admin_id", { length: 36 })
+      .references(() => users.id, { onDelete: "set null" }),
+  },
+  (table) => ({
+    codeIdx: uniqueIndex("idx_subscription_plans_code").on(table.code),
+    ordreIdx: index("idx_subscription_plans_ordre").on(table.ordre),
+  })
+);
+
+// ============================================================================
+// DEMANDES D'ABONNEMENT (restaurant → demande de changement/renouvellement)
+// ============================================================================
+
+export const subscriptionRequests = pgTable(
+  "subscription_requests",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    restaurantId: varchar("restaurant_id", { length: 36 })
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    // Offre demandée et montant figé au moment de la demande
+    planCode: planCodeEnum("plan_code").notNull(),
+    prixFigeFcfa: integer("prix_fige_fcfa").notNull().default(0),
+    statut: statutDemandeEnum("statut").notNull().default("en_attente"),
+    motifRefus: text("motif_refus"),
+    // Admin qui a traité la demande
+    traiteeParAdminId: varchar("traitee_par_admin_id", { length: 36 })
+      .references(() => users.id, { onDelete: "set null" }),
+    traiteeAt: timestamp("traitee_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    restaurantIdx: index("idx_sub_requests_restaurant").on(table.restaurantId),
+    statutIdx: index("idx_sub_requests_statut").on(table.statut),
+    restaurantStatutIdx: index("idx_sub_requests_restaurant_statut").on(
+      table.restaurantId,
+      table.statut
+    ),
+  })
+);
+
+// ============================================================================
+// PÉRIODES D'ABONNEMENT ACTIVES (historique par restaurant)
+// ============================================================================
+
+export const subscriptionPeriods = pgTable(
+  "subscription_periods",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    restaurantId: varchar("restaurant_id", { length: 36 })
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    // Demande qui a déclenché cette période (null pour Découverte auto)
+    requestId: varchar("request_id", { length: 36 })
+      .references(() => subscriptionRequests.id, { onDelete: "set null" }),
+    planCode: planCodeEnum("plan_code").notNull(),
+    // Snapshot du taux au moment de la validation (protège l'historique)
+    tauxCommissionBpsFige: integer("taux_commission_bps_fige").notNull(),
+    // Paiement validé
+    prixPayeFcfa: integer("prix_paye_fcfa").notNull().default(0),
+    moyenReglement: moyenReglementEnum("moyen_reglement"),
+    referenceReglement: varchar("reference_reglement", { length: 255 }),
+    dateReglement: timestamp("date_reglement", { withTimezone: true }),
+    // Qui a validé
+    valideeParAdminId: varchar("validee_par_admin_id", { length: 36 })
+      .references(() => users.id, { onDelete: "set null" }),
+    // Période de validité
+    dateDebut: timestamp("date_debut", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    dateEcheance: timestamp("date_echeance", { withTimezone: true }), // null = découverte (pas d'échéance)
+    statut: statutPeriodeEnum("statut").notNull().default("active"),
+    // Motif de suspension/annulation si applicable
+    motifSuspension: text("motif_suspension"),
+    suspenduParAdminId: varchar("suspendu_par_admin_id", { length: 36 })
+      .references(() => users.id, { onDelete: "set null" }),
+    suspenduAt: timestamp("suspendu_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    restaurantIdx: index("idx_sub_periods_restaurant").on(table.restaurantId),
+    statutIdx: index("idx_sub_periods_statut").on(table.statut),
+    restaurantStatutIdx: index("idx_sub_periods_restaurant_statut").on(
+      table.restaurantId,
+      table.statut
+    ),
+    echeanceIdx: index("idx_sub_periods_echeance").on(table.dateEcheance),
+  })
+);
+
+// ============================================================================
+// ENCAISSEMENTS DE COMMISSIONS (reçu de règlement groupé)
+// ============================================================================
+
+export const commissionSettlements = pgTable(
+  "commission_settlements",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    restaurantId: varchar("restaurant_id", { length: 36 })
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    // Admin qui a enregistré l'encaissement
+    adminId: varchar("admin_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "set null" }),
+    // Montant total encaissé (centimes)
+    montantTotal: integer("montant_total").notNull(),
+    nombreCommissions: integer("nombre_commissions").notNull(),
+    referenceReglement: varchar("reference_reglement", { length: 255 }),
+    notes: text("notes"),
+    settledAt: timestamp("settled_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    restaurantIdx: index("idx_settlements_restaurant").on(table.restaurantId),
+    settledAtIdx: index("idx_settlements_settled_at").on(table.settledAt),
+  })
+);
+
+// ============================================================================
+// ABONNEMENTS  (plan du restaurant) - LEGACY
 // ============================================================================
 
 export const abonnements = pgTable("abonnements", {
@@ -435,6 +634,7 @@ export const commandes = pgTable(
       () => clients.id,
       { onDelete: "no action" }
     ),
+    idempotencyKey: varchar("idempotency_key", { length: 64 }),
     modeCommande: modeCommandeEnum("mode_commande").notNull(),
     statut: statutCommandeEnum("statut").notNull().default("recue"),
     // Sur place
@@ -473,6 +673,10 @@ export const commandes = pgTable(
     numeroIdx:      uniqueIndex("idx_commandes_numero").on(table.numero),
     restaurantIdx:  index("idx_commandes_restaurant").on(table.restaurantId),
     clientIdx:      index("idx_commandes_client").on(table.clientId),
+    clientIdempotencyIdx: uniqueIndex("idx_commandes_client_idempotency").on(
+      table.clientId,
+      table.idempotencyKey
+    ),
     statutIdx:      index("idx_commandes_statut").on(table.statut),
     createdAtIdx:   index("idx_commandes_created_at").on(table.createdAt),
     restaurantStatutIdx: index("idx_commandes_restaurant_statut").on(
@@ -770,6 +974,14 @@ export const auditActionEnum = pgEnum("audit_action", [
   "client_suspendu",
   "client_reactive",
   "commission_modifiee",
+  "abonnement_valide",
+  "abonnement_refuse",
+  "abonnement_suspendu",
+  "abonnement_reactive",
+  "abonnement_expire",
+  "abonnement_regrade",
+  "catalogue_modifie",
+  "commissions_encaissees",
 ]);
 
 export const auditLog = pgTable(
@@ -855,6 +1067,9 @@ export const commissions = pgTable(
     payeeParUserId: varchar("payee_par_user_id", { length: 36 })
       .references(() => users.id, { onDelete: "set null" }),
 
+    settlementId: varchar("settlement_id", { length: 36 })
+      .references(() => commissionSettlements.id, { onDelete: "set null" }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -878,6 +1093,10 @@ export const commissionsRelations = relations(commissions, ({ one }) => ({
     fields:     [commissions.restaurantId],
     references: [restaurants.id],
   }),
+  settlement: one(commissionSettlements, {
+    fields:     [commissions.settlementId],
+    references: [commissionSettlements.id],
+  }),
 }));
 
 // ============================================================================
@@ -890,6 +1109,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     references: [restaurants.userId],
   }),
   notifications: many(notifications),
+  adminSubscriptionPlanUpdates: many(subscriptionPlans),
 }));
 
 export const restaurantsRelations = relations(restaurants, ({ one, many }) => ({
@@ -897,10 +1117,14 @@ export const restaurantsRelations = relations(restaurants, ({ one, many }) => ({
     fields: [restaurants.userId],
     references: [users.id],
   }),
+  // Legacy
   abonnement:  one(abonnements, {
     fields: [restaurants.id],
     references: [abonnements.restaurantId],
   }),
+  // Nouveau système
+  subscriptionPeriods: many(subscriptionPeriods),
+  subscriptionRequests: many(subscriptionRequests),
   creneaux:    many(creneauxHoraires),
   categories:  many(categories),
   plats:       many(plats),
@@ -908,6 +1132,57 @@ export const restaurantsRelations = relations(restaurants, ({ one, many }) => ({
   promotions:  many(promotions),
   avis:        many(avis),
   livreurs:    many(livreurs),
+  commissionSettlements: many(commissionSettlements),
+}));
+
+export const subscriptionPlansRelations = relations(subscriptionPlans, ({ one }) => ({
+  updatedBy: one(users, {
+    fields: [subscriptionPlans.updatedByAdminId],
+    references: [users.id],
+  }),
+}));
+
+export const subscriptionRequestsRelations = relations(subscriptionRequests, ({ one, many }) => ({
+  restaurant: one(restaurants, {
+    fields: [subscriptionRequests.restaurantId],
+    references: [restaurants.id],
+  }),
+  traiteeParAdmin: one(users, {
+    fields: [subscriptionRequests.traiteeParAdminId],
+    references: [users.id],
+  }),
+  periods: many(subscriptionPeriods),
+}));
+
+export const subscriptionPeriodsRelations = relations(subscriptionPeriods, ({ one }) => ({
+  restaurant: one(restaurants, {
+    fields: [subscriptionPeriods.restaurantId],
+    references: [restaurants.id],
+  }),
+  request: one(subscriptionRequests, {
+    fields: [subscriptionPeriods.requestId],
+    references: [subscriptionRequests.id],
+  }),
+  valideeParAdmin: one(users, {
+    fields: [subscriptionPeriods.valideeParAdminId],
+    references: [users.id],
+  }),
+  suspenduParAdmin: one(users, {
+    fields: [subscriptionPeriods.suspenduParAdminId],
+    references: [users.id],
+  }),
+}));
+
+export const commissionSettlementsRelations = relations(commissionSettlements, ({ one, many }) => ({
+  restaurant: one(restaurants, {
+    fields: [commissionSettlements.restaurantId],
+    references: [restaurants.id],
+  }),
+  admin: one(users, {
+    fields: [commissionSettlements.adminId],
+    references: [users.id],
+  }),
+  commissions: many(commissions),
 }));
 
 export const abonnementsRelations = relations(abonnements, ({ one }) => ({

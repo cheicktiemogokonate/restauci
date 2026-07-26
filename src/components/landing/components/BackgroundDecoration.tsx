@@ -1,3 +1,4 @@
+import Image from "next/image";
 import React from "react";
 
 interface BackgroundDecorationProps {
@@ -169,14 +170,15 @@ export default function BackgroundDecoration({ src, className = "", size = 300 }
     );
   }
 
-  // Fallback to standard <img>
+  // Fallback to standard image rendering
   return (
-    <img
+    <Image
       src={src}
       alt=""
       aria-hidden="true"
       referrerPolicy="no-referrer"
-      style={{ width: `${size}px`, height: `${size}px` }}
+      width={size}
+      height={size}
       className={`pointer-events-none select-none z-0 hover:scale-105 transition-transform duration-1000 ${className}`}
     />
   );
