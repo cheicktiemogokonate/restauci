@@ -47,13 +47,14 @@ export interface AddressContact {
 }
 
 import type { ServiceTypeInput } from "@/lib/actions/onboarding";
+import type { EstablishmentType } from "@/lib/onboarding/settings";
 
 export interface RestaurantSettings {
+  establishmentType: EstablishmentType;
   category: string;
   currency: string;
   serviceTypes: ServiceTypeInput[]; // 'dine-in', 'takeout', 'delivery', etc.
   menuLanguage: string;
-  taxRate: number;
   enableOnlineBooking: boolean;
 }
 
@@ -63,6 +64,7 @@ export interface MenuItem {
   description: string;
   price: number;
   category: string;
+  photoUrl: string | null;
 }
 
 export interface RestaurantConfig {

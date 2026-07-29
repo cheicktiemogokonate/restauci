@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { createRestaurant } from "@/lib/db/mutations";
 import { getMyRestaurant } from "@/lib/db/queries";
 import { createLogger } from "@/lib/logger";
+import { RESTAURANT_TYPE_OPTIONS } from "@/lib/onboarding/settings";
+import { SubscriptionLimitError } from "@/lib/subscription-plans";
 import { restaurantSchema } from "@/lib/validations/restaurant";
 import { redirect } from "next/navigation";
 
@@ -24,6 +26,8 @@ export interface OnboardingData {
   latitude: number;
   longitude: number;
   modesCommande: ServiceTypeInput[];
+  establishmentType: "restaurant" | "residence" | "event";
+  cuisines?: string[];
   description?: string;
   logoUrl?: string;
   banniereUrl?: string;
@@ -44,6 +48,7 @@ export interface OnboardingData {
     description: string;
     price: number;
     category: string;
+    photoUrl?: string | null;
   }[];
 }
 
@@ -63,6 +68,22 @@ export async function finaliserOnboarding(data: OnboardingData) {
   const hasRestaurant = await getMyRestaurant(session.userId);
   if (hasRestaurant) {
     redirect("/restaurateur");
+  }
+
+  const allowedEstablishmentCategories = new Set<string>(
+    RESTAURANT_TYPE_OPTIONS.map((category) => category.id),
+  );
+  if (data.establishmentType !== "restaurant") {
+    return {
+      error:
+        "La création des résidences et des événements sera disponible prochainement.",
+    };
+  }
+  if (
+    data.cuisines?.length !== 1 ||
+    !allowedEstablishmentCategories.has(data.cuisines[0])
+  ) {
+    return { error: "Choisissez un type d’établissement valide." };
   }
 
   const normalizedModes = data.modesCommande.map(normalizeMode);
@@ -101,6 +122,7 @@ export async function finaliserOnboarding(data: OnboardingData) {
       description: item.description.trim() || undefined,
       prix: item.price,
       categorie: item.category.trim(),
+      photoUrl: item.photoUrl || undefined,
     }))
     .filter(
       (item) =>
@@ -120,6 +142,7 @@ export async function finaliserOnboarding(data: OnboardingData) {
       latitude: parsed.data.latitude,
       longitude: parsed.data.longitude,
       modesCommande: mappedModes,
+      cuisines: parsed.data.cuisines,
       description: parsed.data.description,
       logoUrl: parsed.data.logoUrl,
       banniereUrl: parsed.data.banniereUrl,
@@ -134,6 +157,9 @@ export async function finaliserOnboarding(data: OnboardingData) {
     });
   } catch (error) {
     log.error({ error, userId: session.userId }, "finaliserOnboarding error");
+    if (error instanceof SubscriptionLimitError) {
+      return { error: error.message };
+    }
     return { error: "Impossible de créer le restaurant. Réessaye." };
   }
 

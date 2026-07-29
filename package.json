@@ -11,11 +11,13 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx drizzle/migrate.ts",
+    "media:migrate-cloudinary": "node --env-file=.env.local --import tsx scripts/migrate-cloudinary-media.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "^2.1.167",
+    "@aws-sdk/client-s3": "^3.1096.0",
     "@neondatabase/serverless": "^1.1.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
@@ -25,7 +27,6 @@
     "@vercel/speed-insights": "^2.0.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
-    "cloudinary": "^2.10.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.2",
@@ -37,7 +38,7 @@
     "lucide-react": "^1.21.0",
     "maplibre-gl": "^5.24.0",
     "motion": "^12.40.0",
-    "next": "16.2.6",
+    "next": "16.2.12",
     "next-themes": "^0.4.6",
     "pg": "^8.21.0",
     "pino": "^10.3.1",
@@ -69,11 +70,17 @@
     "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.2.12",
     "shadcn": "^4.13.1",
     "tailwindcss": "^4",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.23",
+      "sharp": "0.35.3"
+    }
   }
 }

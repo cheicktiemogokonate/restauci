@@ -6,8 +6,17 @@ import {
   Phone,
   LoaderCircle,
   ShieldCheck,
+  Utensils,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+import {
+  getEstablishmentCategoryLabel,
+  getEstablishmentTypeLabel,
+  getServiceTypeLabel,
+} from "@/lib/onboarding/settings";
 import { RestaurantConfig } from "./types";
+import { Button } from "../ui/button";
 
 interface StepOverviewProps {
   config: RestaurantConfig;
@@ -22,6 +31,16 @@ export default function StepOverview({
   onPrev,
   isDeploying = false,
 }: StepOverviewProps) {
+  const establishmentCategory =
+    getEstablishmentCategoryLabel(config.settings.category) ??
+    "Non renseignée";
+  const establishmentType =
+    getEstablishmentTypeLabel(config.settings.establishmentType) ??
+    "Non renseigné";
+  const serviceLabels = config.settings.serviceTypes
+    .map(getServiceTypeLabel)
+    .filter((label) => label !== null);
+
   return (
     <div className="flex-1 max-w-4xl p-8 lg:p-12 overflow-y-auto font-sans">
       {isDeploying ? (
@@ -44,9 +63,7 @@ export default function StepOverview({
         <>
           {/* Step Header */}
           <div className="mb-8">
-            <div className="w-12 h-12 bg-emerald-50 text-brand-500 rounded-2xl flex items-center justify-center mb-4 ring-1 ring-emerald-100">
-              <Eye className="w-6 h-6" />
-            </div>
+
             <span className="text-xs font-mono text-gray-400 font-semibold uppercase tracking-wider block">
               Étape 5/5
             </span>
@@ -201,10 +218,18 @@ export default function StepOverview({
                   <div className="space-y-2 text-xs font-sans">
                     <div className="flex items-start">
                       <span className="w-24 text-gray-400 font-medium shrink-0">
-                        Catégorie
+                        Établissement
                       </span>
-                      <span className="text-gray-900 font-semibold uppercase">
-                        {config.settings.category || "Bistrot"}
+                      <span className="text-gray-900 font-semibold">
+                        {establishmentType}
+                      </span>
+                    </div>
+                    <div className="flex items-start">
+                      <span className="w-24 text-gray-400 font-medium shrink-0">
+                        Sous-type
+                      </span>
+                      <span className="text-gray-900 font-semibold">
+                        {establishmentCategory}
                       </span>
                     </div>
                     <div className="flex items-start">
@@ -215,22 +240,13 @@ export default function StepOverview({
                         {config.settings.currency}
                       </span>
                     </div>
-                    <div className="flex items-start">
-                      <span className="w-24 text-gray-400 font-medium shrink-0">
-                        Structure TVA
-                      </span>
-                      <span className="text-gray-900 font-semibold font-mono">
-                        {config.settings.taxRate}%
-                      </span>
-                    </div>
+
                     <div className="flex items-start">
                       <span className="w-24 text-gray-400 font-medium shrink-0">
                         Services
                       </span>
                       <span className="text-gray-900 font-semibold">
-                        {config.settings.serviceTypes
-                          .join(", ")
-                          .toUpperCase() || "Sur place"}
+                        {serviceLabels.join(", ") || "Non renseignés"}
                       </span>
                     </div>
                   </div>
@@ -244,11 +260,10 @@ export default function StepOverview({
                     {config.schedule.map((row) => (
                       <span
                         key={row.day}
-                        className={`px-2 py-1 text-[10px] font-bold rounded-lg ${
-                          row.isOpen
-                            ? "bg-brand-50 text-brand-700 border border-brand-100"
-                            : "bg-gray-50 text-gray-400 border border-gray-100"
-                        }`}
+                        className={`px-2 py-1 text-[10px] font-bold rounded-lg ${row.isOpen
+                          ? "bg-brand-50 text-brand-700 border border-brand-100"
+                          : "bg-gray-50 text-gray-400 border border-gray-100"
+                          }`}
                       >
                         {row.day.substring(0, 3)}.{" "}
                         {row.isOpen
@@ -261,54 +276,92 @@ export default function StepOverview({
               </div>
             </div>
 
-            {/* Verification Security banner */}
-            <div className="p-4 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-xl flex items-center space-x-3 text-xs leading-relaxed">
-              <ShieldCheck className="w-6 h-6 text-emerald-600 shrink-0" />
-              <div>
-                <span className="font-bold font-display block">
-                  Saisie Vérifiée & Conforme
-                </span>
-                <p className="text-[11px] text-emerald-700 font-sans mt-0.5">
-                  Toutci enregistre ces informations afin de créer votre fiche
-                  restaurant et votre menu public.
-                </p>
-              </div>
-            </div>
+            {config.menu.length > 0 ? (
+              <section
+                aria-labelledby="overview-menu-title"
+                className="border-t border-gray-100 pt-7"
+              >
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <h3
+                      id="overview-menu-title"
+                      className="flex items-center gap-2 text-xs font-bold tracking-wider text-gray-500 uppercase"
+                    >
+                      <Utensils
+                        className="size-4 text-brand-600"
+                        aria-hidden="true"
+                      />
+                      Premiers plats
+                    </h3>
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      Ces plats seront ajoutés à votre carte dès sa création.
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-brand-700">
+                    {config.menu.length}
+                  </span>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {config.menu.map((item) => (
+                    <article
+                      key={item.id}
+                      className="flex min-w-0 items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50/50 p-3"
+                    >
+                      <div className="relative size-14 shrink-0 overflow-hidden rounded-xl bg-emerald-50">
+                        {item.photoUrl ? (
+                          <Image
+                            src={item.photoUrl}
+                            alt=""
+                            fill
+                            sizes="56px"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <Utensils
+                            className="absolute inset-0 m-auto size-4 text-brand-300"
+                            aria-hidden="true"
+                          />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="truncate text-sm font-bold text-gray-900">
+                          {item.name}
+                        </h4>
+                        <p className="truncate text-[11px] text-gray-500">
+                          {item.category}
+                        </p>
+                        <p className="mt-1 text-xs font-bold text-brand-700">
+                          {new Intl.NumberFormat("fr-FR").format(item.price)}{" "}
+                          FCFA
+                        </p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
           </div>
 
           {/* Buttons Block */}
           <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
-            <button
-              type="button"
+            <Button
               onClick={onPrev}
+              variant="outline"
               disabled={isDeploying}
-              className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl inline-flex items-center space-x-2 transition-all cursor-pointer"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-              <span>Précédent</span>
-            </button>
+              <ChevronLeft />
+              Précédent
+            </Button>
 
-            <button
-              type="button"
+            <Button
               onClick={onDeploy}
               disabled={isDeploying}
-              className="px-6 py-2.5 bg-brand-green hover:bg-brand-600 text-white text-sm font-bold rounded-xl inline-flex items-center space-x-2 shadow-lg shadow-brand-500/20 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
-              <span>Créer le restaurant</span>
-              <ArrowRight className="w-4 h-4 text-white hover:translate-x-1 transition-transform" />
-            </button>
+              Créer le restaurant
+              <ChevronRight />
+            </Button>
           </div>
         </>
       )}

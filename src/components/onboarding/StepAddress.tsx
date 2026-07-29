@@ -1,7 +1,17 @@
 import React, { useState } from "react";
-import { MapPin, Phone, Mail, Globe, MessageSquare, Sparkles } from "lucide-react";
+import { Phone, Mail, Globe, MessageSquare, ChevronRight, ChevronLeft } from "lucide-react";
 import { AddressContact } from "./types";
 import InteractiveMap from "./InteractiveMap";
+import { Button } from "../ui/button";
+import { Input } from "@/components/motion/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/motion/select";
+import { Label } from "@/components/ui/label";
 
 interface StepAddressProps {
   data: AddressContact;
@@ -56,9 +66,6 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
     <div className="flex-1 max-w-4xl p-8 lg:p-12 overflow-y-auto">
       {/* Step Header */}
       <div className="mb-8">
-        <div className="w-12 h-12 bg-emerald-50 text-brand-500 rounded-2xl flex items-center justify-center mb-4 ring-1 ring-emerald-100">
-          <MapPin className="w-6 h-6" />
-        </div>
         <span className="text-xs font-mono text-gray-400 font-semibold uppercase tracking-wider block">
           Étape 2/5
         </span>
@@ -79,87 +86,67 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
 
         {/* Location Dropdowns */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label htmlFor="country" className="block text-sm font-semibold text-gray-900 mb-2">
+          <div className="flex flex-col gap-2">
+            <Label className="px-1 text-[11px] font-bold tracking-[0.08em] text-[#173c2f]/75 uppercase">
               Pays *
-            </label>
-            <div className="relative">
-              <select
-                id="country"
-                name="country"
-                disabled
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 text-gray-500 rounded-xl text-sm font-sans outline-none appearance-none cursor-not-allowed"
-              >
-                <option>🇨🇮 Côte d&apos;Ivoire</option>
-              </select>
-            </div>
+            </Label>
+            <Select value="ci" disabled>
+              <SelectTrigger className="h-12 rounded-2xl border-black/8 bg-[#f7faf8] px-4 font-medium">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ci">🇨🇮 Côte d&apos;Ivoire</SelectItem>
+              </SelectContent>
+            </Select>
             <p className="text-[10px] text-gray-400 mt-1">Zone de service actuelle.</p>
           </div>
 
-          <div>
-            <label htmlFor="city" className="block text-sm font-semibold text-gray-900 mb-2">
-              Ville *
-            </label>
-            <input
+          <Input
               id="city"
               name="city"
               type="text"
+              label="Ville *"
               autoComplete="address-level2"
               value={data.city}
-              onChange={(e) => updateData({ city: e.target.value })}
+              onChange={(city) => updateData({ city })}
               placeholder="Ex. Bouaké, Abidjan, Korhogo"
-              className="w-full px-4 py-3 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800"
             />
-          </div>
         </div>
 
         {/* Local District Form */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label htmlFor="commune" className="block text-sm font-semibold text-gray-900 mb-2">
-              Commune *
-            </label>
-            <input
+          <Input
               id="commune"
               name="commune"
               type="text"
+              label="Commune *"
               value={data.commune}
-              onChange={(e) => updateData({ commune: e.target.value })}
+              onChange={(commune) => updateData({ commune })}
               placeholder="Commune, sous-préfecture ou secteur"
-              className="w-full px-4 py-3 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800"
             />
-          </div>
 
-          <div>
-            <label htmlFor="quarter" className="block text-sm font-semibold text-gray-900 mb-2">
-              Quartier
-            </label>
-            <input
+          <Input
               type="text"
               id="quarter"
               name="address-level3"
+              label="Quartier"
               placeholder="Ex: Zone 4C, Deux-Plateaux Vallons"
               value={data.quarter}
-              onChange={(e) => updateData({ quarter: e.target.value })}
-              className="w-full px-4 py-3 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800 placeholder-gray-400"
+              onChange={(quarter) => updateData({ quarter })}
             />
-          </div>
         </div>
 
         {/* Full Address */}
-        <div>
-          <label htmlFor="fullAddress" className="block text-sm font-semibold text-gray-900 mb-2">
-            Adresse complète *
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Input
             type="text"
             id="fullAddress"
             name="street-address"
+            label="Adresse complète *"
             autoComplete="street-address"
             placeholder="Ex: Boulevard de Marseille, en face du supermarché, Zone 4"
             value={data.fullAddress}
-            onChange={(e) => updateData({ fullAddress: e.target.value })}
-            className="w-full px-4 py-3 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800 placeholder-gray-400"
+            onChange={(fullAddress) => updateData({ fullAddress })}
           />
           <p className="text-[11px] text-gray-450 mt-1.5 font-sans italic text-gray-400">
             Soyez précis pour aider vos clients et vos livreurs à vous localiser facilement.
@@ -169,13 +156,9 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
         {/* Drag/Click Interactive Map segment */}
         <div>
           <div className="flex justify-between items-center mb-3">
-            <label className="block text-sm font-semibold text-gray-900">
+            <Label className="block text-sm font-semibold text-gray-900">
               Localisation sur la carte *
-            </label>
-            <span className="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5" />
-              Déplacez le repère pour préciser la position
-            </span>
+            </Label>
           </div>
 
           {/* Map */}
@@ -209,117 +192,71 @@ export default function StepAddress({ data, updateData, onNext, onPrev }: StepAd
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Phone */}
-            <div>
-              <label htmlFor="phone" className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Téléphone *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Phone className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
+            <Input
                   type="tel"
                   id="phone"
                   name="tel"
+                  label="Téléphone *"
                   autoComplete="tel"
                   placeholder="+225 01 23 45 67 89"
                   value={data.phone}
-                  onChange={(e) => updateData({ phone: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800"
+                  onChange={(phone) => updateData({ phone })}
+                  leftIcon={<Phone />}
                 />
-              </div>
-            </div>
 
             {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Adresse email de contact *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
+            <Input
                   type="email"
                   id="email"
                   name="email"
+                  label="Adresse email de contact *"
                   autoComplete="email"
                   placeholder="contact@monrestaurant.ci"
                   value={data.email}
-                  onChange={(e) => updateData({ email: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800"
+                  onChange={(email) => updateData({ email })}
+                  leftIcon={<Mail />}
                 />
-              </div>
-            </div>
 
             {/* WhatsApp */}
-            <div>
-              <label htmlFor="whatsapp" className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Numéro WhatsApp
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <MessageSquare className="h-4 w-4 text-emerald-500" />
-                </div>
-                <input
+            <Input
                   type="tel"
                   id="whatsapp"
                   name="whatsapp"
+                  label="Numéro WhatsApp"
                   placeholder="+225 01 23 45 67 89"
                   value={data.whatsapp}
-                  onChange={(e) => updateData({ whatsapp: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800"
+                  onChange={(whatsapp) => updateData({ whatsapp })}
+                  leftIcon={<MessageSquare className="text-emerald-500" />}
                 />
-              </div>
-            </div>
 
             {/* Website URL */}
-            <div>
-              <label htmlFor="website" className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Site Internet
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Globe className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
+            <Input
                   type="url"
                   id="website"
                   name="url"
+                  label="Site Internet"
                   placeholder="https://www.monrestaurant.ci"
                   value={data.website}
-                  onChange={(e) => updateData({ website: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800"
+                  onChange={(website) => updateData({ website })}
+                  leftIcon={<Globe />}
                 />
-              </div>
-            </div>
           </div>
         </div>
       </div>
 
       {/* Buttons Block */}
       <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
-        <button
-          type="button"
-          onClick={onPrev}
-          className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl inline-flex items-center space-x-2 transition-all cursor-pointer"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          <span>Précédent</span>
-        </button>
 
-        <button
-          type="button"
-          onClick={validateAndProceed}
-          className="px-6 py-2.5 bg-brand-green hover:bg-brand-600 text-white text-sm font-semibold rounded-xl inline-flex items-center space-x-2 shadow-sm cursor-pointer transition-all active:scale-[0.98]"
-        >
-          <span>Suivant, Horaires</span>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+        <Button onClick={onPrev} variant="outline" >
+          <ChevronLeft />
+          Précédent
+        </Button>
+
+        <Button onClick={validateAndProceed} >
+          Suivant, Horaires
+          <ChevronRight />
+        </Button>
+
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPrix } from "@/lib/utils/format";
+import { DASHBOARD_CHART_CONTAINER_PROPS } from "./chart-layout";
 import {
   Area,
   AreaChart,
@@ -24,7 +25,7 @@ export function RevenueChart({
   const hasData = data.length > 0;
 
   return (
-    <Card className="col-span-full lg:col-span-2">
+    <Card className="col-span-full min-w-0 lg:col-span-2">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
           <CardTitle className="text-sm font-semibold sm:text-base">
@@ -45,8 +46,8 @@ export function RevenueChart({
             </p>
           </div>
         ) : (
-          <div className="h-48 w-full sm:h-62.5">
-            <ResponsiveContainer>
+          <div className="h-48 min-h-0 w-full min-w-0 sm:h-62.5">
+            <ResponsiveContainer {...DASHBOARD_CHART_CONTAINER_PROPS}>
               <AreaChart
                 data={data}
                 margin={{ top: 10, right: 8, left: -10, bottom: 0 }}

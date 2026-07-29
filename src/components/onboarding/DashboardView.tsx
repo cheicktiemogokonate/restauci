@@ -147,11 +147,10 @@ export default function DashboardView({
                     </div>
                     <div>
                       <span className="text-[10px] font-mono font-bold text-gray-400 uppercase block">
-                        Monnaie & TVA
+                        Monnaie
                       </span>
                       <span className="text-gray-900 font-mono font-semibold mt-0.5 block">
-                        {config.settings.currency} (TVA{" "}
-                        {config.settings.taxRate}%)
+                        {config.settings.currency}
                       </span>
                     </div>
                   </div>

@@ -32,11 +32,12 @@ const envSchema = z.object({
     .default("false")
     .transform((value) => value === "true"),
 
-  // ── Upload medias ─────────────────────────────────────────────
-  CLOUDINARY_URL: z.string().optional(),
-  CLOUDINARY_CLOUD_NAME: z.string().optional(),
-  CLOUDINARY_API_KEY: z.string().optional(),
-  CLOUDINARY_API_SECRET: z.string().optional(),
+  // ── Upload medias (Cloudflare R2) ─────────────────────────────
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  R2_BUCKET_NAME: z.string().min(3).max(63).optional(),
+  R2_PUBLIC_URL: z.string().url().optional(),
 
   // ── Web Push (VAPID) ─────────────────────────────────────────
   VAPID_PUBLIC_KEY: z.string().min(1).optional(),

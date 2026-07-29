@@ -1,5 +1,31 @@
 import type { NextConfig } from "next";
 
+function getR2RemotePattern() {
+  if (!process.env.R2_PUBLIC_URL) return null;
+
+  try {
+    const url = new URL(process.env.R2_PUBLIC_URL);
+    if (
+      url.protocol !== "https:" ||
+      url.hostname.endsWith(".r2.cloudflarestorage.com")
+    ) {
+      return null;
+    }
+
+    const basePath = url.pathname.replace(/\/+$/, "");
+    return {
+      protocol: "https" as const,
+      hostname: url.hostname,
+      port: url.port,
+      pathname: `${basePath}/**`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const r2RemotePattern = getR2RemotePattern();
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   ...(process.env.NEXT_DIST_DIR
@@ -18,11 +44,7 @@ const nextConfig: NextConfig = {
         hostname: "images.unsplash.com",
         pathname: "/**",
       },
-      {
-        protocol: "https",
-        hostname: "res.cloudinary.com",
-        pathname: "/**",
-      },
+      ...(r2RemotePattern ? [r2RemotePattern] : []),
     ],
     formats: ["image/avif", "image/webp"],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
@@ -64,8 +86,8 @@ const nextConfig: NextConfig = {
               "font-src 'self' https://fonts.gstatic.com",
               // MapLibre GL needs blob: for its web worker
               "worker-src 'self' blob:",
-              // Allow fetching CARTO basemap styles, tiles, glyphs + Cloudinary + own API + OSRM/Nominatim
-              "connect-src 'self' https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://res.cloudinary.com https://router.project-osrm.org https://nominatim.openstreetmap.org",
+              // Allow fetching CARTO basemap styles, tiles and glyphs, plus OSRM/Nominatim.
+              "connect-src 'self' https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://router.project-osrm.org https://nominatim.openstreetmap.org",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",

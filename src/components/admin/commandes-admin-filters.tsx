@@ -7,15 +7,6 @@ import { format } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-const STATUTS = [
-  { value: "tous", label: "Tous" },
-  { value: "recue", label: "Reçue" },
-  { value: "en_preparation", label: "En préparation" },
-  { value: "prete", label: "Prête" },
-  { value: "servie", label: "Servie" },
-  { value: "annulee", label: "Annulée" },
-];
-
 export function CommandesAdminFilters({
   initialSearch,
   initialStatut,
@@ -39,17 +30,6 @@ export function CommandesAdminFilters({
   );
   const [dateDebut, setDateDebut] = useState(initialDateDebut ?? "");
   const [dateFin, setDateFin] = useState(initialDateFin ?? "");
-
-  const changeStatut = (statut: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (statut === "tous") {
-      params.delete("statut");
-    } else {
-      params.set("statut", statut);
-    }
-    params.delete("page");
-    router.push(`?${params.toString()}`);
-  };
 
   const handleFilters = () => {
     const params = new URLSearchParams(searchParams.toString());

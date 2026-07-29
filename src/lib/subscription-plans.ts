@@ -6,6 +6,13 @@ import {
 import { eq, and, gt, lte, or, desc, isNull } from "drizzle-orm";
 import { SubscriptionPlan, SubscriptionPeriod } from "./db/types";
 
+export class SubscriptionLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SubscriptionLimitError";
+  }
+}
+
 /**
  * Récupère le plan d'abonnement actif pour un restaurant.
  * Un restaurant a toujours un plan actif (Découverte par défaut s'il n'y a pas d'historique).

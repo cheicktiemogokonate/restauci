@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { DASHBOARD_CHART_CONTAINER_PROPS } from "./chart-layout";
 
 interface TopCategoriesProps {
   data?: { name: string; value: number; color: string }[];
@@ -11,7 +12,7 @@ export function TopCategories({ data = [] }: TopCategoriesProps) {
   const hasData = data.length > 0;
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-semibold sm:text-base">
           Top Catégories
@@ -26,8 +27,8 @@ export function TopCategories({ data = [] }: TopCategoriesProps) {
           </div>
         ) : (
           <>
-            <div className="h-44 w-full sm:h-52">
-              <ResponsiveContainer>
+            <div className="h-44 min-h-0 w-full min-w-0 sm:h-52">
+              <ResponsiveContainer {...DASHBOARD_CHART_CONTAINER_PROPS}>
                 <PieChart>
                   <Pie
                     data={data}

@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/mutations";
 import { categories } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
+import { SubscriptionLimitError } from "@/lib/subscription-plans";
 import { platSchema, updatePlatSchema } from "@/lib/validations/plat";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -105,7 +106,12 @@ export async function createMenuCategoryAction(name: string) {
       { error, restaurantId: restaurant.id },
       "createMenuCategoryAction error",
     );
-    return { error: "Impossible de créer la catégorie. Réessayez." };
+    return {
+      error:
+        error instanceof SubscriptionLimitError
+          ? error.message
+          : "Impossible de créer la catégorie. Réessayez.",
+    };
   }
 }
 
@@ -221,7 +227,12 @@ export async function createPlatWizardAction(data: CreatePlatWizardInput) {
       { error, restaurantId: restaurant.id },
       "createPlatWizardAction error",
     );
-    return { error: "Impossible d'ajouter le plat. Réessayez." };
+    return {
+      error:
+        error instanceof SubscriptionLimitError
+          ? error.message
+          : "Impossible d'ajouter le plat. Réessayez.",
+    };
   }
 
   revalidatePath("/restaurateur/menu");
@@ -272,7 +283,12 @@ export async function createPlatAction(_: unknown, formData: FormData) {
     });
   } catch (error) {
     log.error({ error, restaurantId: restaurant.id }, "createPlatAction error");
-    return { error: "Une erreur est survenue" };
+    return {
+      error:
+        error instanceof SubscriptionLimitError
+          ? error.message
+          : "Une erreur est survenue",
+    };
   }
 
   revalidatePath("/restaurateur/menu");

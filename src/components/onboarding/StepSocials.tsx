@@ -1,3 +1,4 @@
+import { Input } from "@/components/motion/input";
 import { Check, Link2, RefreshCw, Share2, Sparkles } from "lucide-react";
 import React, { useState } from "react";
 import { SocialLinks } from "./types";
@@ -212,23 +213,19 @@ export default function StepSocials({
 
                 {/* Account input */}
                 <div className="mt-4 pt-4 border-t border-gray-50">
-                  <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1.5">
-                    Lien / Profil public
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Link2 className="h-3.5 w-3.5 text-gray-400" />
-                    </div>
-                    <input
-                      type="text"
-                      className="w-full pl-9 pr-3 py-2 bg-gray-50/50 border border-gray-200 focus:border-brand-500 focus:bg-white rounded-lg text-xs font-sans outline-none text-gray-700"
-                      placeholder={integ.placeholder}
-                      value={currentVal || ""}
-                      onChange={(e) =>
-                        handleInputChange(integ.id, e.target.value)
-                      }
-                    />
-                  </div>
+                  <Input
+                    type="url"
+                    label="Lien / Profil public"
+                    leftIcon={<Link2 />}
+                    placeholder={integ.placeholder}
+                    value={currentVal || ""}
+                    onChange={(value) => handleInputChange(integ.id, value)}
+                    classNames={{
+                      field: "h-10 rounded-xl bg-gray-50/50",
+                      input: "text-xs",
+                      label: "text-[10px] text-gray-400",
+                    }}
+                  />
                 </div>
               </div>
             );

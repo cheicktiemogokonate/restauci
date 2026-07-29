@@ -105,14 +105,16 @@ export function OrderDetailsHeader({
 
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
           {actions}
-          <Button
-            variant="outline"
-            className="h-10 w-full gap-2 rounded-xl border-border/80 text-sm font-semibold text-foreground sm:w-auto"
-            onClick={() => onPrint?.()}
-          >
-            <Printer className="h-4 w-4" />
-            Imprimer le reçu
-          </Button>
+          {status !== "annulee" && (
+            <Button
+              variant="outline"
+              className="h-10 w-full gap-2 rounded-xl border-border/80 text-sm font-semibold text-foreground sm:w-auto"
+              onClick={() => onPrint?.()}
+            >
+              <Printer className="h-4 w-4" />
+              Imprimer le reçu
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -108,10 +108,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           "relative h-12 overflow-hidden rounded-2xl border bg-[#f7faf8] transition-[border-color,box-shadow,background-color] duration-200",
           "border-black/8 shadow-[inset_0_1px_0_rgba(255,255,255,.9)]",
           focused &&
-            !hasError &&
-            "border-[#0f8a5f]/45 bg-white shadow-[0_0_0_3px_rgba(15,138,95,.10)]",
+          !hasError &&
+          "border-[#0f8a5f]/45 bg-white shadow-[0_0_0_3px_rgba(15,138,95,.10)]",
           hasError &&
-            "border-destructive/70 bg-red-50/50 shadow-[0_0_0_3px_rgba(220,38,38,.08)]",
+          "border-destructive/70 bg-red-50/50 shadow-[0_0_0_3px_rgba(220,38,38,.08)]",
           disabled && "opacity-60",
           classNames?.field,
         )}

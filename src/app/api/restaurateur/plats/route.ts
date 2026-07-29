@@ -1,9 +1,11 @@
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { createCategorie, createPlat } from "@/lib/db/mutations";
 import { getMyRestaurant } from "@/lib/db/queries";
 import { categories, plats } from "@/lib/db/schema";
 import { menuLogger } from "@/lib/loggers";
 import { apiLimiter, checkRateLimit } from "@/lib/rate-limit";
+import { SubscriptionLimitError } from "@/lib/subscription-plans";
 import { and, asc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -217,15 +219,11 @@ export async function POST(request: NextRequest) {
           "Using existing category",
         );
       } else {
-        const [createdCategory] = await db
-          .insert(categories)
-          .values({
-            restaurantId: restaurant.id,
-            nom: data.categorieName,
-            visible: true,
-            ordre: 0,
-          })
-          .returning();
+        const createdCategory = await createCategorie({
+          restaurantId: restaurant.id,
+          nom: data.categorieName,
+          ordre: 0,
+        });
 
         categorieId = createdCategory.id;
         menuLogger.info(
@@ -271,25 +269,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [plat] = await db
-      .insert(plats)
-      .values({
-        restaurantId: restaurant.id,
-        categorieId,
-        nom: data.nom,
-        description: data.description ?? null,
-        prix: data.prix,
-        photoUrl: data.image ?? null,
-        disponible: data.disponible,
-        ordre: 0,
-        tags: data.tags ?? [],
-        allergenes: data.allergenes ?? [],
-        nutrition: null,
-        nombreCommandes: 0,
-        noteMoyenne: 0,
-        nombreAvis: 0,
-      })
-      .returning();
+    const plat = await createPlat({
+      restaurantId: restaurant.id,
+      categorieId,
+      nom: data.nom,
+      description: data.description,
+      prix: data.prix,
+      photoUrl: data.image ?? null,
+      disponible: data.disponible,
+      ordre: 0,
+      tags: data.tags,
+      allergenes: data.allergenes,
+    });
 
     menuLogger.info(
       { ip, platId: plat.id, nom: plat.nom, restaurantId: restaurant.id },
@@ -308,6 +299,9 @@ export async function POST(request: NextRequest) {
       },
       "Failed to create plat",
     );
+    if (error instanceof SubscriptionLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     return NextResponse.json(
       { error: "Une erreur interne est survenue." },
       { status: 500 },

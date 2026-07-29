@@ -1,6 +1,6 @@
 # Audit de préparation à la production — plateforme Toutci
 
-Date de validation technique : 26 juillet 2026
+Date de validation technique : 28 juillet 2026
 
 ## Périmètre
 
@@ -51,6 +51,13 @@ Cet audit couvre :
 - Les en-têtes CSP, HSTS, anti-framing, anti-MIME-sniffing et Permissions Policy sont configurés en production.
 - Les contrôles sans effet, témoignages inventés, partenaires fictifs et promesses non vérifiables ont été retirés de la vitrine active.
 - Les formulaires principaux ont des libellés, noms, règles d’autocomplétion et exigences de mot de passe cohérents.
+- Les médias sont envoyés côté serveur vers Cloudflare R2, avec limitation de
+  débit, taille maximale et validation de la signature réelle des images.
+- Les trois médias historiques Cloudinary ont été copiés vers R2, vérifiés
+  publiquement puis remplacés dans la base ; aucune URL Cloudinary active ne
+  subsiste.
+- Next.js et ses dépendances PostCSS/Sharp ont été mis à niveau vers leurs
+  versions corrigées.
 - Les restaurants rejetés sont distingués des nouvelles demandes et ne
   faussent plus le centre d’actions.
 - Les comptes administrateurs suspendus sont refusés par les pages et les API.
@@ -68,9 +75,13 @@ Cet audit couvre :
 
 - `npm run lint` : réussi ;
 - `npm run typecheck` : réussi ;
-- `npm test -- --run` : 5 fichiers et 15 tests réussis ;
+- `npm test` : 6 fichiers et 17 tests réussis ;
 - `npm run build` : réussi, 66 pages générées ;
+- `npm audit --omit=dev` : aucune vulnérabilité de production détectée ;
 - `npx drizzle-kit check` : schéma et migrations cohérents ;
+- `npm run db:migrate` : migration `0005` confirmée sur la base cible ;
+- requête complète des commandes récentes : cinq résultats chargés avec les
+  relations paiement, livraison et livreur ;
 - `/api/health` : base PostgreSQL et cache Redis disponibles ;
 - recette du build production dans le navigateur : accueil, carte client, authentification client et restaurateur, pages juridiques et redirections protégées sans erreur console ;
 - recette administration : protection anonyme, connexion admin, huit vues
@@ -100,24 +111,21 @@ La page des mentions légales reste volontairement exclue de l’indexation tant
 
 La suite Playwright ne peut pas démarrer : l’identifiant actuellement présent dans `.env.test.local` est refusé par la base de tests PostgreSQL. Une nouvelle valeur `DATABASE_URL_TEST` valide et strictement isolée est nécessaire. La suite prépare et nettoie ses propres données de validation, y compris un compte administrateur et un restaurant dédié au cycle validation–suspension–réactivation.
 
-### 3. Migration de déploiement
+### 3. Stockage média Cloudflare R2
 
-La migration `0005_freezing_pretty_boy.sql` doit être appliquée sur l’environnement de déploiement avant l’ouverture au trafic. Elle ajoute notamment la protection d’idempotence des commandes. Une sauvegarde et une exécution contrôlée de `npm run db:migrate` sont requises.
-
-### 4. Services optionnels
-
-Les identifiants Cloudinary sont requis si l’upload d’images restaurant doit être disponible dès la première version. Sans eux, l’onboarding reste possible sans image.
+Les identifiants R2 et le domaine public du bucket doivent être configurés pour
+activer l’envoi des logos, couvertures et photos de plats. Le code utilise
+l’API S3 de R2 et refuse les fichiers dont la signature réelle ne correspond
+pas à une image JPEG, PNG ou WebP.
 
 ## Risques résiduels acceptés pour cette version
 
 - Le paiement reste limité aux modes réellement implémentés ; aucune connexion Google ni promesse de paiement en ligne n’est exposée.
 - La CSP autorise encore les styles et scripts inline nécessaires au rendu Next.js actuel. Un passage à une CSP avec nonce peut être planifié après la mise en production initiale.
-- L’audit automatisé des dépendances n’a pas été exécuté dans cet environnement ; il doit être ajouté au pipeline CI avec accès sécurisé au registre.
 
 ## Décision de sortie
 
 La plateforme complète, administration incluse, est un candidat de mise en
-production. Le feu vert final dépend de quatre actions externes : compléter les
-mentions légales, fournir une base E2E valide, appliquer les migrations sur
-l’environnement cible et configurer les services optionnels retenus pour la
-version.
+production. Le feu vert final dépend de trois actions externes : compléter les
+mentions légales, fournir une base E2E valide et fournir les identifiants ainsi
+que le domaine public Cloudflare R2.

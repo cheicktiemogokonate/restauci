@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DASHBOARD_CHART_CONTAINER_PROPS } from "./chart-layout";
 import {
   Bar,
   BarChart,
@@ -24,7 +25,7 @@ export function OrdersOverview({
   const hasData = data.length > 0;
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
           <CardTitle className="text-sm font-semibold sm:text-base">
@@ -46,8 +47,8 @@ export function OrdersOverview({
             </p>
           </div>
         ) : (
-          <div className="h-44 w-full sm:h-48">
-            <ResponsiveContainer>
+          <div className="h-44 min-h-0 w-full min-w-0 sm:h-48">
+            <ResponsiveContainer {...DASHBOARD_CHART_CONTAINER_PROPS}>
               <BarChart
                 data={data}
                 margin={{ top: 10, right: 0, left: -20, bottom: 0 }}

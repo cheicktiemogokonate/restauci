@@ -97,10 +97,6 @@ export default function InteractiveMap({
           GPS: {pinPos.lat.toFixed(4)}°, {pinPos.lng.toFixed(4)}° ({commune})
         </span>
       </div>
-
-      <div className="absolute top-4 left-4 z-20 bg-brand-50/90 text-brand-700 font-sans border border-brand-100 font-semibold px-2.5 py-1 text-[10px] uppercase rounded-md tracking-wider">
-        Carte Interactive
-      </div>
     </div>
   );
 }

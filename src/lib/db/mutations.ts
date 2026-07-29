@@ -1,5 +1,6 @@
 import { db } from "./index";
 import { eq, and, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { invalidateRestaurantCache } from "@/lib/cache";
 import {
   users,
@@ -17,6 +18,11 @@ import {
   subscriptionRequests,
   subscriptionPeriods,
 } from "./schema";
+import { getInitialMenuCategories } from "@/lib/menu/default-categories";
+import {
+  checkPlanLimits,
+  SubscriptionLimitError,
+} from "@/lib/subscription-plans";
 export { createCommande, updateStatutCommande } from "./commandes-mutations";
 export type { CreateCommandeInput } from "./commandes-mutations";
 
@@ -118,6 +124,7 @@ export interface CreateRestaurantInput {
     description?: string;
     prix: number;
     categorie: string;
+    photoUrl?: string;
   }[];
 }
 
@@ -130,114 +137,157 @@ export async function createRestaurant(input: CreateRestaurantInput) {
   });
   if (existing) slug = `${slug}-${Date.now()}`;
 
-  // Récupérer le plan choisi à l'inscription (pendingPlanCode) ou 'decouverte'
+  // L'offre choisie à l'inscription peut nécessiter une validation. Tant
+  // qu'elle n'est pas validée, les droits actifs sont ceux de Découverte.
   const user = await db.query.users.findFirst({
     where: (u, { eq }) => eq(u.id, input.userId),
   });
 
-  const planCodeToApply = user?.pendingPlanCode || "decouverte";
-
-  // Récupérer les détails du plan dans le catalogue
-  const plan = await db.query.subscriptionPlans.findFirst({
-    where: (p, { eq }) => eq(p.code, planCodeToApply),
+  const requestedPlanCode = user?.pendingPlanCode || "decouverte";
+  const requestedPlan = await db.query.subscriptionPlans.findFirst({
+    where: (plan, { eq }) => eq(plan.code, requestedPlanCode),
+  });
+  const initialPlan = await db.query.subscriptionPlans.findFirst({
+    where: (plan, { eq }) => eq(plan.code, "decouverte"),
   });
 
+  if (!initialPlan) {
+    throw new Error(
+      "Catalogue des abonnements invalide : offre Découverte introuvable.",
+    );
+  }
+
+  const planToRequest = requestedPlan ?? initialPlan;
   const { schedule = [], menu = [], ...restaurantInput } = input;
+  const initialCategories = getInitialMenuCategories(
+    initialPlan.maxCategories,
+  );
+  const allowedCategories = new Set<string>(initialCategories);
 
-  return db.transaction(async (tx) => {
-    const [restaurant] = await tx
-      .insert(restaurants)
-      .values({
-        ...restaurantInput,
-        slug,
-        fraisLivraison: input.fraisLivraison ?? 0,
-        commandeMinimum: input.commandeMinimum ?? 0,
-        modesCommande: input.modesCommande ?? ["sur_place"],
-        cuisines: input.cuisines ?? [],
-        actif: false,
-      })
-      .returning();
+  if (menu.length > 1) {
+    throw new SubscriptionLimitError(
+      "L’onboarding permet d’ajouter un seul plat de démonstration.",
+    );
+  }
 
-    if (schedule.length > 0) {
-      await tx.insert(creneauxHoraires).values(
+  if (initialPlan.maxPlats !== null && menu.length > initialPlan.maxPlats) {
+    throw new SubscriptionLimitError(
+      `L’offre ${initialPlan.nom} autorise au maximum ${initialPlan.maxPlats} plats.`,
+    );
+  }
+
+  if (menu.some((item) => !allowedCategories.has(item.categorie.trim()))) {
+    throw new SubscriptionLimitError(
+      "Un plat utilise une catégorie qui ne fait pas partie des catégories initiales autorisées.",
+    );
+  }
+
+  // Le pilote neon-http ne prend pas en charge les transactions interactives
+  // `db.transaction(callback)`. `db.batch` envoie en revanche toutes les
+  // requêtes dans une transaction HTTP atomique Neon.
+  const restaurantId = crypto.randomUUID();
+  const categoriesWithIds = initialCategories.map((nom, ordre) => ({
+    id: crypto.randomUUID(),
+    restaurantId,
+    nom,
+    ordre,
+  }));
+  const categoriesByName = new Map<string, string>(
+    categoriesWithIds.map((category) => [category.nom, category.id]),
+  );
+
+  const operations: BatchItem<"pg">[] = [
+    db.insert(restaurants).values({
+      ...restaurantInput,
+      id: restaurantId,
+      slug,
+      fraisLivraison: input.fraisLivraison ?? 0,
+      commandeMinimum: input.commandeMinimum ?? 0,
+      modesCommande: input.modesCommande ?? ["sur_place"],
+      cuisines: input.cuisines ?? [],
+      actif: false,
+    }),
+  ];
+
+  if (schedule.length > 0) {
+    operations.push(
+      db.insert(creneauxHoraires).values(
         schedule.map((entry) => ({
-          restaurantId: restaurant.id,
+          id: crypto.randomUUID(),
+          restaurantId,
           nom: entry.nom,
           heureOuverture: entry.heureOuverture,
           heureFermeture: entry.heureFermeture,
           joursActifs: entry.joursActifs,
         })),
-      );
-    }
+      ),
+    );
+  }
 
-    const categoriesByName = new Map<string, string>();
-    for (const [index, categoryName] of [
-      ...new Set(menu.map((item) => item.categorie.trim())),
-    ].entries()) {
-      const [category] = await tx
-        .insert(categories)
-        .values({
-          restaurantId: restaurant.id,
-          nom: categoryName,
-          ordre: index,
-        })
-        .returning({ id: categories.id });
-      categoriesByName.set(categoryName, category.id);
-    }
+  if (categoriesWithIds.length > 0) {
+    operations.push(db.insert(categories).values(categoriesWithIds));
+  }
 
-    if (menu.length > 0) {
-      await tx.insert(plats).values(
+  if (menu.length > 0) {
+    operations.push(
+      db.insert(plats).values(
         menu.map((item, index) => ({
-          restaurantId: restaurant.id,
+          id: crypto.randomUUID(),
+          restaurantId,
           categorieId: categoriesByName.get(item.categorie.trim())!,
           nom: item.nom,
           description: item.description,
           prix: item.prix,
+          photoUrl: item.photoUrl,
           ordre: index,
         })),
-      );
-    }
+      ),
+    );
+  }
 
-    if (plan) {
-      if (plan.code === "decouverte") {
-        await tx.insert(subscriptionPeriods).values({
-          restaurantId: restaurant.id,
-          planCode: plan.code,
-          tauxCommissionBpsFige: plan.tauxCommissionBps,
-          statut: "active",
-        });
-      } else {
-        await tx.insert(subscriptionRequests).values({
-          restaurantId: restaurant.id,
-          planCode: plan.code,
-          prixFigeFcfa: plan.prixAnnuelFcfa,
-          statut: "en_attente",
-        });
+  if (planToRequest.code !== "decouverte") {
+    operations.push(
+      db.insert(subscriptionRequests).values({
+        id: crypto.randomUUID(),
+        restaurantId,
+        planCode: planToRequest.code,
+        prixFigeFcfa: planToRequest.prixAnnuelFcfa,
+        statut: "en_attente",
+      }),
+    );
+  }
 
-        const decouvertePlan = await tx.query.subscriptionPlans.findFirst({
-          where: (p, { eq }) => eq(p.code, "decouverte"),
-        });
+  operations.push(
+    db.insert(subscriptionPeriods).values({
+      id: crypto.randomUUID(),
+      restaurantId,
+      planCode: initialPlan.code,
+      tauxCommissionBpsFige: initialPlan.tauxCommissionBps,
+      statut: "active",
+    }),
+  );
 
-        if (decouvertePlan) {
-          await tx.insert(subscriptionPeriods).values({
-            restaurantId: restaurant.id,
-            planCode: "decouverte",
-            tauxCommissionBpsFige: decouvertePlan.tauxCommissionBps,
-            statut: "active",
-          });
-        }
-      }
-    }
-
-    if (user?.pendingPlanCode) {
-      await tx
+  if (user?.pendingPlanCode) {
+    operations.push(
+      db
         .update(users)
         .set({ pendingPlanCode: null })
-        .where(eq(users.id, user.id));
-    }
+        .where(eq(users.id, user.id)),
+    );
+  }
 
-    return restaurant;
+  await db.batch(
+    operations as [BatchItem<"pg">, ...BatchItem<"pg">[]],
+  );
+
+  const restaurant = await db.query.restaurants.findFirst({
+    where: (table, { eq: equals }) => equals(table.id, restaurantId),
   });
+  if (!restaurant) {
+    throw new Error("Restaurant introuvable après sa création.");
+  }
+
+  return restaurant;
 }
 
 export async function updateRestaurant(
@@ -360,8 +410,6 @@ export interface CreateCategorieInput {
   creneauId?: string | null;
 }
 
-import { checkPlanLimits } from "@/lib/subscription-plans";
-
 export async function createCategorie(input: CreateCategorieInput) {
   const [{ value }] = await db
     .select({ value: sql<number>`count(*)` })
@@ -370,7 +418,9 @@ export async function createCategorie(input: CreateCategorieInput) {
 
   const limits = await checkPlanLimits(input.restaurantId, "categories", Number(value));
   if (!limits) {
-    throw new Error("Limite de catégories atteinte pour votre offre actuelle.");
+    throw new SubscriptionLimitError(
+      "Limite de catégories atteinte pour votre offre actuelle.",
+    );
   }
 
   const [categorie] = await db
@@ -472,7 +522,9 @@ export async function createPlat(input: CreatePlatInput) {
 
   const limits = await checkPlanLimits(input.restaurantId, "plats", Number(value));
   if (!limits) {
-    throw new Error("Limite de plats atteinte pour votre offre actuelle.");
+    throw new SubscriptionLimitError(
+      "Limite de plats atteinte pour votre offre actuelle.",
+    );
   }
 
   const [plat] = await db

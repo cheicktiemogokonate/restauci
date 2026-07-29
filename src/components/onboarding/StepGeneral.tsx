@@ -1,73 +1,47 @@
 import Image from "next/image";
+import { Input } from "@/components/motion/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/motion/select";
+import {
+  BedDouble,
+  CalendarDays,
   Check,
+  ChevronRight,
   Image as ImageIcon,
-  Sparkles,
-  Store,
   Trash2,
   Upload,
+  Utensils,
 } from "lucide-react";
 import React, { useState } from "react";
-import { GeneralInfo } from "./types";
+import {
+  ESTABLISHMENT_TYPE_OPTIONS,
+  RESTAURANT_TYPE_OPTIONS,
+  SERVICE_TYPE_OPTIONS,
+} from "@/lib/onboarding/settings";
+import type { GeneralInfo, RestaurantSettings } from "./types";
+import { Button } from "../ui/button";
+import { Input as FileInput } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 interface StepGeneralProps {
   data: GeneralInfo;
   updateData: (fields: Partial<GeneralInfo>) => void;
-  updateSettings?: (fields: Partial<Record<string, unknown>>) => void;
+  settings: RestaurantSettings;
+  updateSettings: (fields: Partial<RestaurantSettings>) => void;
   onNext: () => void;
 }
 
-// Highly appealing Côte d'Ivoire specialized quick presets
-const RESTAURANT_PRESETS = [
-  {
-    name: "La Braise d'Or",
-    category: "bistrot",
-    serviceTypes: ["dine-in", "takeout", "delivery"],
-    label: "Maquis Moderne / Braisés",
-    description:
-      "Le maquis moderne gourmet d'Abidjan Zone 4. Célèbre pour nos poulets et poissons braisés au feu de bois, notre attiéké de qualité supérieure et nos kédjenous de dinde authentiques.",
-    logoUrl: "",
-    bannerUrl: "",
-    gallery: [],
-  },
-  {
-    name: "L'Atelier Gourmet",
-    category: "bistrot",
-    serviceTypes: ["dine-in", "takeout"],
-    label: "Bistrot Chic & Salon",
-    description:
-      "Une expérience gastronomique raffinée au Plateau. Notre carte valorise des ingrédients nobles de Côte d'Ivoire, mariant techniques culinaires modernes et excellence locale.",
-    logoUrl: "",
-    bannerUrl: "",
-    gallery: [],
-  },
-  {
-    name: "Abidjan Burger & Chawarma",
-    category: "fast-food",
-    serviceTypes: ["takeout", "delivery"],
-    label: "Fast-Food & Street Food",
-    description:
-      "Le fast-food urbain rapide et de qualité supérieure à Cocody. Burgers gourmets maison, chawarmas généreux sous pain artisanal et frites d'attiéké ou de patate douce.",
-    logoUrl: "",
-    bannerUrl: "",
-    gallery: [],
-  },
-  {
-    name: "Douceurs d'Éburnie",
-    category: "cafeteria",
-    serviceTypes: ["dine-in", "takeout"],
-    label: "Salon de Thé & Pâtisserie",
-    description:
-      "Boulangerie-café chaleureuse au Vallon. Brunchs complets le week-end, macarons créatifs au cacao ivoirien d'exception, thés glacés au bissap blanc et citronnelle.",
-    logoUrl: "",
-    bannerUrl: "",
-    gallery: [],
-  },
-];
 
 export default function StepGeneral({
   data,
   updateData,
+  settings,
   updateSettings,
   onNext,
 }: StepGeneralProps) {
@@ -76,36 +50,9 @@ export default function StepGeneral({
     data.bannerUrl,
   );
   const [isUploading, setIsUploading] = useState(false);
-  const [descriptionCount, setDescriptionCount] = useState(
-    data.description.length,
-  );
-  const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | null>(
-    null,
-  );
   const [error, setError] = useState<string | null>(null);
 
-  const applyPreset = (preset: (typeof RESTAURANT_PRESETS)[0], idx: number) => {
-    updateData({
-      name: preset.name,
-      description: preset.description,
-      logoUrl: preset.logoUrl,
-      bannerUrl: preset.bannerUrl,
-      galleryUrls: preset.gallery,
-    });
 
-    if (updateSettings) {
-      updateSettings({
-        category: preset.category,
-        serviceTypes: preset.serviceTypes,
-      });
-    }
-
-    setLogoPreview(preset.logoUrl);
-    setBannerPreview(preset.bannerUrl);
-    setDescriptionCount(preset.description.length);
-    setSelectedPresetIndex(idx);
-    setError(null);
-  };
 
   const uploadImage = async (file: File) => {
     const formData = new FormData();
@@ -130,7 +77,6 @@ export default function StepGeneral({
       const url = await uploadImage(file);
       setLogoPreview(url);
       updateData({ logoUrl: url });
-      setSelectedPresetIndex(null);
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
@@ -151,7 +97,6 @@ export default function StepGeneral({
       const url = await uploadImage(file);
       setBannerPreview(url);
       updateData({ bannerUrl: url });
-      setSelectedPresetIndex(null);
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
@@ -167,11 +112,9 @@ export default function StepGeneral({
     if (type === "logo") {
       setLogoPreview(null);
       updateData({ logoUrl: null });
-      setSelectedPresetIndex(null);
     } else if (type === "banner") {
       setBannerPreview(null);
       updateData({ bannerUrl: null });
-      setSelectedPresetIndex(null);
     }
   };
 
@@ -184,71 +127,41 @@ export default function StepGeneral({
       setError("Une brève description est requise.");
       return;
     }
+    if (!settings.category) {
+      setError("Choisissez le type de restaurant.");
+      return;
+    }
+    if (settings.serviceTypes.length === 0) {
+      setError("Choisissez au moins un mode de service.");
+      return;
+    }
     setError(null);
     onNext();
+  };
+
+  const toggleServiceType = (
+    type: (typeof SERVICE_TYPE_OPTIONS)[number]["id"],
+  ) => {
+    const serviceTypes = settings.serviceTypes.includes(type)
+      ? settings.serviceTypes.filter((current) => current !== type)
+      : [...settings.serviceTypes, type];
+    updateSettings({ serviceTypes });
+    setError(null);
   };
 
   return (
     <div className="flex-1 max-w-4xl p-6 lg:p-10 overflow-y-auto">
       {/* Step Header */}
       <div className="mb-8">
-        <div className="flex items-center space-x-3 mb-3">
-          <div className="w-10 h-10 bg-emerald-50 text-brand-500 rounded-xl flex items-center justify-center ring-1 ring-emerald-100">
-            <Store className="w-5 h-5" />
-          </div>
-          <span className="text-xs font-mono text-gray-400 font-semibold uppercase tracking-wider">
-            Étape 1/5
-          </span>
-        </div>
+        <span className="text-xs font-mono text-gray-400 font-semibold uppercase tracking-wider">
+          Étape 1/5
+        </span>
         <h1 className="text-2xl font-bold font-display text-gray-900 tracking-tight leading-none">
           Enseigne & Identité visuelle
         </h1>
         <p className="text-sm text-gray-500 mt-2 font-sans">
-          Démarrez instantanément avec l&apos;un de nos prototypes de restaurant
-          optimisés pour le marché ivoirien, ou remplissez votre propre
-          formulaire.
+          Présentez votre établissement et choisissez son activité principale.
         </p>
-      </div>
-
-      {/* Modern High-Impact Preset Archetypes Grid inside the container */}
-      <div className="mb-8">
-        <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 mb-3 flex items-center space-x-1.5 font-mono">
-          <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
-          <span>Gabarit de départ rapide</span>
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          {RESTAURANT_PRESETS.map((preset, idx) => {
-            const isSelected =
-              selectedPresetIndex === idx || data.name === preset.name;
-            return (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => applyPreset(preset, idx)}
-                className={`relative p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                  isSelected
-                    ? "border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20"
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                }`}
-              >
-                {isSelected && (
-                  <span className="absolute top-2 right-2 bg-emerald-500 text-white rounded-full p-0.5">
-                    <Check className="w-3 h-3 stroke-3" />
-                  </span>
-                )}
-                <span className="font-semibold text-xs text-gray-900 block truncate">
-                  {preset.name}
-                </span>
-                <span className="text-[10px] text-gray-400 block mt-0.5">
-                  {preset.label}
-                </span>
-                <span className="text-[10px] text-gray-500 block mt-1 line-clamp-2">
-                  {preset.description}
-                </span>
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       <div className="space-y-8 bg-white border border-gray-100 rounded-2xl p-6 lg:p-8 shadow-sm">
@@ -259,44 +172,140 @@ export default function StepGeneral({
           </div>
         )}
 
+        <section
+          aria-labelledby="activity-heading"
+          className="rounded-2xl p-2"
+        >
+          <div className="flex items-start justify-between gap-4">
+
+            <h2
+              id="activity-heading"
+              className="text-sm font-bold text-gray-950"
+            >
+              Votre activité
+            </h2>
+
+
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {ESTABLISHMENT_TYPE_OPTIONS.map((option) => {
+              const selected = settings.establishmentType === option.id;
+              return (
+                  <Button
+                    key={option.id}
+                    onClick={() =>
+                      option.available &&
+                      updateSettings({ establishmentType: option.id })
+                    }
+                    disabled={!option.available}
+                    variant={selected ? "secondary" : "outline"}
+                    aria-pressed={selected}
+                    className={selected ? "text-green-800" : ""}
+                  >
+                    {selected ? (
+                      <Check className="size-3.5" aria-hidden="true" />
+                    ) : null}
+                    {option.id === "restaurant" ? (
+                      <Utensils className="size-3.5" aria-hidden="true" />
+                    ) : option.id === "residence" ? (
+                      <BedDouble className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <CalendarDays className="size-3.5" aria-hidden="true" />
+                    )}
+
+                    <span className="truncate">{option.name}</span>
+                    {!option.available ? (
+                      <span className="absolute -top-1.5 right-1 rounded-full bg-gray-900 px-1 text-[8px] font-bold text-gray-400">
+                        Bientôt
+                      </span>
+                    ) : null}
+                  </Button>
+              );
+            })}
+          </div>
+
+          {settings.establishmentType === "restaurant" ? (
+            <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold tracking-wide text-gray-600 uppercase">
+                  Type de restaurant
+                </Label>
+                <Select
+                  value={settings.category}
+                  onValueChange={(category) => {
+                    updateSettings({ category });
+                    setError(null);
+                  }}
+                >
+                  <SelectTrigger className="h-10 bg-white">
+                    <SelectValue placeholder="Choisir un type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RESTAURANT_TYPE_OPTIONS.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-bold tracking-wide text-gray-600 uppercase">
+                  Services
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {SERVICE_TYPE_OPTIONS.map((service) => {
+                    const selected = settings.serviceTypes.includes(service.id);
+                    return (
+                      <Button
+                        key={service.id}
+                        variant={selected ? "secondary" : "outline"}
+                        size="sm"
+                        onClick={() => toggleServiceType(service.id)}
+                        className={selected ? "text-green-800" : ""}
+                      >
+                        {selected ? (
+                          <Check className="size-3.5" aria-hidden="true" />
+                        ) : null}
+                        {service.name}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </section>
+
         {/* Input Fields */}
         <div className="grid grid-cols-1 gap-6">
-          <div>
-            <label
-              htmlFor="name"
-              className="block text-sm font-semibold text-gray-900 mb-2"
-            >
-              Nom de l&apos;établissement *
-            </label>
-            <input
+            <Input
               type="text"
               id="name"
               name="restaurant-name"
+              label="Nom de l’établissement *"
               placeholder="Ex: Le Krystal, Maquis la Braise"
               value={data.name}
-              onChange={(e) => {
-                updateData({ name: e.target.value });
-                setSelectedPresetIndex(null);
-              }}
-              className="w-full px-4 py-3 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800 placeholder-gray-400"
+              onChange={(name) => updateData({ name })}
             />
-          </div>
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label
+              <Label
                 htmlFor="description"
-                className="block text-sm font-semibold text-gray-900"
+                className="px-1 text-[11px] font-bold tracking-[0.08em] text-[#173c2f]/75 uppercase"
               >
                 Slogan & Description *
-              </label>
+              </Label>
               <span
-                className={`text-[10px] font-mono ${descriptionCount > 300 ? "text-red-500" : "text-gray-400"}`}
+                className="font-mono text-[10px] text-gray-400"
               >
-                {descriptionCount} / 300
+                {data.description.length} / 300
               </span>
             </div>
-            <textarea
+            <Textarea
               id="description"
               name="description"
               rows={3}
@@ -305,10 +314,8 @@ export default function StepGeneral({
               value={data.description}
               onChange={(e) => {
                 updateData({ description: e.target.value });
-                setDescriptionCount(e.target.value.length);
-                setSelectedPresetIndex(null);
               }}
-              className="w-full px-4 py-3 bg-white border border-gray-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 rounded-xl text-sm transition-all font-sans outline-none text-gray-800 placeholder-gray-400 resize-none"
+              className="min-h-24 resize-none rounded-2xl border-black/8 bg-[#f7faf8] px-4 py-3 text-sm font-medium text-[#132d24] placeholder:text-[#789087]/70 focus-visible:border-[#0f8a5f]/45 focus-visible:bg-white focus-visible:ring-[#0f8a5f]/10"
             />
           </div>
         </div>
@@ -344,7 +351,10 @@ export default function StepGeneral({
                   </div>
                 </div>
               ) : (
-                <label className="cursor-pointer text-center flex flex-col items-center h-full justify-center w-full">
+                <Label
+                  htmlFor="onboarding-logo"
+                  className="flex h-full w-full cursor-pointer flex-col items-center justify-center text-center"
+                >
                   <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm text-gray-400 group-hover:text-brand-500 group-hover:scale-105 transition-all">
                     <Upload className="w-4 h-4" />
                   </div>
@@ -354,14 +364,15 @@ export default function StepGeneral({
                   <span className="text-[9px] text-gray-400 mt-0.5">
                     Format carré (cliquez)
                   </span>
-                  <input
+                  <FileInput
+                    id="onboarding-logo"
                     type="file"
                     disabled={isUploading}
                     accept="image/*"
                     onChange={handleLogoUpload}
                     className="hidden"
                   />
-                </label>
+                </Label>
               )}
             </div>
           </div>
@@ -395,7 +406,10 @@ export default function StepGeneral({
                   </div>
                 </div>
               ) : (
-                <label className="cursor-pointer text-center flex flex-col items-center h-full justify-center w-full">
+                <Label
+                  htmlFor="onboarding-banner"
+                  className="flex h-full w-full cursor-pointer flex-col items-center justify-center text-center"
+                >
                   <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm text-gray-400 group-hover:text-brand-500 group-hover:scale-105 transition-all">
                     <ImageIcon className="w-4 h-4" />
                   </div>
@@ -405,14 +419,15 @@ export default function StepGeneral({
                   <span className="text-[9px] text-gray-400 mt-0.5">
                     Format paysage (cliquez)
                   </span>
-                  <input
+                  <FileInput
+                    id="onboarding-banner"
                     type="file"
                     disabled={isUploading}
                     accept="image/*"
                     onChange={handleBannerUpload}
                     className="hidden"
                   />
-                </label>
+                </Label>
               )}
             </div>
           </div>
@@ -422,27 +437,11 @@ export default function StepGeneral({
 
       {/* Buttons Block */}
       <div className="flex justify-end mt-8 pt-6 border-t border-gray-100">
-        <button
-          type="button"
-          onClick={validateAndProceed}
-          disabled={isUploading}
-          className="px-6 py-3 bg-brand-green text-white text-sm font-semibold rounded-xl inline-flex items-center space-x-2 shadow-sm cursor-pointer transition-all active:scale-[0.98]"
-        >
-          <span>Suivant, Localisation</span>
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2.5"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
-        </button>
+
+        <Button onClick={validateAndProceed} disabled={isUploading}>
+          Suivant, Localisation
+          <ChevronRight />
+        </Button>
       </div>
     </div>
   );

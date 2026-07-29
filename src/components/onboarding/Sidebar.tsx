@@ -1,4 +1,13 @@
-import { Check, Clock, Eye, HelpCircle, MapPin, Store, Utensils } from "lucide-react";
+import {
+  Check,
+  Clock,
+  Eye,
+  HelpCircle,
+  MapPin,
+  Store,
+  Utensils,
+} from "lucide-react";
+import { AppLogo } from "../ui/app-logo";
 
 interface SidebarProps {
   currentStep: number;
@@ -15,7 +24,7 @@ export default function Sidebar({
     {
       number: 1,
       title: "Enseigne & Identité",
-      description: "Nom de l'établissement, logo et style de cuisine.",
+      description: "Nom, description et identité visuelle.",
       icon: Store,
     },
     {
@@ -48,24 +57,7 @@ export default function Sidebar({
     <aside className="w-full lg:w-96 lg:h-screen lg:sticky lg:top-0 bg-gray-50 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col p-5 sm:p-6 lg:p-8 shrink-0 select-none overflow-y-auto">
       {/* Brand Logo - Matches screenshot perfectly */}
       <div className="flex items-center space-x-3 mb-4 lg:mb-10">
-        <div className="w-10 h-10 bg-brand-green rounded-xl flex items-center justify-center shadow-sm shadow-brand-green/20">
-          {/* Chef Hat SVG or Icon */}
-          <svg
-            className="w-6 h-6 text-white"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M6 18V20h12v-2" />
-            <path d="M5 10c0-2.3 1.5-4 4-4 1.2 0 2 .5 2.5 1 .5-.5 1.3-1 2.5-1 2.5 0 4 1.7 4 4 0 1-.2 1.5-1 2.2V16H5v-3.8c-.8-.7-1-1.2-1-2.2Z" />
-          </svg>
-        </div>
-        <span className="text-2xl font-bold font-display text-gray-900 tracking-tight">
-          Tout<span className="text-brand-green">ci</span>
-        </span>
+        <AppLogo />
       </div>
 
       {/* Main Stepper Info - Hidden on mobile */}
@@ -104,13 +96,12 @@ export default function Sidebar({
               {steps.map((step) => (
                 <div
                   key={step.number}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    currentStep === step.number
+                  className={`h-1.5 rounded-full transition-all duration-300 ${currentStep === step.number
                       ? "w-4 bg-brand-500"
                       : completedSteps[step.number - 1]
                         ? "w-1.5 bg-emerald-500"
                         : "w-1.5 bg-gray-200"
-                  }`}
+                    }`}
                 />
               ))}
             </div>
@@ -137,23 +128,21 @@ export default function Sidebar({
                   goToStep(step.number);
                 }
               }}
-              className={`relative z-10 flex items-center lg:items-start lg:space-x-4 cursor-pointer group transition-all duration-300 ${
-                isActive
+              className={`relative z-10 flex items-center lg:items-start lg:space-x-4 cursor-pointer group transition-all duration-300 ${isActive
                   ? "opacity-100"
                   : isCompleted
                     ? "opacity-90 hover:opacity-100"
                     : "opacity-60 hover:opacity-85"
-              }`}
+                }`}
             >
               {/* Step indicator circle */}
               <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 font-sans font-bold text-sm shrink-0 shadow-sm ${
-                  isCompleted
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 font-sans font-bold text-sm shrink-0 shadow-sm ${isCompleted
                     ? "bg-brand-green text-white shadow-brand-green/20"
                     : isActive
                       ? "bg-white border-2 border-brand-green text-brand-green ring-4 ring-brand-green/20"
                       : "bg-white border-2 border-gray-200 text-gray-500"
-                }`}
+                  }`}
               >
                 {isCompleted ? (
                   <Check className="w-5 h-5 stroke-3" />
@@ -165,9 +154,8 @@ export default function Sidebar({
               {/* Step details */}
               <div className="flex-1 pt-1">
                 <span
-                  className={`text-sm font-semibold block transition-colors duration-200 font-display ${
-                    isActive ? "text-brand-500 font-bold" : "text-gray-900"
-                  }`}
+                  className={`text-sm font-semibold block transition-colors duration-200 font-display ${isActive ? "text-brand-500 font-bold" : "text-gray-900"
+                    }`}
                 >
                   {step.title}
                 </span>

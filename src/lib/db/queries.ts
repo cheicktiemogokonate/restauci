@@ -2,6 +2,7 @@ import { cacheKey, TTL, withCache } from "@/lib/cache";
 import { getOffset, PAGINATION } from "@/lib/config/pagination";
 import { and, asc, count, desc, eq, gte, like, lte, sql } from "drizzle-orm";
 import { db } from "./index";
+import { withDatabaseReadRetry } from "./read-retry";
 import { avis, commandes, notifications, plats } from "./schema";
 import type { ModeCommande, StatutCommande } from "./types";
 
@@ -508,66 +509,68 @@ export async function getStatsDashboard(restaurantId: string) {
       commandesMois,
       chiffreAffairesMois,
       commandesEnCours,
-    ] = await Promise.all([
-      // Commandes aujourd'hui
-      db
-        .select({ count: count() })
-        .from(commandes)
-        .where(
-          and(
-            eq(commandes.restaurantId, restaurantId),
-            gte(commandes.createdAt, debutJour),
+    ] = await withDatabaseReadRetry(() =>
+      db.batch([
+        // Commandes aujourd'hui
+        db
+          .select({ count: count() })
+          .from(commandes)
+          .where(
+            and(
+              eq(commandes.restaurantId, restaurantId),
+              gte(commandes.createdAt, debutJour),
+            ),
           ),
-        ),
-      // Commandes 7 derniers jours
-      db
-        .select({ count: count() })
-        .from(commandes)
-        .where(
-          and(
-            eq(commandes.restaurantId, restaurantId),
-            gte(commandes.createdAt, debutSemaine),
+        // Commandes 7 derniers jours
+        db
+          .select({ count: count() })
+          .from(commandes)
+          .where(
+            and(
+              eq(commandes.restaurantId, restaurantId),
+              gte(commandes.createdAt, debutSemaine),
+            ),
           ),
-        ),
-      // Commandes ce mois
-      db
-        .select({ count: count() })
-        .from(commandes)
-        .where(
-          and(
-            eq(commandes.restaurantId, restaurantId),
-            gte(commandes.createdAt, debutMois),
+        // Commandes ce mois
+        db
+          .select({ count: count() })
+          .from(commandes)
+          .where(
+            and(
+              eq(commandes.restaurantId, restaurantId),
+              gte(commandes.createdAt, debutMois),
+            ),
           ),
-        ),
-      // CA ce mois (en centimes)
-      db
-        .select({ total: sql<number>`COALESCE(SUM(${commandes.total}), 0)` })
-        .from(commandes)
-        .where(
-          and(
-            eq(commandes.restaurantId, restaurantId),
-            gte(commandes.createdAt, debutMois),
-            sql`${commandes.statut}::text = ${"servie"}`,
+        // CA ce mois (en centimes)
+        db
+          .select({ total: sql<number>`COALESCE(SUM(${commandes.total}), 0)` })
+          .from(commandes)
+          .where(
+            and(
+              eq(commandes.restaurantId, restaurantId),
+              gte(commandes.createdAt, debutMois),
+              eq(commandes.statut, "servie"),
+            ),
           ),
-        ),
-      // Commandes en cours (reçues + en préparation + prêtes)
-      db
-        .select({ statut: commandes.statut, count: count() })
-        .from(commandes)
-        .where(
-          and(
-            eq(commandes.restaurantId, restaurantId),
-            sql`${commandes.statut} IN ('recue', 'en_preparation', 'prete')`,
-          ),
-        )
-        .groupBy(commandes.statut),
-    ]);
+        // Commandes en cours (reçues + en préparation + prêtes)
+        db
+          .select({ statut: commandes.statut, count: count() })
+          .from(commandes)
+          .where(
+            and(
+              eq(commandes.restaurantId, restaurantId),
+              sql`${commandes.statut} IN ('recue', 'en_preparation', 'prete')`,
+            ),
+          )
+          .groupBy(commandes.statut),
+      ]),
+    );
 
     return {
       commandesAujourdhui: commandesAujourdhui[0].count,
       commandesSemaine: commandesSemaine[0].count,
       commandesMois: commandesMois[0].count,
-      chiffreAffairesMois: chiffreAffairesMois[0].total,
+      chiffreAffairesMois: Number(chiffreAffairesMois[0].total),
       commandesEnCours,
     };
   });

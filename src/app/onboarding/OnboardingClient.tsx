@@ -15,6 +15,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+const ONBOARDING_DRAFT_VERSION = "3";
+
 // Initial configuration default states
 const INITIAL_CONFIG: RestaurantConfig = {
   general: {
@@ -26,12 +28,12 @@ const INITIAL_CONFIG: RestaurantConfig = {
   },
   address: {
     country: "Côte d'Ivoire",
-    city: "Bouaké",
+    city: "",
     commune: "",
     quarter: "",
     fullAddress: "",
-    latitude: 7.6905,
-    longitude: -5.03,
+    latitude: 0,
+    longitude: 0,
     phone: "",
     email: "",
     whatsapp: "",
@@ -39,12 +41,12 @@ const INITIAL_CONFIG: RestaurantConfig = {
     facebook: "",
   },
   schedule: [
-    { day: "Lundi", isOpen: true, openTime: "08:00", closeTime: "22:00" },
-    { day: "Mardi", isOpen: true, openTime: "08:00", closeTime: "22:00" },
-    { day: "Mercredi", isOpen: true, openTime: "08:00", closeTime: "22:00" },
-    { day: "Jeudi", isOpen: true, openTime: "08:00", closeTime: "22:00" },
-    { day: "Vendredi", isOpen: true, openTime: "08:00", closeTime: "23:00" },
-    { day: "Samedi", isOpen: true, openTime: "09:00", closeTime: "23:00" },
+    { day: "Lundi", isOpen: false, openTime: "08:00", closeTime: "22:00" },
+    { day: "Mardi", isOpen: false, openTime: "08:00", closeTime: "22:00" },
+    { day: "Mercredi", isOpen: false, openTime: "08:00", closeTime: "22:00" },
+    { day: "Jeudi", isOpen: false, openTime: "08:00", closeTime: "22:00" },
+    { day: "Vendredi", isOpen: false, openTime: "08:00", closeTime: "23:00" },
+    { day: "Samedi", isOpen: false, openTime: "09:00", closeTime: "23:00" },
     { day: "Dimanche", isOpen: false, openTime: "09:00", closeTime: "22:00" },
   ],
   exceptions: [],
@@ -57,29 +59,77 @@ const INITIAL_CONFIG: RestaurantConfig = {
     tripadvisor: "",
   },
   settings: {
-    category: "bistrot",
+    establishmentType: "restaurant",
+    category: "",
     currency: "XOF",
-    serviceTypes: ["dine-in", "takeout", "delivery"],
+    serviceTypes: [],
     menuLanguage: "fr",
-    taxRate: 18,
     enableOnlineBooking: true,
   },
   menu: [],
 };
 
-export default function OnboardingClient({ userId }: { userId: string }) {
+interface OnboardingPlan {
+  name: string;
+  maxDishes: number | null;
+  categories: string[];
+}
+
+export default function OnboardingClient({
+  userId,
+  plan,
+}: {
+  userId: string;
+  plan: OnboardingPlan;
+}) {
   const storageKey = `toutci_onboarding_config:${userId}`;
   const masterStepKey = `toutci_onboarding_step:${userId}`;
+  const draftVersionKey = `toutci_onboarding_version:${userId}`;
   const [currentStep, setCurrentStep] = useState<number>(() => {
     if (typeof window === "undefined") return 1;
     const step = window.localStorage.getItem(masterStepKey);
-    return step ? parseInt(step, 10) : 1;
+    const parsedStep = step ? parseInt(step, 10) : 1;
+    const isLegacyDraft =
+      window.localStorage.getItem(draftVersionKey) !==
+      ONBOARDING_DRAFT_VERSION;
+    if (isLegacyDraft && parsedStep >= 5) return 1;
+    return Math.min(5, Math.max(1, parsedStep));
   });
   const [config, setConfig] = useState<RestaurantConfig>(() => {
     if (typeof window === "undefined") return INITIAL_CONFIG;
     try {
       const cached = window.localStorage.getItem(storageKey);
-      return cached ? (JSON.parse(cached) as RestaurantConfig) : INITIAL_CONFIG;
+      if (!cached) return INITIAL_CONFIG;
+
+      const parsed = JSON.parse(cached) as RestaurantConfig;
+      const isLegacyDraft =
+        window.localStorage.getItem(draftVersionKey) !==
+        ONBOARDING_DRAFT_VERSION;
+      const migratedMenu = Array.isArray(parsed.menu)
+        ? parsed.menu
+            .map((item) => ({
+              ...item,
+              category: plan.categories.includes(item.category)
+                ? item.category
+                : (plan.categories[0] ?? ""),
+            }))
+            .slice(0, 1)
+        : [];
+
+      return {
+        ...parsed,
+        settings: {
+          ...INITIAL_CONFIG.settings,
+          ...parsed.settings,
+          establishmentType: "restaurant",
+          category: isLegacyDraft ? "" : parsed.settings?.category || "",
+          serviceTypes: isLegacyDraft
+            ? []
+            : parsed.settings?.serviceTypes || [],
+          currency: "XOF",
+        },
+        menu: migratedMenu,
+      };
     } catch {
       return INITIAL_CONFIG;
     }
@@ -101,6 +151,7 @@ export default function OnboardingClient({ userId }: { userId: string }) {
     try {
       localStorage.setItem(storageKey, JSON.stringify(updatedConfig));
       localStorage.setItem(masterStepKey, String(step));
+      localStorage.setItem(draftVersionKey, ONBOARDING_DRAFT_VERSION);
     } catch {
       // safe bypass
     }
@@ -174,6 +225,8 @@ export default function OnboardingClient({ userId }: { userId: string }) {
         latitude: config.address.latitude,
         longitude: config.address.longitude,
         modesCommande: config.settings.serviceTypes,
+        establishmentType: config.settings.establishmentType,
+        cuisines: config.settings.category ? [config.settings.category] : [],
         description: config.general.description || undefined,
         logoUrl: config.general.logoUrl || undefined,
         banniereUrl: config.general.bannerUrl || undefined,
@@ -196,7 +249,7 @@ export default function OnboardingClient({ userId }: { userId: string }) {
   };
 
   return (
-    <div className="w-full min-h-screen bg-gray-50/50 flex flex-col lg:flex-row antialiased text-gray-800">
+    <div className="flex min-h-screen w-full flex-col bg-gray-50/50 text-gray-800 antialiased lg:h-dvh lg:min-h-0 lg:flex-row lg:overflow-hidden">
       {/* Dynamic Left Stepper Sidebar */}
       <Sidebar
         currentStep={currentStep}
@@ -205,7 +258,7 @@ export default function OnboardingClient({ userId }: { userId: string }) {
       />
 
       {/* Main wizard sliding viewports */}
-      <main className="flex-1 flex flex-col bg-white border-l border-gray-100 relative min-h-screen">
+      <main className="relative flex min-h-screen flex-1 flex-col border-l border-gray-100 bg-white lg:h-dvh lg:min-h-0 lg:overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}
@@ -213,13 +266,14 @@ export default function OnboardingClient({ userId }: { userId: string }) {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -15 }}
             transition={{ duration: 0.28, ease: "easeInOut" }}
-            className="flex-1 flex flex-col h-full"
+            className="flex h-full min-h-0 flex-1 flex-col"
           >
             {currentStep === 1 && (
               <StepGeneral
                 data={config.general}
                 updateData={handleUpdateGeneral}
-                updateSettings={handleUpdateSettings} // Prop to let them choose thematic category preset
+                settings={config.settings}
+                updateSettings={handleUpdateSettings}
                 onNext={handleNextStep}
               />
             )}
@@ -248,6 +302,8 @@ export default function OnboardingClient({ userId }: { userId: string }) {
               <StepMenu
                 menu={config.menu}
                 updateMenu={handleUpdateMenu}
+                categories={plan.categories}
+                planName={plan.name}
                 onNext={handleNextStep}
                 onPrev={handlePrevStep}
               />
