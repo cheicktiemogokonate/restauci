@@ -1,6 +1,7 @@
 "use client";
 
 import { useNotificationsContext } from "@/components/dashboard/notifications/notifications-provider";
+import { LogoutConfirmationDialog } from "@/components/shared/logout-confirmation-dialog";
 import { Button } from "@/components/ui/button";
 import { useWebPush } from "@/hooks/use-web-push";
 import { getRouteConfig } from "@/lib/config/dashboard-routes";
@@ -38,16 +39,12 @@ export default function Navbar({
   }, [isSubscribed, subscribe]);
 
   const handleLogout = async () => {
-    try {
-      const res = await fetch("/api/auth/logout", { method: "POST" });
-      if (res.ok) {
-        router.push("/login");
-      } else {
-        console.error("[Navbar] Logout failed:", res.statusText);
-      }
-    } catch (err) {
-      console.error("[Navbar] Failed to logout:", err);
+    const res = await fetch("/api/auth/logout", { method: "POST" });
+    if (!res.ok) {
+      throw new Error(`[Navbar] Logout failed: ${res.statusText}`);
     }
+
+    router.push("/login");
   };
 
   return (
@@ -128,16 +125,17 @@ export default function Navbar({
             <p className="text-xs text-gray-400">{restaurant.nom}</p>
           </div>
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-lg"
-          aria-label="Se déconnecter"
-          className="text-muted-foreground hover:text-destructive"
-          onClick={handleLogout}
-        >
-          <LogOut className="w-4 h-4" />
-        </Button>
+        <LogoutConfirmationDialog onConfirm={handleLogout}>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-lg"
+            aria-label="Se déconnecter"
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <LogOut className="w-4 h-4" />
+          </Button>
+        </LogoutConfirmationDialog>
       </div>
     </header>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { CustomAvatar } from "@/components/shared/avatar-fallback";
+import { LogoutConfirmationDialog } from "@/components/shared/logout-confirmation-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,7 +63,7 @@ export default function ProfilClientPage() {
           <Button type="button" size="lg" disabled={isPending || !nom.trim()} onClick={handleSave} className="mt-5 h-11 rounded-xl">{isPending ? "Enregistrement…" : "Enregistrer les modifications"}</Button>
         </section>
 
-        <section aria-labelledby="profile-links-heading" className="py-5"><h2 id="profile-links-heading" className="sr-only">Raccourcis</h2><Button asChild variant="ghost" className="h-auto w-full justify-between rounded-none px-0 py-4 text-left hover:bg-transparent"><Link href="/commandes"><span className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><ClipboardList className="size-4" /></span><span><span className="block text-sm font-semibold">Mes commandes</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">Suivre ou retrouver une commande</span></span></span><ChevronRight className="text-muted-foreground" /></Link></Button><Separator /><Button type="button" variant="ghost" onClick={handleLogout} className="h-auto w-full justify-between rounded-none px-0 py-4 text-destructive hover:bg-transparent hover:text-destructive"><span className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-destructive/10"><LogOut className="size-4" /></span><span className="text-sm font-semibold">Se déconnecter</span></span><ChevronRight /></Button></section>
+        <section aria-labelledby="profile-links-heading" className="py-5"><h2 id="profile-links-heading" className="sr-only">Raccourcis</h2><Button asChild variant="ghost" className="h-auto w-full justify-between rounded-none px-0 py-4 text-left hover:bg-transparent"><Link href="/commandes"><span className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><ClipboardList className="size-4" /></span><span><span className="block text-sm font-semibold">Mes commandes</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">Suivre ou retrouver une commande</span></span></span><ChevronRight className="text-muted-foreground" /></Link></Button><Separator /><LogoutConfirmationDialog onConfirm={handleLogout}><Button type="button" variant="ghost" className="h-auto w-full justify-between rounded-none px-0 py-4 text-destructive hover:bg-transparent hover:text-destructive"><span className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-destructive/10"><LogOut className="size-4" /></span><span className="text-sm font-semibold">Se déconnecter</span></span><ChevronRight /></Button></LogoutConfirmationDialog></section>
       </div>
     </main>
   );

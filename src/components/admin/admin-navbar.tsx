@@ -1,8 +1,23 @@
+"use client";
+
 import { Bell, LogOut } from "lucide-react";
+import { LogoutConfirmationDialog } from "@/components/shared/logout-confirmation-dialog";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export function AdminNavbar() {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    const response = await fetch("/api/auth/logout", { method: "POST" });
+    if (!response.ok) {
+      throw new Error(`Admin logout failed: ${response.statusText}`);
+    }
+
+    router.push("/login");
+  };
+
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b bg-white pr-4 pl-14 sm:pr-6 md:px-6">
       <p className="text-sm font-medium text-muted-foreground">Administration</p>
@@ -25,9 +40,9 @@ export function AdminNavbar() {
         <div className="h-6 w-px bg-gray-200" />
 
         {/* Déconnexion */}
-        <form action="/api/auth/logout" method="POST">
+        <LogoutConfirmationDialog onConfirm={handleLogout}>
           <Button
-            type="submit"
+            type="button"
             variant="ghost"
             size="icon"
             aria-label="Se déconnecter"
@@ -35,7 +50,7 @@ export function AdminNavbar() {
           >
             <LogOut className="w-4 h-4" />
           </Button>
-        </form>
+        </LogoutConfirmationDialog>
       </div>
     </header>
   );
