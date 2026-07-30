@@ -63,7 +63,7 @@ export default function NotFound() {
                 </div>
 
                 {/* Textes */}
-                <h1 className="text-3xl md:text-[42px] font-bold text-[#1f2937] mb-6 tracking-tight">
+                <h1 className="text-3xl md:text-[42px] font-bold text-brand-dark mb-6 tracking-tight">
                     Oups ! Page <span className="text-[#16a34a]">introuvable</span>
                     <svg className="mx-auto mt-2 w-32 h-3 text-[#16a34a] md:w-48" viewBox="0 0 100 10" fill="none" preserveAspectRatio="none">
                         <path d="M0 5 Q 50 0 100 5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />

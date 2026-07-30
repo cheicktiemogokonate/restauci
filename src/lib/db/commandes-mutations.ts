@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { invalidateRestaurantCache } from "@/lib/cache";
 import { redis } from "@/lib/cache/redis";
 import { calculerCommissionCommande } from "@/lib/db/mutations-admin";
@@ -48,61 +49,49 @@ async function getUserIdFromRestaurant(restaurantId: string): Promise<string> {
 }
 
 export async function createCommande(input: CreateCommandeInput) {
+  const commandeId = crypto.randomUUID();
   const numero = genererNumeroCommande();
-  const result = await db.transaction(async (tx) => {
-    if (input.clientId && input.idempotencyKey) {
-      const existing = await tx.query.commandes.findFirst({
-        where: (commande, { and, eq }) =>
-          and(
-            eq(commande.clientId, input.clientId!),
-            eq(commande.idempotencyKey, input.idempotencyKey!),
-          ),
-      });
-      if (existing) return { commande: existing, created: false };
-    }
+  const values = {
+    ...input,
+    id: commandeId,
+    numero,
+    statut: "recue" as const,
+    fraisLivraison: input.fraisLivraison ?? 0,
+    remise: input.remise ?? 0,
+  };
+  const insertCommande =
+    input.clientId && input.idempotencyKey
+      ? db
+          .insert(commandes)
+          .values(values)
+          .onConflictDoNothing({
+            target: [commandes.clientId, commandes.idempotencyKey],
+          })
+      : db.insert(commandes).values(values);
 
-    const values = {
-      ...input,
-      numero,
-      statut: "recue" as const,
-      fraisLivraison: input.fraisLivraison ?? 0,
-      remise: input.remise ?? 0,
-    };
-    const inserted =
-      input.clientId && input.idempotencyKey
-        ? await tx
-            .insert(commandes)
-            .values(values)
-            .onConflictDoNothing({
-              target: [commandes.clientId, commandes.idempotencyKey],
-            })
-            .returning()
-        : await tx.insert(commandes).values(values).returning();
-
-    let commande: typeof commandes.$inferSelect | null = inserted[0] ?? null;
-    if (!commande && input.clientId && input.idempotencyKey) {
-      commande =
-        (await tx.query.commandes.findFirst({
-        where: (row, { and, eq }) =>
-          and(
-            eq(row.clientId, input.clientId!),
-            eq(row.idempotencyKey, input.idempotencyKey!),
-          ),
-        })) ?? null;
-    }
-    if (!commande) throw new Error("Impossible de créer la commande");
-    if (inserted.length === 0) return { commande, created: false };
-
-    await tx
+  // neon-http ne prend pas en charge db.transaction(callback). Le batch est
+  // néanmoins exécuté dans une transaction HTTP atomique. Les compteurs sont
+  // protégés par l'identifiant généré : lors d'un rejeu idempotent, l'INSERT ne
+  // crée aucune ligne et les UPDATE deviennent donc des no-op.
+  const commandeCreee = sql`exists (
+    select 1 from ${commandes} where ${commandes.id} = ${commandeId}
+  )`;
+  const operations: BatchItem<"pg">[] = [
+    insertCommande,
+    db
       .update(restaurants)
       .set({
         nombreCommandes: sql`${restaurants.nombreCommandes} + 1`,
         updatedAt: new Date(),
       })
-      .where(eq(restaurants.id, input.restaurantId));
-
-    for (const item of input.items) {
-      await tx
+      .where(
+        and(
+          eq(restaurants.id, input.restaurantId),
+          commandeCreee,
+        ),
+      ),
+    ...input.items.map((item) =>
+      db
         .update(plats)
         .set({
           nombreCommandes: sql`${plats.nombreCommandes} + ${item.quantite}`,
@@ -112,14 +101,33 @@ export async function createCommande(input: CreateCommandeInput) {
           and(
             eq(plats.id, item.platId),
             eq(plats.restaurantId, input.restaurantId),
+            commandeCreee,
           ),
-        );
-    }
+        ),
+    ),
+  ];
 
-    return { commande, created: true };
-  });
+  await db.batch(
+    operations as [BatchItem<"pg">, ...BatchItem<"pg">[]],
+  );
 
-  const { commande, created } = result;
+  let commande =
+    (await db.query.commandes.findFirst({
+      where: (row, { eq }) => eq(row.id, commandeId),
+    })) ?? null;
+  const created = commande !== null;
+
+  if (!commande && input.clientId && input.idempotencyKey) {
+    commande =
+      (await db.query.commandes.findFirst({
+        where: (row, { and, eq }) =>
+          and(
+            eq(row.clientId, input.clientId!),
+            eq(row.idempotencyKey, input.idempotencyKey!),
+          ),
+      })) ?? null;
+  }
+  if (!commande) throw new Error("Impossible de créer la commande");
   if (!created) return commande;
 
   after(async () => {

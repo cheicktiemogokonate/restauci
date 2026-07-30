@@ -113,7 +113,7 @@ function NavLinks({
 function ProCard() {
   return (
     <div className="mx-3 rounded-xl bg-muted/50 p-4">
-      <div className="mb-3 aspect-video rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center overflow-hidden">
+      <div className="mb-3 aspect-video rounded-lg bg-linear-to-br from-primary/20 to-primary/5 flex items-center justify-center overflow-hidden">
         <Sparkles className="h-8 w-8 text-brand-green/60" />
       </div>
       <p className="text-sm text-muted-foreground mb-3">
@@ -160,7 +160,7 @@ export function MobileSidebar() {
           <span className="sr-only">Toggle menu</span>
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-[260px] p-0">
+      <SheetContent side="left" className="w-65 p-0">
         <SheetTitle className="sr-only">Menu de navigation</SheetTitle>
         <div className="flex h-16 items-center px-4">
           <Logo />
