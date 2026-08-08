@@ -126,7 +126,8 @@ export function RestaurantDetailAdmin({
   const handleValider = () =>
     startTransition(async () => {
       try {
-        await validerRestaurantAction(restaurant.id);
+        const result = await validerRestaurantAction(restaurant.id);
+        if ("error" in result) throw new Error(result.error);
         toast.success("Restaurant validé.");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "La validation a échoué.");
@@ -163,7 +164,8 @@ export function RestaurantDetailAdmin({
   const handleReactiver = () =>
     startTransition(async () => {
       try {
-        await reactiverRestaurantAction(restaurant.id);
+        const result = await reactiverRestaurantAction(restaurant.id);
+        if ("error" in result) throw new Error(result.error);
         toast.success("Restaurant réactivé.");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "La réactivation a échoué.");

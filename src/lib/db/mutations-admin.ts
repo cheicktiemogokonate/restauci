@@ -11,6 +11,7 @@ import {
 } from "./schema";
 import { invalidateCache, cacheKey } from "@/lib/cache";
 import { normalizeSettlementInput } from "@/lib/config/admin-workflows";
+import { logAuditAction } from "@/lib/audit";
 
 
 export class AdminTransitionError extends Error {
@@ -24,42 +25,45 @@ export class AdminTransitionError extends Error {
 // VALIDATION / REJET DE RESTAURANT
 // ============================================================================
 
+// Le projet utilise drizzle-orm/neon-http, qui rejette les transactions
+// interactives db.transaction(callback). Les transitions restent atomiques au
+// niveau de l'UPDATE conditionnel ; le journal d'audit est volontairement
+// best-effort afin qu'une panne d'observabilité n'annule pas l'action métier.
+
 export async function validerRestaurant(
   restaurantId: string,
   adminId:      string
 ) {
-  const restaurant = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(restaurants)
-      .set({
-        actif: true,
-        valideParUserId: adminId,
-        valideAt: new Date(),
-        motifRejet: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(restaurants.id, restaurantId),
-          eq(restaurants.actif, false),
-          eq(restaurants.suspendu, false),
-        ),
-      )
-      .returning();
+  const [restaurant] = await db
+    .update(restaurants)
+    .set({
+      actif: true,
+      valideParUserId: adminId,
+      valideAt: new Date(),
+      motifRejet: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(restaurants.id, restaurantId),
+        eq(restaurants.actif, false),
+        eq(restaurants.suspendu, false),
+        isNull(restaurants.motifRejet),
+      ),
+    )
+    .returning();
 
-    if (!updated) {
-      throw new AdminTransitionError(
-        "Seul un restaurant en attente peut être validé.",
-      );
-    }
+  if (!restaurant) {
+    throw new AdminTransitionError(
+      "Seul un restaurant en attente peut être validé.",
+    );
+  }
 
-    await tx.insert(auditLog).values({
-      adminId,
-      action: "restaurant_valide",
-      ressourceType: "restaurant",
-      ressourceId: restaurantId,
-    });
-    return updated;
+  await logAuditAction({
+    adminId,
+    action: "restaurant_valide",
+    ressourceType: "restaurant",
+    ressourceId: restaurantId,
   });
 
   await invalidateCache(cacheKey.restaurant(restaurantId));
@@ -72,34 +76,31 @@ export async function rejeterRestaurant(
   adminId:      string,
   motif:        string
 ) {
-  const restaurant = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(restaurants)
-      .set({ actif: false, motifRejet: motif, updatedAt: new Date() })
-      .where(
-        and(
-          eq(restaurants.id, restaurantId),
-          eq(restaurants.actif, false),
-          eq(restaurants.suspendu, false),
-          isNull(restaurants.motifRejet),
-        ),
-      )
-      .returning();
+  const [restaurant] = await db
+    .update(restaurants)
+    .set({ actif: false, motifRejet: motif, updatedAt: new Date() })
+    .where(
+      and(
+        eq(restaurants.id, restaurantId),
+        eq(restaurants.actif, false),
+        eq(restaurants.suspendu, false),
+        isNull(restaurants.motifRejet),
+      ),
+    )
+    .returning();
 
-    if (!updated) {
-      throw new AdminTransitionError(
-        "Seul un restaurant en attente peut être rejeté.",
-      );
-    }
+  if (!restaurant) {
+    throw new AdminTransitionError(
+      "Seul un restaurant en attente peut être rejeté.",
+    );
+  }
 
-    await tx.insert(auditLog).values({
-      adminId,
-      action: "restaurant_rejete",
-      ressourceType: "restaurant",
-      ressourceId: restaurantId,
-      details: { motif },
-    });
-    return updated;
+  await logAuditAction({
+    adminId,
+    action: "restaurant_rejete",
+    ressourceType: "restaurant",
+    ressourceId: restaurantId,
+    details: { motif },
   });
 
   await invalidateCache(cacheKey.restaurant(restaurantId));
@@ -116,39 +117,36 @@ export async function suspendreRestaurant(
   adminId:      string,
   motif:        string
 ) {
-  const restaurant = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(restaurants)
-      .set({
-        suspendu: true,
-        motifSuspension: motif,
-        enLigne: false,
-        accepteCommandes: false,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(restaurants.id, restaurantId),
-          eq(restaurants.actif, true),
-          eq(restaurants.suspendu, false),
-        ),
-      )
-      .returning();
+  const [restaurant] = await db
+    .update(restaurants)
+    .set({
+      suspendu: true,
+      motifSuspension: motif,
+      enLigne: false,
+      accepteCommandes: false,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(restaurants.id, restaurantId),
+        eq(restaurants.actif, true),
+        eq(restaurants.suspendu, false),
+      ),
+    )
+    .returning();
 
-    if (!updated) {
-      throw new AdminTransitionError(
-        "Seul un restaurant actif peut être suspendu.",
-      );
-    }
+  if (!restaurant) {
+    throw new AdminTransitionError(
+      "Seul un restaurant actif peut être suspendu.",
+    );
+  }
 
-    await tx.insert(auditLog).values({
-      adminId,
-      action: "restaurant_suspendu",
-      ressourceType: "restaurant",
-      ressourceId: restaurantId,
-      details: { motif },
-    });
-    return updated;
+  await logAuditAction({
+    adminId,
+    action: "restaurant_suspendu",
+    ressourceType: "restaurant",
+    ressourceId: restaurantId,
+    details: { motif },
   });
 
   await invalidateCache(cacheKey.restaurant(restaurantId));
@@ -160,32 +158,29 @@ export async function reactiverRestaurant(
   restaurantId: string,
   adminId:      string
 ) {
-  const restaurant = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(restaurants)
-      .set({ suspendu: false, motifSuspension: null, updatedAt: new Date() })
-      .where(
-        and(
-          eq(restaurants.id, restaurantId),
-          eq(restaurants.actif, true),
-          eq(restaurants.suspendu, true),
-        ),
-      )
-      .returning();
+  const [restaurant] = await db
+    .update(restaurants)
+    .set({ suspendu: false, motifSuspension: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(restaurants.id, restaurantId),
+        eq(restaurants.actif, true),
+        eq(restaurants.suspendu, true),
+      ),
+    )
+    .returning();
 
-    if (!updated) {
-      throw new AdminTransitionError(
-        "Seul un restaurant suspendu peut être réactivé.",
-      );
-    }
+  if (!restaurant) {
+    throw new AdminTransitionError(
+      "Seul un restaurant suspendu peut être réactivé.",
+    );
+  }
 
-    await tx.insert(auditLog).values({
-      adminId,
-      action: "restaurant_reactive",
-      ressourceType: "restaurant",
-      ressourceId: restaurantId,
-    });
-    return updated;
+  await logAuditAction({
+    adminId,
+    action: "restaurant_reactive",
+    ressourceType: "restaurant",
+    ressourceId: restaurantId,
   });
 
   await invalidateCache(cacheKey.restaurant(restaurantId));
@@ -202,75 +197,69 @@ export async function suspendreUser(
   adminId: string,
   motif:   string
 ) {
-  const user = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(users)
-      .set({
-        suspendu: true,
-        motifSuspension: motif,
-        suspenduAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(users.id, userId),
-          eq(users.role, "restaurateur"),
-          eq(users.suspendu, false),
-        ),
-      )
-      .returning();
+  const [user] = await db
+    .update(users)
+    .set({
+      suspendu: true,
+      motifSuspension: motif,
+      suspenduAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.role, "restaurateur"),
+        eq(users.suspendu, false),
+      ),
+    )
+    .returning();
 
-    if (!updated) {
-      throw new AdminTransitionError(
-        "Seul un restaurateur actif peut être suspendu.",
-      );
-    }
+  if (!user) {
+    throw new AdminTransitionError(
+      "Seul un restaurateur actif peut être suspendu.",
+    );
+  }
 
-    await tx.insert(auditLog).values({
-      adminId,
-      action: "user_suspendu",
-      ressourceType: "user",
-      ressourceId: userId,
-      details: { motif },
-    });
-    return updated;
+  await logAuditAction({
+    adminId,
+    action: "user_suspendu",
+    ressourceType: "user",
+    ressourceId: userId,
+    details: { motif },
   });
 
   return user;
 }
 
 export async function reactiverUser(userId: string, adminId: string) {
-  const user = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(users)
-      .set({
-        suspendu: false,
-        motifSuspension: null,
-        suspenduAt: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(users.id, userId),
-          eq(users.role, "restaurateur"),
-          eq(users.suspendu, true),
-        ),
-      )
-      .returning();
+  const [user] = await db
+    .update(users)
+    .set({
+      suspendu: false,
+      motifSuspension: null,
+      suspenduAt: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.role, "restaurateur"),
+        eq(users.suspendu, true),
+      ),
+    )
+    .returning();
 
-    if (!updated) {
-      throw new AdminTransitionError(
-        "Seul un restaurateur suspendu peut être réactivé.",
-      );
-    }
+  if (!user) {
+    throw new AdminTransitionError(
+      "Seul un restaurateur suspendu peut être réactivé.",
+    );
+  }
 
-    await tx.insert(auditLog).values({
-      adminId,
-      action: "user_reactive",
-      ressourceType: "user",
-      ressourceId: userId,
-    });
-    return updated;
+  await logAuditAction({
+    adminId,
+    action: "user_reactive",
+    ressourceType: "user",
+    ressourceId: userId,
   });
 
   return user;
@@ -281,63 +270,57 @@ export async function suspendreClient(
   adminId:  string,
   motif:    string
 ) {
-  const client = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(clients)
-      .set({
-        actif: false,
-        motifSuspension: motif,
-        suspenduAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(clients.id, clientId), eq(clients.actif, true)))
-      .returning();
+  const [client] = await db
+    .update(clients)
+    .set({
+      actif: false,
+      motifSuspension: motif,
+      suspenduAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(clients.id, clientId), eq(clients.actif, true)))
+    .returning();
 
-    if (!updated) {
-      throw new AdminTransitionError(
-        "Seul un client actif peut être suspendu.",
-      );
-    }
+  if (!client) {
+    throw new AdminTransitionError(
+      "Seul un client actif peut être suspendu.",
+    );
+  }
 
-    await tx.insert(auditLog).values({
-      adminId,
-      action: "client_suspendu",
-      ressourceType: "client",
-      ressourceId: clientId,
-      details: { motif },
-    });
-    return updated;
+  await logAuditAction({
+    adminId,
+    action: "client_suspendu",
+    ressourceType: "client",
+    ressourceId: clientId,
+    details: { motif },
   });
 
   return client;
 }
 
 export async function reactiverClient(clientId: string, adminId: string) {
-  const client = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(clients)
-      .set({
-        actif: true,
-        motifSuspension: null,
-        suspenduAt: null,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(clients.id, clientId), eq(clients.actif, false)))
-      .returning();
+  const [client] = await db
+    .update(clients)
+    .set({
+      actif: true,
+      motifSuspension: null,
+      suspenduAt: null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(clients.id, clientId), eq(clients.actif, false)))
+    .returning();
 
-    if (!updated) {
-      throw new AdminTransitionError(
-        "Seul un client suspendu peut être réactivé.",
-      );
-    }
+  if (!client) {
+    throw new AdminTransitionError(
+      "Seul un client suspendu peut être réactivé.",
+    );
+  }
 
-    await tx.insert(auditLog).values({
-      adminId,
-      action: "client_reactive",
-      ressourceType: "client",
-      ressourceId: clientId,
-    });
-    return updated;
+  await logAuditAction({
+    adminId,
+    action: "client_reactive",
+    ressourceType: "client",
+    ressourceId: clientId,
   });
 
   return client;
