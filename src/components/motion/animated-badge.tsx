@@ -1,6 +1,8 @@
 "use client";
 // beui.dev/components/motion/animated-badge
 
+import { EASE_OUT } from "@/lib/ease";
+import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   Check,
@@ -18,8 +20,6 @@ import {
   type Variants,
 } from "motion/react";
 import type { ReactNode } from "react";
-import { EASE_OUT } from "@/lib/ease";
-import { cn } from "@/lib/utils";
 
 export type AnimatedBadgeStatus =
   | "neutral"
@@ -47,8 +47,10 @@ export interface AnimatedBadgeProps extends Omit<
 const STATUS_CLASS: Record<AnimatedBadgeStatus, string> = {
   neutral: "border-border bg-card text-muted-foreground",
   info: "border-primary/30 bg-primary/10 text-primary",
-  success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  warning: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  success:
+    "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  warning:
+    "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
   danger: "border-destructive/30 bg-destructive/10 text-destructive",
   loading: "border-primary/30 bg-primary/10 text-primary",
 };
@@ -202,7 +204,7 @@ export function AnimatedBadge({
               initial={reduce ? false : "initial"}
               animate={reduce ? { opacity: 1 } : "animate"}
               exit={reduce ? undefined : "exit"}
-              className="inline-block will-change-transform"
+              className="inline-flex w-fit gap-1 will-change-transform"
             >
               {children}
             </motion.span>
