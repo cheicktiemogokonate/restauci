@@ -43,6 +43,13 @@
       "when": 1785050173268,
       "tag": "0005_freezing_pretty_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786180761519,
+      "tag": "0006_blushing_king_cobra",
+      "breakpoints": true
     }
   ]
 }

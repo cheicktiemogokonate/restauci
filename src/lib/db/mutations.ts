@@ -1,7 +1,11 @@
 import { db } from "./index";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, isNotNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
-import { invalidateRestaurantCache } from "@/lib/cache";
+import {
+  cacheKey,
+  invalidateCache,
+  invalidateRestaurantCache,
+} from "@/lib/cache";
 import {
   users,
   restaurants,
@@ -325,6 +329,33 @@ export async function updateRestaurant(
     .returning();
 
   await invalidateRestaurantCache(id);
+  return restaurant;
+}
+
+/** Replace un dossier refusé dans la file de validation administrateur. */
+export async function resoumettreRestaurant(
+  restaurantId: string,
+  userId: string,
+) {
+  const [restaurant] = await db
+    .update(restaurants)
+    .set({ motifRejet: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(restaurants.id, restaurantId),
+        eq(restaurants.userId, userId),
+        eq(restaurants.actif, false),
+        eq(restaurants.suspendu, false),
+        isNotNull(restaurants.motifRejet),
+      ),
+    )
+    .returning();
+
+  if (restaurant) {
+    await invalidateRestaurantCache(restaurant.id, restaurant.slug);
+    await invalidateCache(cacheKey.restaurantByUser(userId));
+  }
+
   return restaurant;
 }
 

@@ -32,6 +32,8 @@ export interface SseEventMap {
   commande_prete: SseNotificationPayload;
   commande_annulee: SseNotificationPayload;
   nouveau_avis: SseNotificationPayload;
+  restaurant_valide: SseNotificationPayload;
+  restaurant_rejete: SseNotificationPayload;
   promotion: SseNotificationPayload;
   systeme: SseNotificationPayload;
   message: unknown;

@@ -9,13 +9,24 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 function getNotificationHref(notification: Notification): string {
-  if (!notification.lienType || !notification.lienId) return "#";
   switch (notification.lienType) {
     case "commande":
-      return `/restaurateur/commandes/${notification.lienId}`;
+      return notification.lienId
+        ? `/restaurateur/commandes/${notification.lienId}`
+        : "/restaurateur/commandes";
+    case "profil":
+      return "/restaurateur/profil";
+    case "restaurant":
+      return "/restaurateur";
     default:
       return "#";
   }
+}
+
+function getNotificationLinkLabel(notification: Notification): string {
+  if (notification.lienType === "commande") return "Voir la commande";
+  if (notification.lienType === "profil") return "Corriger mon dossier";
+  return "Voir mon tableau de bord";
 }
 
 function getNotificationIcon(type: string): string {
@@ -28,6 +39,10 @@ function getNotificationIcon(type: string): string {
       return "❌";
     case "nouveau_avis":
       return "⭐";
+    case "restaurant_valide":
+      return "🎉";
+    case "restaurant_rejete":
+      return "📝";
     default:
       return "🔔";
   }
@@ -88,6 +103,8 @@ const NOTIFICATION_TRIGGER_TYPES = new Set([
   "commande_prete",
   "commande_annulee",
   "nouveau_avis",
+  "restaurant_valide",
+  "restaurant_rejete",
 ]);
 
 // Types déjà gérés par le DashboardRealtimeProvider (toast + son + refresh).
@@ -98,6 +115,8 @@ const SKIP_SOUND_FOR = new Set([
   "nouvelle_commande",
   "commande_prete",
   "commande_annulee",
+  "restaurant_valide",
+  "restaurant_rejete",
 ]);
 
 export function NotificationsClient() {
@@ -285,11 +304,11 @@ export function NotificationsClient() {
                       {notification.message}
                     </p>
 
-                    {notification.lienType && notification.lienId && (
+                    {getNotificationHref(notification) !== "#" && (
                       <div className="mt-3">
                         <Button asChild variant="outline" size="sm">
                           <Link href={getNotificationHref(notification)}>
-                            Voir la commande →
+                            {getNotificationLinkLabel(notification)} →
                           </Link>
                         </Button>
                       </div>

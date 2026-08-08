@@ -4,6 +4,7 @@ import { getRestaurateurSession } from "@/lib/auth/get-restaurateur-session";
 import {
   createCreneau,
   deleteCreneau,
+  resoumettreRestaurant,
   updateCreneau,
   updateRestaurant,
 } from "@/lib/db/mutations";
@@ -128,6 +129,38 @@ export async function updateRestaurantAction(
   revalidatePath("/restaurateur");
 
   return { success: true };
+}
+
+export async function resoumettreRestaurantAction() {
+  const { session, restaurant } = await getRestaurateurSession();
+
+  if (restaurant.actif || restaurant.suspendu || !restaurant.motifRejet) {
+    return { error: "Seul un dossier refusé peut être renvoyé pour validation." };
+  }
+
+  try {
+    const updated = await resoumettreRestaurant(
+      restaurant.id,
+      session.userId as string,
+    );
+    if (!updated) {
+      return { error: "Ce dossier a déjà été renvoyé ou son état a changé." };
+    }
+  } catch (error) {
+    log.error(
+      { error, restaurantId: restaurant.id },
+      "resoumettreRestaurantAction error",
+    );
+    return { error: "Impossible de renvoyer le dossier pour le moment." };
+  }
+
+  revalidatePath("/restaurateur");
+  revalidatePath("/restaurateur/profil");
+  revalidatePath("/restaurateur/facturation");
+  revalidatePath("/admin");
+  revalidatePath("/admin/a-traiter");
+  revalidatePath("/admin/restaurants");
+  return { success: true } as const;
 }
 
 export async function setRestaurantOnlineAction(enLigne: boolean) {

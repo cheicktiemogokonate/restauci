@@ -55,6 +55,8 @@ const NOTIFICATION_TRIGGER_TYPES = new Set([
   "commande_prete",
   "commande_annulee",
   "nouveau_avis",
+  "restaurant_valide",
+  "restaurant_rejete",
 ]);
 
 // Débounce pour éviter les fetchs en rafale si plusieurs événements arrivent

@@ -18,6 +18,8 @@ export interface NotificationPayload {
     | "commande_prete"
     | "commande_annulee"
     | "nouveau_avis"
+    | "restaurant_valide"
+    | "restaurant_rejete"
     | "systeme";
   titre: string;
   message: string;
@@ -77,6 +79,8 @@ export async function sendNotification(
       url:
         lienType === "commande"
           ? `/restaurateur/commandes/${lienId}`
+          : lienType === "profil"
+            ? "/restaurateur/profil"
           : "/restaurateur",
       data: { type, lienId, lienType, ...data },
     }),
@@ -114,6 +118,25 @@ async function sendWebPush(
     return;
   }
 
+  if (
+    !process.env.VAPID_PUBLIC_KEY ||
+    !process.env.VAPID_PRIVATE_KEY ||
+    !process.env.VAPID_EMAIL
+  ) {
+    log.warn("Configuration VAPID absente, Web Push ignore");
+    return;
+  }
+
+  const vapidSubject = process.env.VAPID_EMAIL.startsWith("mailto:")
+    ? process.env.VAPID_EMAIL
+    : `mailto:${process.env.VAPID_EMAIL}`;
+
+  webPush.setVapidDetails(
+    vapidSubject,
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  );
+
   const subscriptions = await db
     .select()
     .from(pushSubscriptions)
@@ -130,8 +153,8 @@ async function sendWebPush(
     titre: payload.titre,
     message: payload.message,
     url: payload.url ?? "/restaurateur/commandes",
-    icon: payload.icon ?? "/icons/icon-192x192.png",
-    badge: payload.badge ?? "/icons/badge-72x72.png",
+    icon: payload.icon ?? "/web-app-manifest-192x192.png",
+    badge: payload.badge ?? "/web-app-manifest-192x192.png",
     data: payload.data ?? {},
     timestamp: Date.now(),
   });

@@ -80,6 +80,8 @@ export const typeNotificationEnum = pgEnum("type_notification", [
   "abonnement_regrade",
   "abonnement_suspendu",
   "abonnement_expire",
+  "restaurant_valide",
+  "restaurant_rejete",
 ]);
 
 export const statutAbonnementEnum = pgEnum("statut_abonnement", [

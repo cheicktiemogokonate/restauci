@@ -138,7 +138,7 @@ export function RestaurantDetailAdmin({
     startTransition(async () => {
       try {
         const result = await rejeterRestaurantAction(restaurant.id, motif);
-        if (result.error) throw new Error(result.error);
+        if ("error" in result) throw new Error(result.error);
         toast.success("Restaurant rejeté.");
         setShowRejetModal(false);
         setMotif("");
@@ -152,7 +152,7 @@ export function RestaurantDetailAdmin({
     startTransition(async () => {
       try {
         const result = await suspendreRestaurantAction(restaurant.id, motif);
-        if (result.error) throw new Error(result.error);
+        if ("error" in result) throw new Error(result.error);
         toast.success("Restaurant suspendu.");
         setShowSuspendModal(false);
         setMotif("");

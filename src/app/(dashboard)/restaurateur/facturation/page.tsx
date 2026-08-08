@@ -1,4 +1,5 @@
 import { RestaurateurSubscriptionButton } from "@/components/restaurateur/restaurateur-subscription-button";
+import { RestaurantValidationStatus } from "@/components/dashboard/restaurant-validation-status";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -36,7 +37,13 @@ export default async function FacturationPage() {
 
   const restaurantData = await db.query.restaurants.findFirst({
     where: eq(restaurants.userId, session.userId as string),
-    columns: { id: true, actif: true, suspendu: true },
+    columns: {
+      id: true,
+      actif: true,
+      suspendu: true,
+      motifRejet: true,
+      motifSuspension: true,
+    },
   });
 
   if (!restaurantData) {
@@ -96,19 +103,12 @@ export default async function FacturationPage() {
         </div>
       )}
 
-      {!restaurantData.actif && !restaurantData.suspendu && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-xl p-4 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-          <div>
-            <h3 className="font-semibold text-blue-900">
-              En attente d'activation
-            </h3>
-            <p className="text-sm mt-1">
-              Votre restaurant est en cours de validation par notre équipe.
-            </p>
-          </div>
-        </div>
-      )}
+      <RestaurantValidationStatus
+        actif={restaurantData.actif}
+        suspendu={restaurantData.suspendu}
+        motifRejet={restaurantData.motifRejet}
+        motifSuspension={restaurantData.motifSuspension}
+      />
 
       {/* Offre actuelle */}
       <Card>

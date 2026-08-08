@@ -44,7 +44,8 @@ export async function validerRestaurantAction(restaurantId: string) {
   if ("error" in result) return result;
   revalidatePath("/admin/restaurants");
   revalidatePath(`/admin/restaurants/${restaurantId}`);
-  return result;
+  revalidatePath("/restaurateur");
+  return { success: true } as const;
 }
 
 export async function rejeterRestaurantAction(
@@ -63,7 +64,9 @@ export async function rejeterRestaurantAction(
   if ("error" in result) return result;
   revalidatePath("/admin/restaurants");
   revalidatePath(`/admin/restaurants/${restaurantId}`);
-  return result;
+  revalidatePath("/restaurateur");
+  revalidatePath("/restaurateur/profil");
+  return { success: true } as const;
 }
 
 export async function suspendreRestaurantAction(
@@ -82,7 +85,7 @@ export async function suspendreRestaurantAction(
   if ("error" in result) return result;
   revalidatePath("/admin/restaurants");
   revalidatePath(`/admin/restaurants/${restaurantId}`);
-  return result;
+  return { success: true } as const;
 }
 
 export async function reactiverRestaurantAction(restaurantId: string) {
@@ -95,5 +98,5 @@ export async function reactiverRestaurantAction(restaurantId: string) {
   if ("error" in result) return result;
   revalidatePath("/admin/restaurants");
   revalidatePath(`/admin/restaurants/${restaurantId}`);
-  return result;
+  return { success: true } as const;
 }

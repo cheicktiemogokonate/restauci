@@ -11,6 +11,13 @@ interface UseWebPushReturn {
   unsubscribe: () => Promise<void>;
 }
 
+function urlBase64ToUint8Array(value: string): Uint8Array<ArrayBuffer> {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(base64);
+  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
+}
+
 export function useWebPush(): UseWebPushReturn {
   const [permission, setPermission] = useState<PermissionState>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -55,7 +62,7 @@ export function useWebPush(): UseWebPushReturn {
 
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: vapidKey,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
       });
 
       const response = await fetch("/api/push/web/subscribe", {

@@ -41,8 +41,10 @@ export async function GET(req: NextRequest) {
     
     const { limit, offset } = parsed.data;
 
-    const [notifList, { count }] = await db.transaction(async (tx) => {
-      const list = await tx
+    // neon-http ne prend pas en charge db.transaction(callback). Ces deux
+    // lectures indépendantes peuvent être exécutées en parallèle.
+    const [notifList, countRows] = await Promise.all([
+      db
         .select({
           id: notifications.id,
           type: notifications.type,
@@ -58,18 +60,16 @@ export async function GET(req: NextRequest) {
         .where(eq(notifications.userId, session.userId))
         .orderBy(desc(notifications.createdAt))
         .limit(limit)
-        .offset(offset);
-
-      const [{ count }] = await tx
+        .offset(offset),
+      db
         .select({ count: sql<number>`count(*)` })
         .from(notifications)
         .where(and(
           eq(notifications.userId, session.userId),
           eq(notifications.lue, false)
-        ));
-
-      return [list, { count }];
-    });
+        )),
+    ]);
+    const count = countRows[0]?.count ?? 0;
 
     return NextResponse.json({
       notifications: notifList,

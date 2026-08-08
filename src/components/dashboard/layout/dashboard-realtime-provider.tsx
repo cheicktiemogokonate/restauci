@@ -141,6 +141,8 @@ const REFRESH_TRIGGER_TYPES = new Set([
   "commande_annulee",
   "statut",
   "livreur_assigne",
+  "restaurant_valide",
+  "restaurant_rejete",
 ]);
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -231,6 +233,28 @@ export function DashboardRealtimeProvider({
           action: {
             label: "Voir",
             onClick: () => router.push(commandeHref),
+          },
+        });
+      } else if (event.type === "restaurant_valide") {
+        toast.success("🎉 Restaurant validé", {
+          description: String(
+            data.message ?? "Votre restaurant est maintenant validé.",
+          ),
+          duration: 8000,
+          action: {
+            label: "Voir",
+            onClick: () => router.push("/restaurateur"),
+          },
+        });
+      } else if (event.type === "restaurant_rejete") {
+        toast.error("📝 Demande à corriger", {
+          description: String(
+            data.message ?? "Consultez le motif puis corrigez votre dossier.",
+          ),
+          duration: 10000,
+          action: {
+            label: "Corriger",
+            onClick: () => router.push("/restaurateur/profil"),
           },
         });
       } else if (event.type === "statut") {

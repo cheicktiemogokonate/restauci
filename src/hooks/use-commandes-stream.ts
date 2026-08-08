@@ -72,6 +72,8 @@ export function useCommandesStream(
       es.addEventListener("commande_prete",    handleNamedEvent("commande_prete"));
       es.addEventListener("commande_annulee",  handleNamedEvent("commande_annulee"));
       es.addEventListener("nouveau_avis",      handleNamedEvent("nouveau_avis"));
+      es.addEventListener("restaurant_valide", handleNamedEvent("restaurant_valide"));
+      es.addEventListener("restaurant_rejete", handleNamedEvent("restaurant_rejete"));
       es.addEventListener("statut",            handleNamedEvent("statut"));
       es.addEventListener("livreur_assigne",   handleNamedEvent("livreur_assigne"));
 

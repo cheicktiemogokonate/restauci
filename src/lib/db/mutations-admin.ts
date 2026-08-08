@@ -12,6 +12,7 @@ import {
 import { invalidateCache, cacheKey } from "@/lib/cache";
 import { normalizeSettlementInput } from "@/lib/config/admin-workflows";
 import { logAuditAction } from "@/lib/audit";
+import { sendNotification } from "@/lib/notifications";
 
 
 export class AdminTransitionError extends Error {
@@ -66,7 +67,21 @@ export async function validerRestaurant(
     ressourceId: restaurantId,
   });
 
-  await invalidateCache(cacheKey.restaurant(restaurantId));
+  await invalidateCache(
+    cacheKey.restaurant(restaurantId),
+    cacheKey.restaurantByUser(restaurant.userId),
+  );
+
+  await sendNotification({
+    userId: restaurant.userId,
+    restaurantId: restaurant.id,
+    type: "restaurant_valide",
+    titre: "Votre restaurant est validé",
+    message: `Bonne nouvelle ! ${restaurant.nom} a été validé. Vous pouvez maintenant finaliser votre configuration et commencer votre activité.`,
+    lienType: "restaurant",
+    lienId: restaurant.id,
+    data: { statut: "valide" },
+  });
 
   return restaurant;
 }
@@ -103,7 +118,21 @@ export async function rejeterRestaurant(
     details: { motif },
   });
 
-  await invalidateCache(cacheKey.restaurant(restaurantId));
+  await invalidateCache(
+    cacheKey.restaurant(restaurantId),
+    cacheKey.restaurantByUser(restaurant.userId),
+  );
+
+  await sendNotification({
+    userId: restaurant.userId,
+    restaurantId: restaurant.id,
+    type: "restaurant_rejete",
+    titre: "Votre dossier nécessite des corrections",
+    message: `Votre demande pour ${restaurant.nom} a été refusée. Motif : ${motif}`,
+    lienType: "profil",
+    lienId: restaurant.id,
+    data: { statut: "rejete", motif },
+  });
 
   return restaurant;
 }
@@ -149,7 +178,10 @@ export async function suspendreRestaurant(
     details: { motif },
   });
 
-  await invalidateCache(cacheKey.restaurant(restaurantId));
+  await invalidateCache(
+    cacheKey.restaurant(restaurantId),
+    cacheKey.restaurantByUser(restaurant.userId),
+  );
 
   return restaurant;
 }
@@ -183,7 +215,10 @@ export async function reactiverRestaurant(
     ressourceId: restaurantId,
   });
 
-  await invalidateCache(cacheKey.restaurant(restaurantId));
+  await invalidateCache(
+    cacheKey.restaurant(restaurantId),
+    cacheKey.restaurantByUser(restaurant.userId),
+  );
 
   return restaurant;
 }

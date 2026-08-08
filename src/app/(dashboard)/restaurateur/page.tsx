@@ -9,6 +9,7 @@ import { RevenueSection } from "@/components/dashboard/stats/revenue-section";
 import { StatsSection } from "@/components/dashboard/stats/stats-section";
 import { TrendingSection } from "@/components/dashboard/stats/trending-section";
 import { StatsShell } from "@/components/dashboard/stats/stats-shell";
+import { RestaurantValidationStatus } from "@/components/dashboard/restaurant-validation-status";
 
 import {
   OrdersOverviewSection,
@@ -35,6 +36,13 @@ export default async function RestaurateurDashboardPage() {
     <div className="flex flex-1 flex-col overflow-hidden">
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6 space-y-4 sm:space-y-6">
+          <RestaurantValidationStatus
+            actif={restaurant.actif}
+            suspendu={restaurant.suspendu}
+            motifRejet={restaurant.motifRejet}
+            motifSuspension={restaurant.motifSuspension}
+          />
+
           {/* Section KPIs — streame indépendamment */}
           <Suspense fallback={<StatsShell restaurantId={restaurant.id} />}>
             <StatsSection restaurantId={restaurant.id} />
