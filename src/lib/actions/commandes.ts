@@ -6,11 +6,13 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getMyRestaurant } from "@/lib/db/queries";
 import { assignerLivreur, updateStatutCommande } from "@/lib/db/mutations";
+import { applyRestaurantOrderTransition } from "@/lib/db/commandes-mutations";
 import { pushSseEvent } from "@/lib/realtime/sse-push";
 import type { StatutCommande } from "@/lib/db/types";
 import { and, eq, sql } from "drizzle-orm";
 import { commandes, livraisons, livreurs } from "@/lib/db/schema";
-import { calculerCommissionCommande } from "@/lib/db/mutations-admin";
+import { transactionalDb } from "@/lib/db/transaction";
+import { scheduleDebtCycleNotification } from "@/lib/commissions/ledger";
 
 export async function updateCommandeStatus(
   commandeId: string,
@@ -101,7 +103,7 @@ export async function updateDeliveryStatus(
   if (!restaurant) throw new Error("Restaurant introuvable");
 
   const now = new Date();
-  const result = await db.transaction(async (tx) => {
+  const transactionResult = await transactionalDb.transaction(async (tx) => {
     const livraison = await tx.query.livraisons.findFirst({
       where: (row, { eq }) => eq(row.commandeId, commandeId),
       with: { commande: true },
@@ -138,17 +140,20 @@ export async function updateDeliveryStatus(
       throw new Error("La livraison a déjà été mise à jour. Actualisez la page.");
     }
 
+    let commissionTransition = null;
     if (statut === "livree") {
-      await tx
-        .update(commandes)
-        .set({ statut: "servie", heureServie: now, updatedAt: now })
-        .where(
-          and(
-            eq(commandes.id, commandeId),
-            eq(commandes.restaurantId, restaurant.id),
-            eq(commandes.statut, "prete"),
-          ),
-        );
+      const servedOrder = await applyRestaurantOrderTransition(tx, {
+        id: commandeId,
+        restaurantId: restaurant.id,
+        targetStatus: "servie",
+        allowedPreviousStatuses: ["prete"],
+        allowDeliveryCompletion: true,
+        now,
+      });
+      if (!servedOrder) {
+        throw new Error("La commande a déjà été mise à jour. Actualisez la page.");
+      }
+      commissionTransition = servedOrder.transition;
       if (livraison.livreurId) {
         await tx
           .update(livreurs)
@@ -170,7 +175,7 @@ export async function updateDeliveryStatus(
           ),
         );
     }
-    return updatedDelivery;
+    return { updatedDelivery, commissionTransition };
   });
 
   after(async () => {
@@ -182,11 +187,20 @@ export async function updateDeliveryStatus(
         timestamp: now.toISOString(),
       }),
     ];
-    if (statut === "livree") effects.push(calculerCommissionCommande(commandeId));
     await Promise.allSettled(effects);
   });
 
+  const cycleResult = transactionResult.commissionTransition?.cycleResult;
+  if (cycleResult?.notificationNeeded && cycleResult.cycle) {
+    scheduleDebtCycleNotification({
+      partnerAccountId:
+        transactionResult.commissionTransition!.commission.partnerAccountId,
+      cycleId: cycleResult.cycle.id,
+      debtFcfa: cycleResult.debt,
+    });
+  }
+
   revalidatePath("/restaurateur/commandes");
   revalidatePath(`/restaurateur/commandes/${commandeId}`);
-  return result;
+  return transactionResult.updatedDelivery;
 }

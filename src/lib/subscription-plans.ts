@@ -1,11 +1,19 @@
 import { db } from "./db";
 import { 
   subscriptionPlans, 
-  subscriptionPeriods
+  subscriptionPeriods,
+  subscriptionPlanLimits,
+  restaurants,
 } from "./db/schema";
-import { eq, and, gt, lte, or, desc, isNull } from "drizzle-orm";
+import { eq, and, gt, lte, desc, ne, asc } from "drizzle-orm";
 import { SubscriptionPlan, SubscriptionPeriod } from "./db/types";
+import { unstable_cache } from "next/cache";
+import type { DbExecutor } from "./db/transaction";
 
+export const SUBSCRIPTION_PLANS_CACHE_TAG = "subscription-plans";
+
+// Conservée comme erreur métier publique pour les anciens appelants. La
+// création n'est désormais jamais bloquée par un quota de publication.
 export class SubscriptionLimitError extends Error {
   constructor(message: string) {
     super(message);
@@ -13,33 +21,61 @@ export class SubscriptionLimitError extends Error {
   }
 }
 
+export const getPublicSubscriptionPlans = unstable_cache(
+  async () =>
+    db.query.subscriptionPlans.findMany({
+      where: eq(subscriptionPlans.actif, true),
+      orderBy: [asc(subscriptionPlans.ordre)],
+      with: {
+        limits: {
+          where: eq(subscriptionPlanLimits.activityType, "restaurant"),
+        },
+      },
+    }),
+  ["public-subscription-plans"],
+  { tags: [SUBSCRIPTION_PLANS_CACHE_TAG], revalidate: 3_600 },
+);
+
+export async function getPartnerAccountIdForRestaurant(
+  restaurantId: string,
+): Promise<string> {
+  const restaurant = await db.query.restaurants.findFirst({
+    where: eq(restaurants.id, restaurantId),
+    columns: { partnerAccountId: true },
+  });
+  if (!restaurant) throw new Error("Restaurant introuvable");
+  return restaurant.partnerAccountId;
+}
+
 /**
  * Récupère le plan d'abonnement actif pour un restaurant.
  * Un restaurant a toujours un plan actif (Découverte par défaut s'il n'y a pas d'historique).
  */
-export async function getEffectivePlan(restaurantId: string): Promise<{
+export async function getEffectivePlan(
+  partnerAccountId: string,
+  options: { executor?: DbExecutor; now?: Date } = {},
+): Promise<{
   plan: SubscriptionPlan;
   period: SubscriptionPeriod | null;
 }> {
-  const now = new Date();
+  const executor = options.executor ?? db;
+  const now = options.now ?? new Date();
 
-  // On cherche la période active en cours
-  // "active" signifie: statut = active, date_debut <= now, (date_echeance == null OR date_echeance > now)
-  const activePeriod = await db.query.subscriptionPeriods.findFirst({
+  // Une période Découverte n'est jamais nécessaire : seuls les abonnements
+  // payants réellement en cours peuvent remplacer le fallback.
+  const activePeriod = await executor.query.subscriptionPeriods.findFirst({
     where: and(
-      eq(subscriptionPeriods.restaurantId, restaurantId),
+      eq(subscriptionPeriods.partnerAccountId, partnerAccountId),
       eq(subscriptionPeriods.statut, "active"),
+      ne(subscriptionPeriods.planCode, "decouverte"),
       lte(subscriptionPeriods.dateDebut, now),
-      or(
-        isNull(subscriptionPeriods.dateEcheance),
-        gt(subscriptionPeriods.dateEcheance, now)
-      )
+      gt(subscriptionPeriods.dateEcheance, now),
     ),
-    orderBy: [desc(subscriptionPeriods.dateDebut)], // au cas où, on prend la plus récente
+    orderBy: [desc(subscriptionPeriods.dateDebut)],
   });
 
   if (activePeriod) {
-    const plan = await db.query.subscriptionPlans.findFirst({
+    const plan = await executor.query.subscriptionPlans.findFirst({
       where: eq(subscriptionPlans.code, activePeriod.planCode)
     });
 
@@ -48,8 +84,8 @@ export async function getEffectivePlan(restaurantId: string): Promise<{
     }
   }
 
-  // Fallback: Si aucune période active n'est trouvée, c'est le plan "decouverte" par défaut.
-  const defaultPlan = await db.query.subscriptionPlans.findFirst({
+  // Fallback logique : aucune écriture de période gratuite en base.
+  const defaultPlan = await executor.query.subscriptionPlans.findFirst({
     where: eq(subscriptionPlans.code, "decouverte")
   });
 
@@ -64,30 +100,15 @@ export async function getEffectivePlan(restaurantId: string): Promise<{
  * Récupère le taux de commission en vigueur (points de base) pour une commande.
  * Si une période est active, on utilise le taux figé `tauxCommissionBpsFige` (pour protéger l'historique en cas de changement de catalogue).
  */
-export async function getCommissionRateBps(restaurantId: string): Promise<number> {
-  const { plan, period } = await getEffectivePlan(restaurantId);
+export async function getCommissionRateBps(
+  partnerAccountId: string,
+  options: { executor?: DbExecutor; now?: Date } = {},
+): Promise<number> {
+  const { plan, period } = await getEffectivePlan(partnerAccountId, options);
   
   if (period) {
     return period.tauxCommissionBpsFige;
   }
   
   return plan.tauxCommissionBps;
-}
-
-/**
- * Vérifie si le restaurant a atteint une limite de son abonnement actif
- */
-export async function checkPlanLimits(
-  restaurantId: string, 
-  metric: "plats" | "categories", 
-  currentCount: number
-): Promise<boolean> {
-  const { plan } = await getEffectivePlan(restaurantId);
-  
-  const limit = metric === "plats" ? plan.maxPlats : plan.maxCategories;
-  
-  // Si null, c'est illimité
-  if (limit === null) return true;
-  
-  return currentCount < limit;
 }

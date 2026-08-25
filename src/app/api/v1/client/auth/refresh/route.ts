@@ -3,34 +3,40 @@ import { validateBody } from "@/lib/api/validate";
 import { signToken, verifyToken } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { NextRequest } from "next/server";
-import { z } from "zod";
 import { db } from "@/lib/db";
 import { clients } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import {
   CLIENT_REFRESH_COOKIE,
+  applyClientRefreshTransport,
   clearClientRefreshCookie,
-  setClientRefreshCookie,
 } from "@/lib/api/client-session-cookie";
 import {
   blacklistToken,
   isTokenBlacklisted,
 } from "@/lib/api/token-blacklist";
+import {
+  clientRefreshRequestSchema,
+  getClientRefreshLifetime,
+  resolveClientRefreshToken,
+} from "@/lib/api/client-token-transport";
 
 const log = createLogger("v1-client-auth-refresh");
 
-const refreshSchema = z.object({
-  refreshToken: z.string().min(1).optional(),
-});
-
 export async function POST(request: NextRequest) {
-  const { data, error } = await validateBody(request, refreshSchema);
+  const { data, error } = await validateBody(
+    request,
+    clientRefreshRequestSchema,
+  );
   if (error) return error;
 
   try {
     // Vérifier le refresh token (type: "client-refresh")
-    const refreshToken =
-      data.refreshToken ?? request.cookies.get(CLIENT_REFRESH_COOKIE)?.value;
+    const refreshToken = resolveClientRefreshToken({
+      transport: data.tokenTransport,
+      bodyToken: data.refreshToken,
+      cookieToken: request.cookies.get(CLIENT_REFRESH_COOKIE)?.value,
+    });
     if (!refreshToken) return apiResponse.unauthorized("Session expirée");
     if (await isTokenBlacklisted(refreshToken)) {
       const response = apiResponse.unauthorized("Session expirée");
@@ -55,22 +61,35 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
+    const refreshLifetime = getClientRefreshLifetime(payload.sessionDuration);
+    const sessionDuration =
+      payload.sessionDuration === "extended" ? "extended" : "standard";
     const [newAccessToken, newRefreshToken] = await Promise.all([
       signToken({ clientId: client.id, type: "client" }, "15m"),
-      signToken({ clientId: client.id, type: "client-refresh" }, "7d"),
+      signToken(
+        { clientId: client.id, type: "client-refresh", sessionDuration },
+        refreshLifetime.expiresIn,
+      ),
     ]);
 
     log.info({ clientId: payload.clientId }, "Token client refreshé");
 
     const response = apiResponse.success({
       accessToken: newAccessToken,
+      ...(data.tokenTransport === "json"
+        ? { refreshToken: newRefreshToken }
+        : {}),
       expiresIn: 15 * 60,
     });
     await blacklistToken(
       refreshToken,
       typeof payload.exp === "number" ? payload.exp : undefined,
     );
-    setClientRefreshCookie(response, newRefreshToken, 7 * 24 * 3600);
+    applyClientRefreshTransport(response, {
+      transport: data.tokenTransport,
+      token: newRefreshToken,
+      maxAge: refreshLifetime.maxAge,
+    });
     return response;
   } catch (err) {
     log.error({ err }, "Erreur refresh token client");

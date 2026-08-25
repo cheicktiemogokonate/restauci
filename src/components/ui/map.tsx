@@ -19,6 +19,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/utils";
+import { createInstanceLifecycleGuard } from "@/components/ui/map-lifecycle";
 
 const defaultStyles = {
   dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
@@ -85,6 +86,7 @@ function useResolvedTheme(themeProp?: "light" | "dark"): Theme {
 type MapContextValue = {
   map: MapLibreGL.Map | null;
   isLoaded: boolean;
+  isMapAlive: (candidate: MapLibreGL.Map) => boolean;
 };
 
 const MapContext = createContext<MapContextValue | null>(null);
@@ -187,6 +189,11 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   const [mapInstance, setMapInstance] = useState<MapLibreGL.Map | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isStyleLoaded, setIsStyleLoaded] = useState(false);
+  const lifecycleGuardRef = useRef<ReturnType<
+    typeof createInstanceLifecycleGuard<MapLibreGL.Map>
+  > | null>(null);
+  lifecycleGuardRef.current ??=
+    createInstanceLifecycleGuard<MapLibreGL.Map>();
   const currentStyleRef = useRef<MapStyleOption | null>(null);
   const styleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const internalUpdateRef = useRef(false);
@@ -236,10 +243,12 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       renderWorldCopies: false,
       attributionControl: {
         compact: true,
+        customAttribution: "© OpenStreetMap contributors",
       },
       ...props,
       ...viewport,
     });
+    lifecycleGuardRef.current?.attach(map);
 
     const styleDataHandler = () => {
       clearStyleTimeout();
@@ -274,6 +283,10 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     setMapInstance(map);
 
     return () => {
+      // React can clean up this parent effect before effects rendered inside
+      // the provider. Mark the instance dead first so layer/source/listener
+      // cleanups never call MapLibre after map.remove() destroyed its style.
+      lifecycleGuardRef.current?.detach(map);
       clearStyleTimeout();
       map.off("load", loadHandler);
       map.off("styledata", styleDataHandler);
@@ -285,6 +298,12 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       setMapInstance(null);
     };
   }, []);
+
+  const isMapAlive = useCallback(
+    (candidate: MapLibreGL.Map) =>
+      lifecycleGuardRef.current?.isAlive(candidate) ?? false,
+    [],
+  );
 
   // Sync controlled viewport to map
   useEffect(() => {
@@ -340,8 +359,9 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     () => ({
       map: mapInstance,
       isLoaded: isLoaded && isStyleLoaded,
+      isMapAlive,
     }),
-    [mapInstance, isLoaded, isStyleLoaded],
+    [mapInstance, isLoaded, isStyleLoaded, isMapAlive],
   );
 
   return (
@@ -913,7 +933,7 @@ function MapControls({
 }
 
 function CompassButton({ onClick }: { onClick: () => void }) {
-  const { map } = useMap();
+  const { map, isMapAlive } = useMap();
   const compassRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -932,10 +952,11 @@ function CompassButton({ onClick }: { onClick: () => void }) {
     updateRotation();
 
     return () => {
+      if (!isMapAlive(map)) return;
       map.off("rotate", updateRotation);
       map.off("pitch", updateRotation);
     };
-  }, [map]);
+  }, [isMapAlive, map]);
 
   return (
     <ControlButton onClick={onClick} label="Reset bearing to north">
@@ -1083,7 +1104,7 @@ function MapRoute({
   onMouseLeave,
   interactive = true,
 }: MapRouteProps) {
-  const { map, isLoaded } = useMap();
+  const { map, isLoaded, isMapAlive } = useMap();
   const autoId = useId();
   const id = propId ?? autoId;
   const sourceId = `route-source-${id}`;
@@ -1116,14 +1137,11 @@ function MapRoute({
     });
 
     return () => {
-      try {
-        if (map.getLayer(layerId)) map.removeLayer(layerId);
-        if (map.getSource(sourceId)) map.removeSource(sourceId);
-      } catch {
-        // ignore
-      }
+      if (!isMapAlive(map)) return;
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
     };
-  }, [isLoaded, map]);
+  }, [isLoaded, isMapAlive, map]);
 
   // When coordinates change, update the source data
   useEffect(() => {
@@ -1169,12 +1187,14 @@ function MapRoute({
     map.on("mouseleave", layerId, handleMouseLeave);
 
     return () => {
+      if (!isMapAlive(map)) return;
       map.off("click", layerId, handleClick);
       map.off("mouseenter", layerId, handleMouseEnter);
       map.off("mouseleave", layerId, handleMouseLeave);
     };
   }, [
     isLoaded,
+    isMapAlive,
     map,
     layerId,
     onClick,
@@ -1349,7 +1369,7 @@ function MapArc<T extends MapArcDatum = MapArcDatum>({
   interactive = true,
   beforeId,
 }: MapArcProps<T>) {
-  const { map, isLoaded } = useMap();
+  const { map, isLoaded, isMapAlive } = useMap();
   const autoId = useId();
   const id = propId ?? autoId;
   const sourceId = `arc-source-${id}`;
@@ -1432,15 +1452,12 @@ function MapArc<T extends MapArcDatum = MapArcDatum>({
     );
 
     return () => {
-      try {
-        if (map.getLayer(layerId)) map.removeLayer(layerId);
-        if (map.getLayer(hitLayerId)) map.removeLayer(hitLayerId);
-        if (map.getSource(sourceId)) map.removeSource(sourceId);
-      } catch {
-        // ignore
-      }
+      if (!isMapAlive(map)) return;
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getLayer(hitLayerId)) map.removeLayer(hitLayerId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
     };
-  }, [isLoaded, map]);
+  }, [isLoaded, isMapAlive, map]);
 
   // Sync features when data / curvature / samples change.
   useEffect(() => {
@@ -1541,13 +1558,14 @@ function MapArc<T extends MapArcDatum = MapArcDatum>({
     map.on("click", hitLayerId, handleClick);
 
     return () => {
+      if (!isMapAlive(map)) return;
       map.off("mousemove", hitLayerId, handleMouseMove);
       map.off("mouseleave", hitLayerId, handleMouseLeave);
       map.off("click", hitLayerId, handleClick);
       setHover(null);
       map.getCanvas().style.cursor = "";
     };
-  }, [isLoaded, map, hitLayerId, sourceId, interactive]);
+  }, [isLoaded, isMapAlive, map, hitLayerId, sourceId, interactive]);
 
   return null;
 }
@@ -1599,7 +1617,7 @@ function MapClusterLayer<
   onPointClick,
   onClusterClick,
 }: MapClusterLayerProps<P>) {
-  const { map, isLoaded } = useMap();
+  const { map, isLoaded, isMapAlive } = useMap();
   const id = useId();
   const sourceId = `cluster-source-${id}`;
   const clusterLayerId = `clusters-${id}`;
@@ -1687,18 +1705,15 @@ function MapClusterLayer<
     });
 
     return () => {
-      try {
-        if (map.getLayer(clusterCountLayerId))
-          map.removeLayer(clusterCountLayerId);
-        if (map.getLayer(unclusteredLayerId))
-          map.removeLayer(unclusteredLayerId);
-        if (map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
-        if (map.getSource(sourceId)) map.removeSource(sourceId);
-      } catch {
-        // ignore
-      }
+      if (!isMapAlive(map)) return;
+      if (map.getLayer(clusterCountLayerId))
+        map.removeLayer(clusterCountLayerId);
+      if (map.getLayer(unclusteredLayerId))
+        map.removeLayer(unclusteredLayerId);
+      if (map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
     };
-  }, [isLoaded, map, sourceId]);
+  }, [isLoaded, isMapAlive, map, sourceId]);
 
   // Update source data when data prop changes (only for non-URL data)
   useEffect(() => {
@@ -1841,6 +1856,7 @@ function MapClusterLayer<
     map.on("mouseleave", unclusteredLayerId, handleMouseLeavePoint);
 
     return () => {
+      if (!isMapAlive(map)) return;
       map.off("click", clusterLayerId, handleClusterClick);
       map.off("click", unclusteredLayerId, handlePointClick);
       map.off("mouseenter", clusterLayerId, handleMouseEnterCluster);
@@ -1850,6 +1866,7 @@ function MapClusterLayer<
     };
   }, [
     isLoaded,
+    isMapAlive,
     map,
     clusterLayerId,
     unclusteredLayerId,

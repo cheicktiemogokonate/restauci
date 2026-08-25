@@ -1,11 +1,8 @@
 import Image from "next/image";
 import {
-  ArrowRight,
-  Eye,
   Mail,
   Phone,
   LoaderCircle,
-  ShieldCheck,
   Utensils,
   ChevronLeft,
   ChevronRight,

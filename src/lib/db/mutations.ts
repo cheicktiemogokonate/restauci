@@ -8,27 +8,25 @@ import {
 } from "@/lib/cache";
 import {
   users,
+  partnerAccounts,
   restaurants,
   categories,
   plats,
   creneauxHoraires,
   clients,
-  paiements,
   livraisons,
   livreurs,
   promotions,
   avis,
   notifications,
-  subscriptionRequests,
-  subscriptionPeriods,
 } from "./schema";
 import { getInitialMenuCategories } from "@/lib/menu/default-categories";
-import {
-  checkPlanLimits,
-  SubscriptionLimitError,
-} from "@/lib/subscription-plans";
-export { createCommande, updateStatutCommande } from "./commandes-mutations";
-export type { CreateCommandeInput } from "./commandes-mutations";
+import { getEffectiveLimits } from "@/lib/quota-entitlements";
+import { persistNotification } from "@/lib/notifications";
+import type { TypeNotification } from "./types";
+import { env } from "@/lib/env";
+import { resolveRestaurantMarketAssignment } from "@/modules/restaurants/server";
+export { updateStatutCommande } from "./commandes-mutations";
 
 // ============================================================================
 // HELPERS
@@ -54,7 +52,7 @@ export interface CreateUserInput {
   email: string;
   passwordHash: string;
   telephone: string;
-  role?: "restaurateur" | "admin";
+  role?: "partner" | "admin";
 }
 
 export async function createUser(input: CreateUserInput) {
@@ -65,7 +63,7 @@ export async function createUser(input: CreateUserInput) {
       email: input.email,
       password: input.passwordHash,
       telephone: input.telephone,
-      role: input.role ?? "restaurateur",
+      role: input.role ?? "partner",
     })
     .returning();
   return user;
@@ -97,7 +95,7 @@ export async function updateUser(
 // ============================================================================
 
 export interface CreateRestaurantInput {
-  userId: string;
+  partnerAccountId: string;
   nom: string;
   description?: string;
   telephone: string;
@@ -141,47 +139,41 @@ export async function createRestaurant(input: CreateRestaurantInput) {
   });
   if (existing) slug = `${slug}-${Date.now()}`;
 
-  // L'offre choisie à l'inscription peut nécessiter une validation. Tant
-  // qu'elle n'est pas validée, les droits actifs sont ceux de Découverte.
-  const user = await db.query.users.findFirst({
-    where: (u, { eq }) => eq(u.id, input.userId),
-  });
+  const initialEntitlement = await getEffectiveLimits(input.partnerAccountId);
 
-  const requestedPlanCode = user?.pendingPlanCode || "decouverte";
-  const requestedPlan = await db.query.subscriptionPlans.findFirst({
-    where: (plan, { eq }) => eq(plan.code, requestedPlanCode),
-  });
-  const initialPlan = await db.query.subscriptionPlans.findFirst({
-    where: (plan, { eq }) => eq(plan.code, "decouverte"),
-  });
-
-  if (!initialPlan) {
-    throw new Error(
-      "Catalogue des abonnements invalide : offre Découverte introuvable.",
-    );
-  }
-
-  const planToRequest = requestedPlan ?? initialPlan;
   const { schedule = [], menu = [], ...restaurantInput } = input;
+  let marketAssignment:
+    | Awaited<ReturnType<typeof resolveRestaurantMarketAssignment>>
+    | null = null;
+  if (env.RESTAURANT_GEO_POLICY_MODE !== "off") {
+    try {
+      marketAssignment = await resolveRestaurantMarketAssignment({
+        latitude: input.latitude,
+        longitude: input.longitude,
+      });
+    } catch (error) {
+      if (env.RESTAURANT_GEO_POLICY_MODE === "enforce") throw error;
+    }
+  }
   const initialCategories = getInitialMenuCategories(
-    initialPlan.maxCategories,
+    initialEntitlement.limits.category,
   );
   const allowedCategories = new Set<string>(initialCategories);
 
   if (menu.length > 1) {
-    throw new SubscriptionLimitError(
+    throw new Error(
       "L’onboarding permet d’ajouter un seul plat de démonstration.",
     );
   }
 
-  if (initialPlan.maxPlats !== null && menu.length > initialPlan.maxPlats) {
-    throw new SubscriptionLimitError(
-      `L’offre ${initialPlan.nom} autorise au maximum ${initialPlan.maxPlats} plats.`,
+  if (initialEntitlement.limits.dish !== null && menu.length > initialEntitlement.limits.dish) {
+    throw new Error(
+      `L’offre ${initialEntitlement.plan.nom} autorise au maximum ${initialEntitlement.limits.dish} plats.`,
     );
   }
 
   if (menu.some((item) => !allowedCategories.has(item.categorie.trim()))) {
-    throw new SubscriptionLimitError(
+    throw new Error(
       "Un plat utilise une catégorie qui ne fait pas partie des catégories initiales autorisées.",
     );
   }
@@ -195,6 +187,7 @@ export async function createRestaurant(input: CreateRestaurantInput) {
     restaurantId,
     nom,
     ordre,
+    firstPublishedAt: new Date(),
   }));
   const categoriesByName = new Map<string, string>(
     categoriesWithIds.map((category) => [category.nom, category.id]),
@@ -210,6 +203,14 @@ export async function createRestaurant(input: CreateRestaurantInput) {
       modesCommande: input.modesCommande ?? ["sur_place"],
       cuisines: input.cuisines ?? [],
       actif: false,
+      ...(marketAssignment
+        ? {
+            serviceMarketId: marketAssignment.serviceMarketId,
+            serviceMarketVersionId: marketAssignment.serviceMarketVersionId,
+            geoAssignmentStatus: marketAssignment.geoAssignmentStatus,
+            geoAssignedAt: marketAssignment.geoAssignedAt,
+          }
+        : {}),
     }),
   ];
 
@@ -244,39 +245,9 @@ export async function createRestaurant(input: CreateRestaurantInput) {
           prix: item.prix,
           photoUrl: item.photoUrl,
           ordre: index,
+          firstPublishedAt: new Date(),
         })),
       ),
-    );
-  }
-
-  if (planToRequest.code !== "decouverte") {
-    operations.push(
-      db.insert(subscriptionRequests).values({
-        id: crypto.randomUUID(),
-        restaurantId,
-        planCode: planToRequest.code,
-        prixFigeFcfa: planToRequest.prixAnnuelFcfa,
-        statut: "en_attente",
-      }),
-    );
-  }
-
-  operations.push(
-    db.insert(subscriptionPeriods).values({
-      id: crypto.randomUUID(),
-      restaurantId,
-      planCode: initialPlan.code,
-      tauxCommissionBpsFige: initialPlan.tauxCommissionBps,
-      statut: "active",
-    }),
-  );
-
-  if (user?.pendingPlanCode) {
-    operations.push(
-      db
-        .update(users)
-        .set({ pendingPlanCode: null })
-        .where(eq(users.id, user.id)),
     );
   }
 
@@ -302,11 +273,6 @@ export async function updateRestaurant(
     telephone: string;
     email: string;
     siteWeb: string;
-    adresse: string;
-    ville: string;
-    pays: string;
-    latitude: number;
-    longitude: number;
     logoUrl: string | null;
     banniereUrl: string | null;
     fraisLivraison: number;
@@ -337,13 +303,22 @@ export async function resoumettreRestaurant(
   restaurantId: string,
   userId: string,
 ) {
+  const partnerAccount = await db.query.partnerAccounts.findFirst({
+    where: and(
+      eq(partnerAccounts.userId, userId),
+      eq(partnerAccounts.activityType, "restaurant"),
+    ),
+    columns: { id: true },
+  });
+  if (!partnerAccount) return undefined;
+
   const [restaurant] = await db
     .update(restaurants)
     .set({ motifRejet: null, updatedAt: new Date() })
     .where(
       and(
         eq(restaurants.id, restaurantId),
-        eq(restaurants.userId, userId),
+        eq(restaurants.partnerAccountId, partnerAccount.id),
         eq(restaurants.actif, false),
         eq(restaurants.suspendu, false),
         isNotNull(restaurants.motifRejet),
@@ -442,21 +417,9 @@ export interface CreateCategorieInput {
 }
 
 export async function createCategorie(input: CreateCategorieInput) {
-  const [{ value }] = await db
-    .select({ value: sql<number>`count(*)` })
-    .from(categories)
-    .where(eq(categories.restaurantId, input.restaurantId));
-
-  const limits = await checkPlanLimits(input.restaurantId, "categories", Number(value));
-  if (!limits) {
-    throw new SubscriptionLimitError(
-      "Limite de catégories atteinte pour votre offre actuelle.",
-    );
-  }
-
   const [categorie] = await db
     .insert(categories)
-    .values({ ...input, ordre: input.ordre ?? 0 })
+    .values({ ...input, ordre: input.ordre ?? 0, firstPublishedAt: new Date() })
     .returning();
 
   await invalidateRestaurantCache(input.restaurantId);
@@ -530,7 +493,7 @@ export interface CreatePlatInput {
   categorieId: string;
   nom: string;
   description?: string;
-  prix: number;             // centimes
+  prix: number;             // FCFA entiers
   photoUrl?: string | null;
   disponible?: boolean;
   ordre?: number;
@@ -546,18 +509,6 @@ export interface CreatePlatInput {
 }
 
 export async function createPlat(input: CreatePlatInput) {
-  const [{ value }] = await db
-    .select({ value: sql<number>`count(*)` })
-    .from(plats)
-    .where(eq(plats.restaurantId, input.restaurantId));
-
-  const limits = await checkPlanLimits(input.restaurantId, "plats", Number(value));
-  if (!limits) {
-    throw new SubscriptionLimitError(
-      "Limite de plats atteinte pour votre offre actuelle.",
-    );
-  }
-
   const [plat] = await db
     .insert(plats)
     .values({
@@ -566,6 +517,7 @@ export async function createPlat(input: CreatePlatInput) {
       ordre: input.ordre ?? 0,
       tags: input.tags ?? [],
       allergenes: input.allergenes ?? [],
+      firstPublishedAt: new Date(),
     })
     .returning();
 
@@ -611,6 +563,46 @@ export async function toggleDisponibilitePlat(
 
   await invalidateRestaurantCache(restaurantId);
   return plat;
+}
+
+export async function setCategoriePublicationIntent(
+  id: string,
+  restaurantId: string,
+  publicationIntent: boolean,
+) {
+  const [category] = await db
+    .update(categories)
+    .set({
+      publicationIntent,
+      firstPublishedAt: publicationIntent
+        ? sql`coalesce(${categories.firstPublishedAt}, now())`
+        : categories.firstPublishedAt,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(categories.id, id), eq(categories.restaurantId, restaurantId)))
+    .returning();
+  await invalidateRestaurantCache(restaurantId);
+  return category;
+}
+
+export async function setPlatPublicationIntent(
+  id: string,
+  restaurantId: string,
+  publicationIntent: boolean,
+) {
+  const [dish] = await db
+    .update(plats)
+    .set({
+      publicationIntent,
+      firstPublishedAt: publicationIntent
+        ? sql`coalesce(${plats.firstPublishedAt}, now())`
+        : plats.firstPublishedAt,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(plats.id, id), eq(plats.restaurantId, restaurantId)))
+    .returning();
+  await invalidateRestaurantCache(restaurantId);
+  return dish;
 }
 
 export async function deletePlat(id: string, restaurantId: string) {
@@ -687,36 +679,6 @@ export async function upsertClient(input: CreateClientInput) {
     .returning();
 
   return client;
-}
-
-// ============================================================================
-// PAIEMENTS
-// ============================================================================
-
-export interface CreatePaiementInput {
-  commandeId: string;
-  montant: number;
-  methode: "especes" | "carte" | "mobile_money" | "en_ligne";
-  referenceExterne?: string;
-  numeroMobileMoney?: string;
-  operateur?: string;
-}
-
-export async function createPaiement(input: CreatePaiementInput) {
-  const [paiement] = await db
-    .insert(paiements)
-    .values({ ...input, statut: "en_attente" })
-    .returning();
-  return paiement;
-}
-
-export async function marquerPaiementPaye(id: string) {
-  const [paiement] = await db
-    .update(paiements)
-    .set({ statut: "paye", payeAt: new Date(), updatedAt: new Date() })
-    .where(eq(paiements.id, id))
-    .returning();
-  return paiement;
 }
 
 // ============================================================================
@@ -920,13 +882,7 @@ async function recalculerNoteMoyenne(restaurantId: string) {
 export interface CreateNotificationInput {
   userId?: string;
   clientId?: string;
-  type:
-    | "nouvelle_commande"
-    | "commande_prete"
-    | "commande_annulee"
-    | "nouveau_avis"
-    | "promotion"
-    | "systeme";
+  type: TypeNotification;
   titre: string;
   message: string;
   lienType?: string;
@@ -934,11 +890,17 @@ export interface CreateNotificationInput {
 }
 
 export async function createNotificationUser(input: CreateNotificationInput) {
-  const [notif] = await db
-    .insert(notifications)
-    .values(input)
-    .returning();
-  return notif;
+  if (!input.userId) {
+    throw new Error("userId est requis pour une notification persistée utilisateur");
+  }
+  return persistNotification(db, {
+    userId: input.userId,
+    type: input.type,
+    titre: input.titre,
+    message: input.message,
+    lienType: input.lienType,
+    lienId: input.lienId,
+  });
 }
 
 export async function marquerNotificationLue(id: string, userId: string) {

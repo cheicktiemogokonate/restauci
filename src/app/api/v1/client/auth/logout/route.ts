@@ -7,15 +7,29 @@ import { blacklistToken } from "@/lib/api/token-blacklist";
 import { verifyToken } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { NextRequest } from "next/server";
+import {
+  readOptionalClientLogoutBody,
+  resolveClientRefreshToken,
+} from "@/lib/api/client-token-transport";
 
 const log = createLogger("v1-client-auth-logout");
 
 export async function POST(request: NextRequest) {
+  const body = await readOptionalClientLogoutBody(request);
+  if (!body) {
+    return apiResponse.error("Corps JSON invalide", "BAD_REQUEST", {
+      status: 400,
+    });
+  }
   const accessHeader = request.headers.get("authorization");
   const accessToken = accessHeader?.startsWith("Bearer ")
     ? accessHeader.slice(7)
     : null;
-  const refreshToken = request.cookies.get(CLIENT_REFRESH_COOKIE)?.value;
+  const refreshToken = resolveClientRefreshToken({
+    transport: body.tokenTransport,
+    bodyToken: body.refreshToken,
+    cookieToken: request.cookies.get(CLIENT_REFRESH_COOKIE)?.value,
+  });
 
   try {
     await Promise.all(

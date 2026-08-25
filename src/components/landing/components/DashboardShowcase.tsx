@@ -1,5 +1,5 @@
 "use client";
-import { formatEuro } from "@/lib/utils/format";
+import { formatPrix } from "@/lib/utils/format";
 import {
   Activity,
   Award,
@@ -38,7 +38,7 @@ export default function DashboardShowcase() {
     setLocalDishes((prev) =>
       prev.map((dish) => {
         if (dish.id === dishId) {
-          return { ...dish, price: Math.max(5, dish.price + amount) };
+          return { ...dish, price: Math.max(500, dish.price + amount) };
         }
         return dish;
       }),
@@ -245,20 +245,20 @@ export default function DashboardShowcase() {
                             {/* Adjusted Interactive Price display */}
                             <div>
                               <span className="text-xs font-mono font-extrabold text-brand-green">
-                                {formatEuro(dish.price)}
+                                {formatPrix(dish.price)}
                               </span>
                             </div>
 
                             {/* Set adjustment triggers */}
                             <div className="flex items-center gap-1">
                               <button
-                                onClick={() => handlePriceUpdate(dish.id, -0.5)}
+                                onClick={() => handlePriceUpdate(dish.id, -500)}
                                 className="w-5 h-5 rounded bg-gray-100 hover:bg-gray-200 text-brand-dark flex items-center justify-center text-xs font-bold font-mono cursor-pointer"
                               >
                                 -
                               </button>
                               <button
-                                onClick={() => handlePriceUpdate(dish.id, 0.5)}
+                                onClick={() => handlePriceUpdate(dish.id, 500)}
                                 className="w-5 h-5 rounded bg-brand-green/10 hover:bg-brand-green hover:text-white text-brand-green flex items-center justify-center text-xs font-bold font-mono cursor-pointer"
                               >
                                 +
@@ -355,7 +355,7 @@ export default function DashboardShowcase() {
                             PROFIT REEEL EN SEMAINE
                           </span>
                           <h4 className="font-mono font-black text-3xl text-brand-dark">
-                            {formatEuro(18425.5)}
+                            {formatPrix(1_842_500)}
                           </h4>
                           <p className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
                             <Activity className="h-3.5 w-3.5" /> + 8.4% de marge

@@ -15,6 +15,7 @@ import Link from "next/link";
 
 interface RestaurantCommissionRow {
   restaurantId: string;
+  partnerAccountId: string;
   restaurantNom: string;
   nombreCommandes: number;
   montantDu: number | string;
@@ -24,7 +25,7 @@ interface CommissionRow {
   id: string;
   restaurantId: string;
   restaurantNom: string;
-  commandeId: string;
+  commandeId: string | null;
   statut: string;
   montantCommission: number | string;
   createdAt: Date | string;
@@ -103,9 +104,9 @@ export function RestaurantSummaryTable({
             </Link>
           </Button>
           <CommissionPaymentButton
-            restaurantId={restaurant.restaurantId}
+            partnerAccountId={restaurant.partnerAccountId}
             restaurantNom={restaurant.restaurantNom}
-            montantFormate={formatPrix(Number(restaurant.montantDu))}
+            montantDu={Number(restaurant.montantDu)}
           />
         </div>
       ),
@@ -173,14 +174,17 @@ export function CommissionDetailsTable({
       header: "Commande",
       sortable: true,
       width: "140px",
-      cell: (commission) => (
-        <Link
-          href={`/admin/commandes/${commission.commandeId}`}
-          className="font-mono text-xs font-medium text-primary hover:underline"
-        >
-          {commission.commandeId.slice(0, 8)}
-        </Link>
-      ),
+      cell: (commission) =>
+        commission.commandeId ? (
+          <Link
+            href={`/admin/commandes/${commission.commandeId}`}
+            className="font-mono text-xs font-medium text-primary hover:underline"
+          >
+            {commission.commandeId.slice(0, 8)}
+          </Link>
+        ) : (
+          <span className="text-xs text-muted-foreground">Réservation</span>
+        ),
     },
     {
       key: "statut",
@@ -190,17 +194,17 @@ export function CommissionDetailsTable({
       cell: (commission) => (
         <StatusBadge
           variant={
-            commission.statut === "payee"
-              ? "success"
-              : commission.statut === "annulee"
+            commission.statut === "due"
+              ? "warning"
+              : commission.statut === "void"
                 ? "neutral"
-                : "warning"
+                : "info"
           }
         >
-          {commission.statut === "en_attente"
-            ? "En attente"
-            : commission.statut === "payee"
-              ? "Payée"
+          {commission.statut === "pending"
+            ? "En attente de service"
+            : commission.statut === "due"
+              ? "Due"
               : "Annulée"}
         </StatusBadge>
       ),

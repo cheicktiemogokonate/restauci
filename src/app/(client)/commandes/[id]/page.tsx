@@ -39,6 +39,7 @@ export default function SuiviCommandePage() {
   const { commande, isLoading, error } = useCommandeTracking(params.id);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [isCancelling, startCancellation] = useTransition();
+  const [isRetrying, startRetry] = useTransition();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -66,6 +67,20 @@ export default function SuiviCommandePage() {
       if (!result.success) {
         setCancelError(result.error ?? "Impossible d’annuler la commande.");
       }
+    });
+  };
+  const resumePayment = () => {
+    if (commande.payment?.checkoutUrl && commande.payment.status === "pending") {
+      window.location.assign(commande.payment.checkoutUrl);
+      return;
+    }
+    startRetry(async () => {
+      const result = await clientApi.post<{ authorizationUrl: string }>(
+        `/commandes/${commande.id}/paiement`,
+        { method: commande.payment?.method === "card" ? "card" : "mobile_money" },
+      );
+      if (result.data?.authorizationUrl) window.location.assign(result.data.authorizationUrl);
+      else setCancelError(result.error ?? "Impossible de reprendre le paiement.");
     });
   };
 
@@ -101,7 +116,13 @@ export default function SuiviCommandePage() {
             )}
           </section>
           <section aria-labelledby="tracking-heading" className="border-b py-6"><h2 id="tracking-heading" className="mb-5 flex items-center gap-2 text-base font-semibold"><Clock3 className="size-4 text-primary" />Progression</h2><div>{commande.timeline.map((etape, index) => <motion.div key={etape.etape} initial={reduceMotion ? false : { opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2, delay: Math.min(index * 0.06, 0.24) }} className="flex gap-3"><div className="flex flex-col items-center"><span className={`flex size-7 items-center justify-center rounded-full ${etape.fait ? "bg-primary text-primary-foreground" : etape.actif ? "border-2 border-primary bg-background text-primary" : "border-2 border-muted bg-background text-muted-foreground"}`}>{etape.fait ? <Check className="size-4" /> : <Circle className="size-2 fill-current" />}</span>{index < commande.timeline.length - 1 ? <span className={`my-1 h-9 w-px ${etape.fait ? "bg-primary" : "bg-border"}`} /> : null}</div><div className="pt-1"><p className={`text-sm font-semibold ${etape.fait || etape.actif ? "text-foreground" : "text-muted-foreground"}`}>{etape.label}</p>{etape.actif ? <p className="mt-0.5 text-xs text-primary">En cours</p> : null}</div></motion.div>)}</div></section>
-          {commande.statut === "recue" ? (
+          {commande.statut === "en_attente_paiement" ? (
+            <section className="space-y-3 border-b py-5">
+              {cancelError ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Action impossible</AlertTitle><AlertDescription>{cancelError}</AlertDescription></Alert> : null}
+              <Button className="w-full" disabled={isRetrying} onClick={resumePayment}>{isRetrying ? "Initialisation…" : "Reprendre le paiement Paystack"}</Button>
+              <Button type="button" variant="outline" className="w-full text-destructive" disabled={isCancelling} onClick={cancelCommande}>{isCancelling ? "Annulation…" : "Annuler cette commande non payée"}</Button>
+            </section>
+          ) : commande.statut === "recue" && !commande.payment ? (
             <section className="border-b py-5">
               {cancelError ? <Alert variant="destructive" className="mb-3"><AlertCircle /><AlertTitle>Annulation impossible</AlertTitle><AlertDescription>{cancelError}</AlertDescription></Alert> : null}
               <AlertDialog>

@@ -1,22 +1,23 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { transactionalDb as db } from "@/lib/db/transaction";
+import { hasValidCronAuthorization } from "@/lib/cron-auth";
 import { 
   subscriptionPeriods, 
-  subscriptionPlans,
-  auditLog,
-  notifications,
-  restaurants,
+  partnerAccounts,
   users
 } from "@/lib/db/schema";
 import { lte, eq, and, isNotNull } from "drizzle-orm";
-
-// Secret pour protéger la route (ex: CRON_SECRET dans Vercel/Render)
-const CRON_SECRET = process.env.CRON_SECRET || "dev-cron-secret";
+import { persistAuditLog } from "@/lib/audit";
+import { persistNotification } from "@/lib/notifications";
 
 export async function GET(request: Request) {
-  // Vérification de sécurité simple via header Authorization
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || cronSecret.length < 32) {
+    console.error("[CRON SUBSCRIPTIONS] CRON_SECRET manquant ou trop court");
+    return new NextResponse("Cron unavailable", { status: 503 });
+  }
+
+  if (!hasValidCronAuthorization(request.headers.get("authorization"), cronSecret)) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
@@ -35,24 +36,38 @@ export async function GET(request: Request) {
     let expiredCount = 0;
 
     for (const period of expiredPeriods) {
-      await db.transaction(async (tx) => {
-        // a) Marquer la période comme expirée
-        await tx.update(subscriptionPeriods)
-          .set({ statut: "expiree" })
-          .where(eq(subscriptionPeriods.id, period.id));
+      const processed = await db.transaction(async (tx) => {
+        // Le changement d'état conditionnel rend le traitement rejouable et
+        // empêche deux exécutions concurrentes de produire deux notifications.
+        const [expiredPeriod] = await tx.update(subscriptionPeriods)
+          .set({
+            statut: "expiree",
+            endedAt: period.dateEcheance,
+            endReason: "expiration_naturelle",
+          })
+          .where(and(
+            eq(subscriptionPeriods.id, period.id),
+            eq(subscriptionPeriods.statut, "active"),
+            isNotNull(subscriptionPeriods.dateEcheance),
+            lte(subscriptionPeriods.dateEcheance, now),
+          ))
+          .returning({ id: subscriptionPeriods.id });
+
+        if (!expiredPeriod) return false;
 
         // b) Créer une notification
-        const restaurant = await tx.query.restaurants.findFirst({
-          where: eq(restaurants.id, period.restaurantId),
-          columns: { userId: true, nom: true }
+        const partnerAccount = await tx.query.partnerAccounts.findFirst({
+          where: eq(partnerAccounts.id, period.partnerAccountId),
+          columns: { userId: true },
+          with: { restaurant: { columns: { nom: true } } },
         });
 
-        if (restaurant) {
-         await tx.insert(notifications).values({
-           userId: restaurant.userId,
+        if (partnerAccount) {
+         await persistNotification(tx, {
+           userId: partnerAccount.userId,
            type: "abonnement_expire",
            titre: "Abonnement expiré",
-            message: `Votre abonnement ${period.planCode} a expiré. Vous avez été rétrogradé à l'offre Découverte.`,
+            message: `Votre abonnement ${period.planCode} a expiré. L'offre Découverte s'applique désormais automatiquement.`,
             lienType: "abonnement",
           });
 
@@ -66,11 +81,11 @@ export async function GET(request: Request) {
           });
 
           if (superAdmin) {
-            await tx.insert(auditLog).values({
+            await persistAuditLog(tx, {
               adminId: superAdmin.id,
               action: "abonnement_expire",
-              ressourceType: "restaurant",
-              ressourceId: period.restaurantId,
+              ressourceType: "partner_account",
+              ressourceId: period.partnerAccountId,
               details: {
                 periodId: period.id,
                 planCode: period.planCode,
@@ -80,37 +95,10 @@ export async function GET(request: Request) {
           }
         }
 
-        // d) Créer la nouvelle période 'decouverte' pour assurer la continuité
-        //    — uniquement s'il n'en existe pas déjà une active (sinon on se
-        //    retrouverait avec deux périodes Découverte actives simultanément).
-        const decouverteActive = await tx.query.subscriptionPeriods.findFirst({
-          where: and(
-            eq(subscriptionPeriods.restaurantId, period.restaurantId),
-            eq(subscriptionPeriods.statut, "active"),
-            eq(subscriptionPeriods.planCode, "decouverte")
-          ),
-        });
-
-        if (decouverteActive) {
-          // Une période Découverte est déjà active, on ne crée pas de doublon.
-          return;
-        }
-
-        const decouvertePlan = await tx.query.subscriptionPlans.findFirst({
-          where: eq(subscriptionPlans.code, "decouverte")
-        });
-
-        if (decouvertePlan) {
-          await tx.insert(subscriptionPeriods).values({
-            restaurantId: period.restaurantId,
-            planCode: "decouverte",
-            tauxCommissionBpsFige: decouvertePlan.tauxCommissionBps,
-            statut: "active",
-          });
-        }
+        return true;
       });
 
-      expiredCount++;
+      if (processed) expiredCount++;
     }
 
     return NextResponse.json({ 
@@ -119,7 +107,7 @@ export async function GET(request: Request) {
       expired: expiredCount 
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[CRON SUBSCRIPTIONS]", error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }

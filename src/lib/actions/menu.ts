@@ -7,11 +7,14 @@ import {
   createPlat,
   deletePlat,
   toggleDisponibilitePlat,
+  setCategoriePublicationIntent,
+  setPlatPublicationIntent,
   updateCategorie,
   updatePlat,
 } from "@/lib/db/mutations";
 import { categories } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
+import { parseMontantFcfa } from "@/lib/money";
 import { SubscriptionLimitError } from "@/lib/subscription-plans";
 import { platSchema, updatePlatSchema } from "@/lib/validations/plat";
 import { and, eq } from "drizzle-orm";
@@ -34,13 +37,6 @@ const platWizardSchema = z
   .refine((data) => data.categorieId || data.newCategorieName, {
     message: "La catégorie est requise",
   });
-
-function parsePrix(prix: string): number | null {
-  const cleaned = prix.replace(/\s/g, "").replace(/[^\d]/g, "");
-  const value = Number(cleaned);
-  if (!Number.isFinite(value) || value <= 0) return null;
-  return value;
-}
 
 export type CreatePlatWizardInput = z.infer<typeof platWizardSchema>;
 
@@ -163,7 +159,7 @@ export async function createPlatWizardAction(data: CreatePlatWizardInput) {
   }
 
   const { nom, description, image, prix: prixRaw, disponible } = parsed.data;
-  const prix = parsePrix(prixRaw);
+  const prix = parseMontantFcfa(prixRaw);
   if (prix === null) {
     return { error: "Prix invalide." };
   }
@@ -336,7 +332,7 @@ export async function updatePlatAction(data: z.infer<typeof updatePlatSchema>) {
     disponible,
     prix: prixRaw,
   } = parsed.data;
-  const prix = parsePrix(prixRaw);
+  const prix = parseMontantFcfa(prixRaw);
   if (prix === null) {
     return { error: "Prix invalide." };
   }
@@ -403,5 +399,34 @@ export async function toggleDisponibilitePlatAction(
   }
 
   revalidatePath("/restaurateur/menu");
+  return { success: true };
+}
+
+export async function setCategoryPublicationAction(categoryId: string, publicationIntent: boolean) {
+  const { restaurant } = await getRestaurateurSession();
+  if (!categoryId || typeof publicationIntent !== "boolean") return { error: "Données invalides" };
+  try {
+    const category = await setCategoriePublicationIntent(categoryId, restaurant.id, publicationIntent);
+    if (!category) return { error: "Catégorie introuvable" };
+  } catch (error) {
+    log.error({ error, categoryId, restaurantId: restaurant.id }, "setCategoryPublicationAction error");
+    return { error: "Impossible de modifier la publication" };
+  }
+  revalidatePath("/restaurateur/menu");
+  return { success: true };
+}
+
+export async function setDishPublicationAction(platId: string, publicationIntent: boolean) {
+  const { restaurant } = await getRestaurateurSession();
+  if (!platId || typeof publicationIntent !== "boolean") return { error: "Données invalides" };
+  try {
+    const dish = await setPlatPublicationIntent(platId, restaurant.id, publicationIntent);
+    if (!dish) return { error: "Plat introuvable" };
+  } catch (error) {
+    log.error({ error, platId, restaurantId: restaurant.id }, "setDishPublicationAction error");
+    return { error: "Impossible de modifier la publication" };
+  }
+  revalidatePath("/restaurateur/menu");
+  revalidatePath(`/restaurateur/menu/${platId}`);
   return { success: true };
 }

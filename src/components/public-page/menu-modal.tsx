@@ -31,6 +31,7 @@ export default function MenuModal({ isOpen, onClose, dishes, restaurant }: MenuM
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const ajouterItem = usePanierStore((state) => state.ajouterItem);
+  const commandesOuvertes = restaurant.enLigne && restaurant.accepteCommandes;
 
   const categories = useMemo(() => {
     const seen = new Set<string>();
@@ -49,7 +50,7 @@ export default function MenuModal({ isOpen, onClose, dishes, restaurant }: MenuM
   });
 
   const handleAdd = (dish: Dish) => {
-    if (!restaurant.accepteCommandes) return;
+    if (!commandesOuvertes) return;
 
     ajouterItem(
       { id: restaurant.id, nom: restaurant.nom, slug: restaurant.slug },
@@ -90,7 +91,7 @@ export default function MenuModal({ isOpen, onClose, dishes, restaurant }: MenuM
               <Input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Rechercher un plat" className="h-10 pl-9" />
             </div>
           </div>
-          {!restaurant.accepteCommandes ? <p className="mt-3 text-sm font-medium text-amber-700">Les commandes sont momentanément suspendues. Vous pouvez tout de même consulter la carte.</p> : null}
+          {!commandesOuvertes ? <p className="mt-3 text-sm font-medium text-amber-700">Les commandes sont momentanément suspendues. Vous pouvez tout de même consulter la carte.</p> : null}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-muted/25 px-5 py-5 sm:px-6">
@@ -107,7 +108,7 @@ export default function MenuModal({ isOpen, onClose, dishes, restaurant }: MenuM
                       <span className="shrink-0 text-sm font-bold text-primary">{formatPrix(dish.price)}</span>
                     </div>
                     {dish.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{dish.description}</p> : null}
-                    <Button type="button" size="sm" className="mt-3 h-8" disabled={!restaurant.accepteCommandes} onClick={() => handleAdd(dish)}>
+                    <Button type="button" size="sm" className="mt-3 h-8" disabled={!commandesOuvertes} onClick={() => handleAdd(dish)}>
                       <Plus /> Ajouter
                     </Button>
                   </div>

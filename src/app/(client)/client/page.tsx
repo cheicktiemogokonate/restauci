@@ -14,7 +14,7 @@ import {
   type RestaurantProche,
 } from "@/lib/client-app/hooks/use-restaurants-proches";
 import dynamic from "next/dynamic";
-import { AlertCircle, RefreshCw, SearchX } from "lucide-react";
+import { AlertCircle, LoaderCircle, LocateFixed, RefreshCw, SearchX } from "lucide-react";
 import { useState } from "react";
 
 // Lazy-load the map component — MapLibre GL is ~1 MB, no need to block initial paint
@@ -41,22 +41,30 @@ export default function AccueilClientPage() {
   const [search, setSearch] = useState("");
   const [cuisine, setCuisine] = useState<string | null>(null);
   const debouncedSearch = useDebounce(search, 400);
-  const { restaurants, isLoading, error, recharger } = useRestaurantsProches({
-    lat: geo.lat,
-    lng: geo.lng,
-    search: debouncedSearch || undefined,
-    cuisine: cuisine || undefined,
-  });
+  const { restaurants, isLoading, error, marketName, recharger } =
+    useRestaurantsProches({
+      currentLocation: geo.currentLocation,
+      search: debouncedSearch || undefined,
+      cuisine: cuisine || undefined,
+    });
 
   const [selectedRestaurant, setSelectedRestaurant] =
     useState<RestaurantProche | null>(null);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [showRoute, setShowRoute] = useState(false);
 
+  const activeSelectedRestaurant = selectedRestaurant
+    ? restaurants.find((restaurant) => restaurant.id === selectedRestaurant.id) ?? null
+    : null;
+
   // Charge le detail complet (avec geometrie OSRM) du restaurant
   // selectionne, pour pouvoir tracer l'itineraire sur la carte
   const { restaurant: selectedDetail, isLoading: isDetailLoading } =
-    useRestaurantDetail(selectedRestaurant?.slug ?? null, geo.lat, geo.lng);
+    useRestaurantDetail(
+      activeSelectedRestaurant?.slug ?? null,
+      geo.currentLocation?.lat,
+      geo.currentLocation?.lng,
+    );
 
   const itineraire = selectedDetail?.geo?.itineraire
     ? {
@@ -74,12 +82,13 @@ export default function AccueilClientPage() {
     longitude: r.longitude,
     logoUrl: r.logoUrl,
     distanceKm: r.distanceKm,
+    placement: r.placement,
   }));
 
   const handleSelectPin = (pin: RestaurantMapPin) => {
     const restaurant = restaurants.find((r) => r.id === pin.id);
     if (restaurant) {
-      if (selectedRestaurant?.id !== restaurant.id) {
+      if (activeSelectedRestaurant?.id !== restaurant.id) {
         setSelectedRestaurant(restaurant);
         setShowRoute(false);
       }
@@ -89,16 +98,53 @@ export default function AccueilClientPage() {
 
   return (
     <div className="relative h-screen w-full overflow-hidden">
-      {/* Carte plein ecran */}
-      <RestaurantMap
-        centerLat={geo.lat}
-        centerLng={geo.lng}
-        restaurants={pins}
-        selectedId={selectedRestaurant?.id ?? null}
-        itineraire={itineraire}
-        showRoute={showRoute}
-        onSelectRestaurant={handleSelectPin}
-      />
+      {geo.currentLocation ? (
+        <RestaurantMap
+          centerLat={geo.currentLocation.lat}
+          centerLng={geo.currentLocation.lng}
+          restaurants={pins}
+          selectedId={activeSelectedRestaurant?.id ?? null}
+          itineraire={itineraire}
+          showRoute={showRoute}
+          focusRestaurants={Boolean(debouncedSearch.trim())}
+          onSelectRestaurant={handleSelectPin}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-muted/40 px-4">
+          <Alert className="max-w-sm bg-background shadow-lg">
+            {geo.status === "demande" || geo.status === "idle" ? (
+              <LoaderCircle className="animate-spin text-primary" />
+            ) : (
+              <LocateFixed className="text-primary" />
+            )}
+            <AlertTitle>
+              {geo.status === "refusee"
+                ? "Localisation nécessaire"
+                : geo.status === "indisponible"
+                  ? "Position indisponible"
+                  : "Recherche de votre position"}
+            </AlertTitle>
+            <AlertDescription>
+              {geo.status === "refusee"
+                ? "Autorisez la localisation dans votre navigateur pour afficher les restaurants de votre zone."
+                : geo.status === "indisponible"
+                  ? "Activez le GPS ou réessayez lorsque votre appareil peut déterminer sa position."
+                  : "Nous déterminons votre zone actuelle afin d'afficher le bon catalogue."}
+            </AlertDescription>
+            {(geo.status === "refusee" || geo.status === "indisponible") && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={geo.demander}
+                className="mt-3 w-fit"
+              >
+                <RefreshCw /> Réessayer
+              </Button>
+            )}
+          </Alert>
+        </div>
+      )}
 
       {/* Barre du haut */}
       <ClientTopBar
@@ -110,9 +156,11 @@ export default function AccueilClientPage() {
         onSearchChange={setSearch}
         cuisine={cuisine}
         onCuisineChange={setCuisine}
+        locationReady={Boolean(geo.currentLocation)}
+        marketName={marketName}
       />
 
-      {!isLoading && error ? (
+      {geo.currentLocation && !isLoading && error ? (
         <div className="pointer-events-none absolute inset-x-4 top-1/2 z-20 -translate-y-1/2">
           <Alert variant="destructive" className="pointer-events-auto mx-auto max-w-sm bg-background/95 shadow-xl backdrop-blur-md">
             <AlertCircle />
@@ -125,12 +173,12 @@ export default function AccueilClientPage() {
         </div>
       ) : null}
 
-      {!isLoading && !error && restaurants.length === 0 ? (
+      {geo.currentLocation && !isLoading && !error && restaurants.length === 0 ? (
         <div className="pointer-events-none absolute inset-x-4 top-1/2 z-20 -translate-y-1/2">
           <Alert className="pointer-events-auto mx-auto max-w-sm bg-background/95 shadow-xl backdrop-blur-md">
             <SearchX className="text-primary" />
             <AlertTitle>Aucun restaurant trouvé</AlertTitle>
-            <AlertDescription>Essayez une autre recherche ou élargissez votre sélection.</AlertDescription>
+            <AlertDescription>{search || cuisine ? "Essayez une autre recherche ou réinitialisez les filtres." : "Aucun restaurant public n'est encore disponible dans votre zone."}</AlertDescription>
             {(search || cuisine) ? <Button type="button" variant="outline" size="sm" onClick={() => { setSearch(""); setCuisine(null); }} className="mt-3 w-fit">Réinitialiser les filtres</Button> : null}
           </Alert>
         </div>
@@ -141,10 +189,10 @@ export default function AccueilClientPage() {
 
       {/* Bottom sheet */}
       <RestaurantBottomSheet
-        isOpen={isBottomSheetOpen}
-        slug={selectedRestaurant?.slug ?? null}
+        isOpen={isBottomSheetOpen && Boolean(activeSelectedRestaurant)}
+        slug={activeSelectedRestaurant?.slug ?? null}
         restaurant={selectedDetail}
-        previewRestaurant={selectedRestaurant}
+        previewRestaurant={activeSelectedRestaurant}
         isLoading={isDetailLoading}
         showRoute={showRoute}
         onToggleRoute={() => setShowRoute((value) => !value)}

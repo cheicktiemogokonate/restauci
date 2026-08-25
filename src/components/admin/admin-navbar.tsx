@@ -15,7 +15,8 @@ export function AdminNavbar() {
       throw new Error(`Admin logout failed: ${response.statusText}`);
     }
 
-    router.push("/login");
+    router.replace("/login");
+    router.refresh();
   };
 
   return (
@@ -43,12 +44,13 @@ export function AdminNavbar() {
         <LogoutConfirmationDialog onConfirm={handleLogout}>
           <Button
             type="button"
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             aria-label="Se déconnecter"
-            className="text-muted-foreground hover:bg-red-50 hover:text-red-700"
+            className="gap-2 text-muted-foreground hover:border-red-200 hover:bg-red-50 hover:text-red-700"
           >
             <LogOut className="w-4 h-4" />
+            <span>Changer de compte</span>
           </Button>
         </LogoutConfirmationDialog>
       </div>

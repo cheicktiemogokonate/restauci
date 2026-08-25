@@ -20,7 +20,9 @@ import {
   clients,
   commandes,
   commissions,
-  paiements,
+  financialTransactions,
+  payments,
+  partnerAccounts,
   restaurants,
   subscriptionPeriods,
   subscriptionPlans,
@@ -75,7 +77,7 @@ export async function getRestaurantsAdmin({
 
   const activePeriods = db
     .select({
-      restaurantId: subscriptionPeriods.restaurantId,
+      partnerAccountId: subscriptionPeriods.partnerAccountId,
       planCode: subscriptionPeriods.planCode,
       statutAbonnement: subscriptionPeriods.statut,
       dateEcheance: subscriptionPeriods.dateEcheance,
@@ -110,7 +112,7 @@ export async function getRestaurantsAdmin({
         nombreCommandes: restaurants.nombreCommandes,
         noteMoyenne: restaurants.noteMoyenne,
         createdAt: restaurants.createdAt,
-        userId: restaurants.userId,
+        userId: partnerAccounts.userId,
         planCode: activePeriods.planCode,
         planNom: subscriptionPlans.nom,
         statutAbonnement: activePeriods.statutAbonnement,
@@ -118,7 +120,14 @@ export async function getRestaurantsAdmin({
         tauxCommissionBpsFige: activePeriods.tauxCommissionBpsFige,
       })
         .from(restaurants)
-        .leftJoin(activePeriods, eq(activePeriods.restaurantId, restaurants.id))
+        .innerJoin(
+          partnerAccounts,
+          eq(restaurants.partnerAccountId, partnerAccounts.id),
+        )
+        .leftJoin(
+          activePeriods,
+          eq(activePeriods.partnerAccountId, partnerAccounts.id),
+        )
         .leftJoin(subscriptionPlans, eq(subscriptionPlans.code, activePeriods.planCode))
         .where(whereClause)
         .orderBy(desc(restaurants.createdAt))
@@ -150,15 +159,19 @@ export async function getRestaurantDetailAdmin(id: string) {
   const [proprietaire] = await db
     .select({ nom: users.nom, email: users.email, telephone: users.telephone })
     .from(users)
-    .where(eq(users.id, restaurant.userId))
+    .innerJoin(partnerAccounts, eq(partnerAccounts.userId, users.id))
+    .where(eq(partnerAccounts.id, restaurant.partnerAccountId))
     .limit(1);
 
-  const planInfo = await getEffectivePlan(id);
+  const planInfo = await getEffectivePlan(restaurant.partnerAccountId);
 
   const [pendingRequest] = await db
     .select()
     .from(subscriptionRequests)
-    .where(and(eq(subscriptionRequests.restaurantId, id), eq(subscriptionRequests.statut, "en_attente")))
+    .where(and(
+      eq(subscriptionRequests.partnerAccountId, restaurant.partnerAccountId),
+      eq(subscriptionRequests.statut, "en_attente"),
+    ))
     .orderBy(desc(subscriptionRequests.createdAt))
     .limit(1);
 
@@ -339,23 +352,19 @@ export async function getCommandesGlobalAdmin({
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     conditions.push(
       sql`EXISTS (
-        SELECT 1 FROM ${paiements}
-        WHERE ${paiements.commandeId} = ${commandes.id}
-          AND ${paiements.statut} = ${"echoue"}
-          AND ${paiements.createdAt} >= ${thirtyDaysAgo}
+        SELECT 1 FROM ${payments}
+        INNER JOIN ${financialTransactions}
+          ON ${financialTransactions.id} = ${payments.transactionId}
+        WHERE ${financialTransactions.restaurantOrderId} = ${commandes.id}
+          AND ${payments.status} = ${"failed"}
+          AND ${payments.createdAt} >= ${thirtyDaysAgo}
       )`,
     );
   } else if (signal === "refunded") {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    conditions.push(
-      sql`EXISTS (
-        SELECT 1 FROM ${paiements}
-        WHERE ${paiements.commandeId} = ${commandes.id}
-          AND ${paiements.statut} = ${"rembourse"}
-          AND ${paiements.createdAt} >= ${thirtyDaysAgo}
-      )`,
-    );
+    // Les remboursements sont hors périmètre du MVP Bloc 7.
+    conditions.push(sql`FALSE`);
   } else if (signal === "cancelled_today") {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -427,9 +436,9 @@ export async function getCommandeDetailAdmin(commandeId: string) {
           restaurantNom: restaurants.nom,
           clientNom: clients.nom,
           clientTelephone: clients.telephone,
-          commissionTauxBps: commissions.tauxCommissionBps,
-          commissionMontant: commissions.montantCommission,
-          commissionStatut: commissions.statut,
+          commissionTauxBps: commissions.rateBpsSnapshot,
+          commissionMontant: commissions.amountFcfa,
+          commissionStatut: commissions.commercialStatus,
         })
         .from(commandes)
         .innerJoin(restaurants, eq(commandes.restaurantId, restaurants.id))
@@ -439,15 +448,19 @@ export async function getCommandeDetailAdmin(commandeId: string) {
         .limit(1),
       db
         .select({
-          paiementMontant: paiements.montant,
-          paiementMethode: paiements.methode,
-          paiementStatut: paiements.statut,
-          paiementReference: paiements.referenceExterne,
-          paiementPayeAt: paiements.payeAt,
+          paiementMontant: payments.amountFcfa,
+          paiementMethode: payments.method,
+          paiementStatut: payments.status,
+          paiementReference: payments.providerReference,
+          paiementPayeAt: payments.confirmedAt,
         })
-        .from(paiements)
-        .where(eq(paiements.commandeId, commandeId))
-        .orderBy(desc(paiements.createdAt))
+        .from(payments)
+        .innerJoin(
+          financialTransactions,
+          eq(payments.transactionId, financialTransactions.id),
+        )
+        .where(eq(financialTransactions.restaurantOrderId, commandeId))
+        .orderBy(desc(payments.createdAt))
         .limit(1),
     ]),
   );
@@ -486,15 +499,11 @@ export const getAdminSupportSummary = cache(async () => {
             AND ${commandes.createdAt} <= ${stalledBefore}
         )`,
         failedPayments: sql<number>`(
-          SELECT COUNT(*) FROM ${paiements}
-          WHERE ${paiements.statut} = ${"echoue"}
-            AND ${paiements.createdAt} >= ${thirtyDaysAgo}
+          SELECT COUNT(*) FROM ${payments}
+          WHERE ${payments.status} = ${"failed"}
+            AND ${payments.createdAt} >= ${thirtyDaysAgo}
         )`,
-        refundedPayments: sql<number>`(
-          SELECT COUNT(*) FROM ${paiements}
-          WHERE ${paiements.statut} = ${"rembourse"}
-            AND ${paiements.createdAt} >= ${thirtyDaysAgo}
-        )`,
+        refundedPayments: sql<number>`0`,
         cancelledToday: sql<number>`(
           SELECT COUNT(*) FROM ${commandes}
           WHERE ${commandes.statut} = ${"annulee"}
@@ -517,7 +526,7 @@ export const getAdminSupportSummary = cache(async () => {
 // ============================================================================
 
 export interface GetUsersAdminOptions {
-  role?: "restaurateur" | "admin" | "tous";
+  role?: "partner" | "admin" | "tous";
   search?: string;
   page?: number;
   limit?: number;
@@ -548,7 +557,7 @@ export async function getUsersAdmin({
 
   const activePeriods = db
     .select({
-      restaurantId: subscriptionPeriods.restaurantId,
+      partnerAccountId: subscriptionPeriods.partnerAccountId,
       planCode: subscriptionPeriods.planCode,
       statutAbonnement: subscriptionPeriods.statut,
       dateEcheance: subscriptionPeriods.dateEcheance,
@@ -585,8 +594,15 @@ export async function getUsersAdmin({
         dateEcheance: activePeriods.dateEcheance,
       })
         .from(users)
-        .leftJoin(restaurants, eq(restaurants.userId, users.id))
-        .leftJoin(activePeriods, eq(activePeriods.restaurantId, restaurants.id))
+        .leftJoin(partnerAccounts, eq(partnerAccounts.userId, users.id))
+        .leftJoin(
+          restaurants,
+          eq(restaurants.partnerAccountId, partnerAccounts.id),
+        )
+        .leftJoin(
+          activePeriods,
+          eq(activePeriods.partnerAccountId, partnerAccounts.id),
+        )
         .leftJoin(subscriptionPlans, eq(subscriptionPlans.code, activePeriods.planCode))
         .where(whereClause)
         .orderBy(desc(users.createdAt))
@@ -697,7 +713,7 @@ export async function getStatsGlobalAdmin() {
           WHERE ${restaurants.suspendu} = true
         )`,
         usersTotal: sql<number>`(
-          SELECT COUNT(*) FROM ${users} WHERE ${users.role} = ${"restaurateur"}
+          SELECT COUNT(*) FROM ${users} WHERE ${users.role} = ${"partner"}
         )`,
         clientsTotal: sql<number>`(SELECT COUNT(*) FROM ${clients})`,
         commandesAujourdhui: sql<number>`(
@@ -720,9 +736,15 @@ export async function getStatsGlobalAdmin() {
             AND ${commandes.statut}::text = ${"servie"}
         )`,
         commissionsEnAttente: sql<number>`(
-          SELECT COALESCE(SUM(${commissions.montantCommission}), 0)
+          SELECT COALESCE(SUM(${commissions.amountFcfa} - COALESCE((
+            SELECT SUM(allocation.amount_fcfa)
+            FROM commission_settlement_allocations allocation
+            INNER JOIN commission_settlements settlement ON settlement.id = allocation.settlement_id
+            WHERE allocation.commission_id = commissions.id AND settlement.statut = 'confirmed'
+          ), 0)), 0)
           FROM ${commissions}
-          WHERE ${commissions.statut} = ${"en_attente"}
+          WHERE ${commissions.commercialStatus} = ${"due"}
+            AND ${commissions.collectionMode} = ${"cash_receivable"}
         )`,
       })
       .from(sql`(SELECT 1) AS admin_stats_source`),
@@ -790,14 +812,21 @@ export const getAdminActionCenterSummary = cache(async () => {
             AND ${subscriptionPeriods.dateEcheance} <= ${subscriptionDeadline}
         )`,
         commissionRestaurants: sql<number>`(
-          SELECT COUNT(DISTINCT ${commissions.restaurantId})
+          SELECT COUNT(DISTINCT ${commissions.partnerAccountId})
           FROM ${commissions}
-          WHERE ${commissions.statut} = ${"en_attente"}
+          WHERE ${commissions.commercialStatus} = ${"due"}
+            AND ${commissions.collectionMode} = ${"cash_receivable"}
         )`,
         commissionsAmount: sql<number>`(
-          SELECT COALESCE(SUM(${commissions.montantCommission}), 0)
+          SELECT COALESCE(SUM(${commissions.amountFcfa} - COALESCE((
+            SELECT SUM(allocation.amount_fcfa)
+            FROM commission_settlement_allocations allocation
+            INNER JOIN commission_settlements settlement ON settlement.id = allocation.settlement_id
+            WHERE allocation.commission_id = commissions.id AND settlement.statut = 'confirmed'
+          ), 0)), 0)
           FROM ${commissions}
-          WHERE ${commissions.statut} = ${"en_attente"}
+          WHERE ${commissions.commercialStatus} = ${"due"}
+            AND ${commissions.collectionMode} = ${"cash_receivable"}
         )`,
       })
       .from(sql`(SELECT 1) AS admin_action_center_source`),
@@ -844,7 +873,7 @@ export async function getEvolutionPlateformeAdmin(jours = 30) {
 export interface GetCommissionsAdminOptions {
   restaurantId?: string;
   restaurantSearch?: string;
-  statut?: "en_attente" | "payee" | "annulee" | "tous";
+  statut?: "pending" | "due" | "void" | "tous";
   dateDebut?: Date;
   dateFin?: Date;
   page?: number;
@@ -861,8 +890,8 @@ export async function getCommissionsAdmin({
   limit = 20,
 }: GetCommissionsAdminOptions) {
   const conditions = [];
-  if (restaurantId) conditions.push(eq(commissions.restaurantId, restaurantId));
-  if (statut !== "tous") conditions.push(eq(commissions.statut, statut));
+  if (restaurantId) conditions.push(eq(restaurants.id, restaurantId));
+  if (statut !== "tous") conditions.push(eq(commissions.commercialStatus, statut));
   if (dateDebut) conditions.push(gte(commissions.createdAt, dateDebut));
   if (dateFin) conditions.push(lte(commissions.createdAt, dateFin));
   const normalizedRestaurantSearch = restaurantSearch?.trim().slice(0, 100);
@@ -879,18 +908,19 @@ export async function getCommissionsAdmin({
         .select({
         id: commissions.id,
         commandeId: commissions.commandeId,
-        restaurantId: commissions.restaurantId,
-        montantCommande: commissions.montantCommande,
-        tauxCommissionBps: commissions.tauxCommissionBps,
-        montantCommission: commissions.montantCommission,
-        statut: commissions.statut,
-        payeeAt: commissions.payeeAt,
-        settlementId: commissions.settlementId,
+        restaurantId: restaurants.id,
+        partnerAccountId: commissions.partnerAccountId,
+        montantCommande: commissions.baseAmountFcfa,
+        tauxCommissionBps: commissions.rateBpsSnapshot,
+        montantCommission: commissions.amountFcfa,
+        statut: commissions.commercialStatus,
+        collectionMode: commissions.collectionMode,
+        dueAt: commissions.dueAt,
         createdAt: commissions.createdAt,
         restaurantNom: restaurants.nom,
       })
         .from(commissions)
-        .innerJoin(restaurants, eq(commissions.restaurantId, restaurants.id))
+        .innerJoin(restaurants, eq(commissions.partnerAccountId, restaurants.partnerAccountId))
         .where(whereClause)
         .orderBy(desc(commissions.createdAt))
         .limit(limit)
@@ -899,15 +929,15 @@ export async function getCommissionsAdmin({
       db
         .select({ total: count() })
         .from(commissions)
-        .innerJoin(restaurants, eq(commissions.restaurantId, restaurants.id))
+        .innerJoin(restaurants, eq(commissions.partnerAccountId, restaurants.partnerAccountId))
         .where(whereClause),
       db
         .select({
-          montantTotal: sql<number>`COALESCE(SUM(${commissions.montantCommission}), 0)`,
-          restaurantsTotal: sql<number>`COUNT(DISTINCT ${commissions.restaurantId})`,
+          montantTotal: sql<number>`COALESCE(SUM(${commissions.amountFcfa}), 0)`,
+          restaurantsTotal: sql<number>`COUNT(DISTINCT ${commissions.partnerAccountId})`,
         })
         .from(commissions)
-        .innerJoin(restaurants, eq(commissions.restaurantId, restaurants.id))
+        .innerJoin(restaurants, eq(commissions.partnerAccountId, restaurants.partnerAccountId))
         .where(whereClause),
     ]),
   );
@@ -931,16 +961,33 @@ export async function getCommissionsParRestaurantAdmin() {
   return withDatabaseReadRetry(() =>
     db
       .select({
-        restaurantId: commissions.restaurantId,
+        restaurantId: restaurants.id,
+        partnerAccountId: commissions.partnerAccountId,
         restaurantNom: restaurants.nom,
-        montantDu: sql<number>`COALESCE(SUM(${commissions.montantCommission}), 0)`,
+        montantDu: sql<number>`COALESCE(SUM(${commissions.amountFcfa} - COALESCE((
+          SELECT SUM(allocation.amount_fcfa)
+          FROM commission_settlement_allocations allocation
+          INNER JOIN commission_settlements settlement ON settlement.id = allocation.settlement_id
+          WHERE allocation.commission_id = commissions.id
+            AND settlement.statut = 'confirmed'
+        ), 0)), 0)`,
         nombreCommandes: count(),
       })
       .from(commissions)
-      .innerJoin(restaurants, eq(commissions.restaurantId, restaurants.id))
-      .where(eq(commissions.statut, "en_attente"))
-      .groupBy(commissions.restaurantId, restaurants.nom)
-      .orderBy(desc(sql`SUM(${commissions.montantCommission})`)),
+      .innerJoin(restaurants, eq(commissions.partnerAccountId, restaurants.partnerAccountId))
+      .where(and(
+        eq(commissions.commercialStatus, "due"),
+        eq(commissions.collectionMode, "cash_receivable"),
+      ))
+      .groupBy(restaurants.id, commissions.partnerAccountId, restaurants.nom)
+      .having(sql`SUM(${commissions.amountFcfa} - COALESCE((
+        SELECT SUM(allocation.amount_fcfa)
+        FROM commission_settlement_allocations allocation
+        INNER JOIN commission_settlements settlement ON settlement.id = allocation.settlement_id
+        WHERE allocation.commission_id = commissions.id
+          AND settlement.statut = 'confirmed'
+      ), 0)) > 0`)
+      .orderBy(desc(sql`SUM(${commissions.amountFcfa})`)),
   );
 }
 

@@ -18,6 +18,8 @@ interface ClientTopBarProps {
   onSearchChange: (value: string) => void;
   cuisine: string | null;
   onCuisineChange: (value: string | null) => void;
+  locationReady: boolean;
+  marketName?: string | null;
 }
 
 const cuisines = ["Tout", "Africaine", "Pizza", "Fast food", "Pâtisserie", "Boissons"];
@@ -31,6 +33,8 @@ export function ClientTopBar({
   onSearchChange,
   cuisine,
   onCuisineChange,
+  locationReady,
+  marketName,
 }: ClientTopBarProps) {
   const user = useAuthStore((state) => state.user);
   const initials = user?.nom
@@ -50,6 +54,7 @@ export function ClientTopBar({
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="Restaurant ou plat"
               aria-label="Rechercher un restaurant ou un plat"
+              disabled={!locationReady}
               className="h-11 rounded-xl border-white/80 bg-background/95 pr-3 pl-9 text-sm shadow-lg backdrop-blur-md"
             />
           </div>
@@ -85,10 +90,10 @@ export function ClientTopBar({
           </Button>
         </div>
 
-        {!isLoading && (
+        {locationReady && !isLoading && (
           <Badge variant="secondary" className="h-6 rounded-lg bg-background/90 px-2.5 shadow-sm backdrop-blur-md">
-            <MapPin className="size-3 text-primary" />
-            {nombreResultats} restaurant{nombreResultats !== 1 ? "s" : ""} à proximité
+            {search.trim() ? <Search className="size-3 text-primary" /> : <MapPin className="size-3 text-primary" />}
+            {nombreResultats} restaurant{nombreResultats !== 1 ? "s" : ""}{search.trim() ? " trouvé" : " dans"}{search.trim() && nombreResultats !== 1 ? "s" : ""}{search.trim() ? "" : ` ${marketName ?? "votre zone"}`}
           </Badge>
         )}
 
@@ -104,6 +109,7 @@ export function ClientTopBar({
                 variant={isActive ? "default" : "secondary"}
                 size="sm"
                 onClick={() => onCuisineChange(value)}
+                disabled={!locationReady}
                 className="shrink-0 rounded-full px-3 shadow-sm backdrop-blur-md"
               >
                 {label}
@@ -114,7 +120,7 @@ export function ClientTopBar({
 
         {geoStatus === "refusee" && (
           <p className="w-fit rounded-lg border border-amber-200 bg-amber-50/95 px-2.5 py-1.5 text-xs text-amber-800 shadow-sm backdrop-blur-md">
-            Localisation refusée — affichage centré sur Abidjan.
+            Localisation refusée — autorisez votre position pour découvrir les restaurants de votre zone.
           </p>
         )}
       </div>

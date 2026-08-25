@@ -26,7 +26,7 @@ export default async function AdminUsersPage({
           limit: 20,
         })
       : await getUsersAdmin({
-          role: "restaurateur",
+          role: "partner",
           search: searchParamsAwaited.search,
           page,
           limit: 20,

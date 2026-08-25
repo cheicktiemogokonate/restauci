@@ -1,6 +1,6 @@
 /**
- * Centre par defaut de la carte — Abidjan, Cote d'Ivoire.
- * Utilise si la geolocalisation est refusee ou indisponible.
+ * Cadrage initial de certains sélecteurs d'adresse administratifs.
+ * Ne doit jamais servir de position client ou d'autorité géographique.
  */
 export const ABIDJAN_CENTER: [number, number] = [-4.0083, 5.3599]; // [lng, lat] — ordre MapLibre
 

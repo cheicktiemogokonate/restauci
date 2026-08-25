@@ -1,12 +1,12 @@
 "use client";
-import { formatEuro } from "@/lib/utils/format";
+import { formatPrix } from "@/lib/utils/format";
 import {
   AlertTriangle,
+  Banknote,
   CheckCircle2,
   ChefHat,
   ChevronRight,
   Clock,
-  DollarSign,
   Layers,
   Map,
   Play,
@@ -27,7 +27,7 @@ const initialOrders = [
     customer: "Lucas M.",
     table: "Table 4",
     items: "1x Double Bacon Burger, 1x Frites",
-    amount: 18.5,
+    amount: 8_500,
     status: "En Cuisine",
     time: "13:05",
   },
@@ -36,7 +36,7 @@ const initialOrders = [
     customer: "Sarah L.",
     table: "Emporter #3",
     items: "1x Pizza Pepperoni, 1x Fondant Chocolat",
-    amount: 24.4,
+    amount: 9_500,
     status: "Prêt",
     time: "13:10",
   },
@@ -45,7 +45,7 @@ const initialOrders = [
     customer: "Marc P.",
     table: "Table 12",
     items: "1x Salade César, 1x Saumon Grillé",
-    amount: 32.0,
+    amount: 12_000,
     status: "Livré",
     time: "12:55",
   },
@@ -54,7 +54,7 @@ const initialOrders = [
     customer: "Clarisse D.",
     table: "Livraison #18",
     items: "1x Plateau Sushi Premium",
-    amount: 24.0,
+    amount: 15_000,
     status: "En Cuisine",
     time: "13:15",
   },
@@ -63,7 +63,7 @@ const initialOrders = [
     customer: "Gilles V.",
     table: "Table 9",
     items: "2x Double Bacon Burger, 2x Coca Cola",
-    amount: 36.0,
+    amount: 17_000,
     status: "En Cuisine",
     time: "13:18",
   },
@@ -129,7 +129,7 @@ export default function InteractiveDashboard() {
   const [orders, setOrders] = useState(initialOrders);
   const [stocks, setStocks] = useState(initialStocks);
   const [tables, setTables] = useState(initialTables);
-  const [revenue, setRevenue] = useState(1425.8);
+  const [revenue, setRevenue] = useState(142_500);
   const [addedOrdersCount, setAddedOrdersCount] = useState(0);
 
   // Status handlers
@@ -300,10 +300,10 @@ export default function InteractiveDashboard() {
                 <div className="bg-gray-50/50 p-3 sm:p-3.5 rounded-xl border border-gray-200/40">
                   <div className="flex items-center justify-between text-brand-dark/50 text-[11px] sm:text-xs font-medium">
                     <span className="truncate pr-1">Ventes</span>
-                    <DollarSign className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <Banknote className="h-4 w-4 text-emerald-500 shrink-0" />
                   </div>
                   <div className="mt-1 text-base sm:text-xl font-mono font-bold text-brand-dark tracking-tight truncate">
-                    {formatEuro(revenue)}
+                    {formatPrix(revenue)}
                   </div>
                   <div className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5 max-w-full overflow-hidden truncate">
                     <TrendingUp className="h-3 w-3 shrink-0" />{" "}
@@ -371,10 +371,10 @@ export default function InteractiveDashboard() {
                     </div>
                     <div className="flex items-baseline gap-2 mt-1">
                       <span className="text-xl font-mono font-bold text-brand-dark">
-                        {formatEuro(revenue)}
+                        {formatPrix(revenue)}
                       </span>
                       <span className="text-xs text-emerald-600 font-semibold">
-                        + {formatEuro(240)} cet après-midi
+                        + {formatPrix(24_000)} cet après-midi
                       </span>
                     </div>
                   </div>
@@ -507,7 +507,7 @@ export default function InteractiveDashboard() {
                           </span>
                           <div className="flex items-center justify-between mt-1 pt-1 border-t border-gray-100">
                             <span className="text-[11px] font-mono text-[#15803d] font-bold">
-                              {formatEuro(dish.price)}
+                              {formatPrix(dish.price)}
                             </span>
                             <span className="text-[10px] text-brand-dark/40 font-medium">
                               Ajouter +
@@ -588,7 +588,7 @@ export default function InteractiveDashboard() {
                             </span>
                           </td>
                           <td className="py-3 text-right font-mono font-bold text-brand-dark">
-                            {formatEuro(order.amount)}
+                            {formatPrix(order.amount)}
                           </td>
                         </tr>
                       ))}
@@ -681,7 +681,7 @@ export default function InteractiveDashboard() {
                               </p>
                               <div className="mt-3 flex justify-between items-center pt-2 border-t border-gray-100">
                                 <span className="text-xs font-mono font-bold text-brand-dark">
-                                  {formatEuro(order.amount)}
+                                  {formatPrix(order.amount)}
                                 </span>
                                 <button
                                   onClick={() => handleAdvanceStatus(order.id)}
@@ -744,7 +744,7 @@ export default function InteractiveDashboard() {
                               </p>
                               <div className="mt-3 flex justify-between items-center pt-2 border-t border-gray-100">
                                 <span className="text-xs font-mono font-bold text-brand-dark">
-                                  {formatEuro(order.amount)}
+                                  {formatPrix(order.amount)}
                                 </span>
                                 <button
                                   onClick={() => handleAdvanceStatus(order.id)}
@@ -803,7 +803,7 @@ export default function InteractiveDashboard() {
                               <div className="flex justify-between items-center pt-2 border-t border-gray-100 text-[10px] text-brand-dark/50">
                                 <span>Encaissé via Toutci</span>
                                 <span className="font-mono text-emerald-600 font-bold">
-                                  {formatEuro(order.amount)}
+                                  {formatPrix(order.amount)}
                                 </span>
                               </div>
                             </motion.div>

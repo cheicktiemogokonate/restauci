@@ -1,22 +1,14 @@
 // Formatting utilities for display values (prices, dates, phone numbers, etc.)
 
-export function formatPrix(montant: number): string {
+/** Formate un montant métier stocké en FCFA entiers, sans conversion d'unité. */
+export function formatPrix(montantFcfa: number): string {
   return (
     new Intl.NumberFormat("fr-FR", {
       style: "decimal",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(montant) + " FCFA"
+    }).format(montantFcfa) + " FCFA"
   );
-}
-
-export function formatEuro(amount: number): string {
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
 }
 
 export function formatDate(date: Date | string): string {

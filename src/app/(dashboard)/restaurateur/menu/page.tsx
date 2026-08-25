@@ -1,13 +1,13 @@
 import MenuManager from "@/components/dashboard/menu/menu-manager";
-import { getCurrentUser } from "@/lib/auth";
+import { getRestaurateurSession } from "@/lib/auth/get-restaurateur-session";
 import { parsePage } from "@/lib/config/pagination";
 import { db } from "@/lib/db";
 import { getPlats } from "@/lib/db/queries";
-import { categories, plats, restaurants } from "@/lib/db/schema";
+import { categories, plats } from "@/lib/db/schema";
 import type { Categorie } from "@/types";
 import type { PlatAvecCategorie } from "@/types/dashboard";
 import { asc, count, eq, sql } from "drizzle-orm";
-import { redirect } from "next/navigation";
+import { getRestaurantQuotaEligibility } from "@/lib/quota-entitlements";
 
 const PLATS_LIMIT = 12;
 
@@ -21,16 +21,7 @@ export default async function RestaurateurMenuPage({
     dispo?: string;
   }>;
 }) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) redirect("/login");
-
-  const [restaurant] = await db
-    .select()
-    .from(restaurants)
-    .where(eq(restaurants.userId, currentUser.userId))
-    .limit(1);
-
-  if (!restaurant) return <div>Restaurant introuvable.</div>;
+  const { restaurant } = await getRestaurateurSession();
 
   const params = await searchParams;
   const page = parsePage(params.page);
@@ -41,7 +32,7 @@ export default async function RestaurateurMenuPage({
   if (params.dispo === "available") disponible = true;
   if (params.dispo === "unavailable") disponible = false;
 
-  const [categoriesList, platsPage, menuStats] = await Promise.all([
+  const [categoriesList, platsPage, menuStats, eligibility] = await Promise.all([
     db
       .select({
         id: categories.id,
@@ -51,7 +42,8 @@ export default async function RestaurateurMenuPage({
         description: categories.description,
         imageUrl: categories.imageUrl,
         ordre: categories.ordre,
-        visible: categories.visible,
+        publicationIntent: categories.publicationIntent,
+        firstPublishedAt: categories.firstPublishedAt,
         createdAt: categories.createdAt,
         updatedAt: categories.updatedAt,
         platCount: count(plats.id),
@@ -77,19 +69,42 @@ export default async function RestaurateurMenuPage({
       })
       .from(plats)
       .where(eq(plats.restaurantId, restaurant.id)),
+    getRestaurantQuotaEligibility(restaurant.id),
   ]);
+
+  const categoriesWithEligibility = categoriesList.map((category) => ({
+    ...category,
+    quotaEligible: eligibility.categoryIds.has(category.id),
+  }));
+  const dishesWithEligibility = platsPage.items.map((dish) => ({
+    ...dish,
+    quotaEligible: eligibility.dishIds.has(dish.id),
+    categoryQuotaEligible: eligibility.categoryIds.has(dish.categorieId),
+  }));
 
   return (
     <MenuManager
       totalPlats={platsPage.total}
-      categories={categoriesList as (Categorie & { platCount: number })[]}
-      initialPlats={platsPage.items as PlatAvecCategorie[]}
+      categories={categoriesWithEligibility as (Categorie & { platCount: number; quotaEligible: boolean })[]}
+      initialPlats={dishesWithEligibility as (PlatAvecCategorie & { quotaEligible: boolean; categoryQuotaEligible: boolean })[]}
       menuStats={menuStats[0] ?? { total: 0, disponibles: 0, indisponibles: 0 }}
       currentPage={page}
       limit={PLATS_LIMIT}
       currentQ={search}
       currentCategorie={categorieId}
       currentDispo={params.dispo ?? "all"}
+      quotaSummary={{
+        category: {
+          used: eligibility.eligibleCategories.length,
+          total: eligibility.totalCategorySlots,
+          limit: eligibility.limits.category,
+        },
+        dish: {
+          used: eligibility.eligibleDishes.length,
+          total: eligibility.totalDishSlots,
+          limit: eligibility.limits.dish,
+        },
+      }}
     />
   );
 }

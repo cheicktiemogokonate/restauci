@@ -1,4 +1,4 @@
-import { formatEuro } from "@/lib/utils/format";
+import { formatPrix } from "@/lib/utils/format";
 import {
   BarChart3,
   Calendar,
@@ -228,7 +228,7 @@ export default function FeatureGrid() {
                   Chiffre d&apos;Affaires
                 </span>
                 <span className="font-bold text-brand-dark font-sans text-sm">
-                  {formatEuro(1425.5)}
+                  {formatPrix(142_500)}
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs">
@@ -236,7 +236,7 @@ export default function FeatureGrid() {
                   Panier Moyen
                 </span>
                 <span className="font-semibold text-brand-dark font-mono">
-                  {formatEuro(24.58)}
+                  {formatPrix(5_500)}
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs border-t border-dashed border-gray-100 pt-2.5">

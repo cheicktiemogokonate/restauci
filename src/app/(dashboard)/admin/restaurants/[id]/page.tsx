@@ -8,6 +8,8 @@ import {
 } from "@/lib/db/queries-admin";
 import type { StatutCommande } from "@/lib/db/types";
 import { notFound } from "next/navigation";
+import { PaystackProviderAccountCard } from "@/components/admin/paystack-provider-account-card";
+import { getPaystackProviderAccount } from "@/modules/transactions/provider-accounts";
 
 export default async function AdminRestaurantDetailPage({
   params,
@@ -37,7 +39,7 @@ export default async function AdminRestaurantDetailPage({
     ? (searchParamsAwaited.statut as StatutCommande)
     : undefined;
 
-  const [commandesResult, evolution] = await Promise.all([
+  const [commandesResult, evolution, providerAccount] = await Promise.all([
     getCommandesRestaurantAdmin({
       restaurantId: id,
       statut,
@@ -45,16 +47,31 @@ export default async function AdminRestaurantDetailPage({
       limit: 20,
     }),
     getEvolutionRestaurantAdmin(id, 30),
+    getPaystackProviderAccount(restaurant.partnerAccountId),
   ]);
 
   return (
-    <RestaurantDetailAdmin
-      restaurant={restaurant}
-      commandes={commandesResult.items}
-      totalCommandes={commandesResult.total}
-      page={page}
-      totalPages={commandesResult.totalPages}
-      evolution={evolution}
-    />
+    <>
+      <RestaurantDetailAdmin
+        restaurant={restaurant}
+        commandes={commandesResult.items}
+        totalCommandes={commandesResult.total}
+        page={page}
+        totalPages={commandesResult.totalPages}
+        evolution={evolution}
+      />
+      <div className="mx-auto -mt-6 mb-8 max-w-7xl px-4 sm:px-6 lg:px-8">
+        <PaystackProviderAccountCard
+          resourceType="restaurant"
+          resourceId={restaurant.id}
+          partnerAccountId={restaurant.partnerAccountId}
+          account={providerAccount ? {
+            providerAccountReference: providerAccount.providerAccountReference,
+            status: providerAccount.status,
+            verifiedAt: providerAccount.verifiedAt,
+          } : null}
+        />
+      </div>
+    </>
   );
 }

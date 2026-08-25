@@ -144,6 +144,7 @@ function buildTracking(
     : ["Commande reçue", "En préparation", "Prête", "Servie"];
 
   const activeIndex: Record<Commande["statut"], number> = {
+    en_attente_paiement: -1,
     annulee: -1,
     recue: 0,
     en_preparation: 1,

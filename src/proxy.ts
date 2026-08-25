@@ -12,6 +12,8 @@ const ROUTES_PUBLIQUES = [
   "/login",
   "/register",
   "/restaurant/*",
+  "/residences",
+  "/residences/*",
   "/client/*",
   // L'espace consommateur utilise sa propre authentification Bearer.
   // Ces pages doivent donc pouvoir charger avant que le garde client-side
@@ -33,6 +35,8 @@ const API_PUBLIQUES = [
   "/api/auth/register",
   "/api/v1/",
   "/api/health",
+  "/api/webhooks/paystack",
+  "/api/payments/paystack/callback",
 ];
 
 // Configuration du rate limiter global (Redis via Upstash)
@@ -122,7 +126,7 @@ export async function proxy(req: NextRequest) {
     const role = typeof payload.role === "string" ? payload.role : "";
 
     if (pathname.startsWith("/admin") && role !== "admin") {
-      return NextResponse.redirect(new URL("/restaurateur", req.url));
+      return NextResponse.redirect(new URL("/partenaire", req.url));
     }
 
     return NextResponse.next();

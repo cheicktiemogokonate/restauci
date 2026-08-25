@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
-import { and, count, desc, eq, gte, ilike, inArray, lte, or } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, inArray, lte, ne, or } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { commandes, livraisons, restaurants } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { commandes, livraisons } from "@/lib/db/schema";
+import { getRestaurateurSession } from "@/lib/auth/get-restaurateur-session";
 import { commandeLogger } from "@/lib/loggers";
 import CommandesPageClient from "@/components/dashboard/commandes/commandes-page-client";
 import type { Commande } from "@/types";
@@ -23,8 +22,7 @@ export default async function CommandesPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) redirect("/login");
+  const { restaurant } = await getRestaurateurSession();
 
   const resolvedSearchParams = await searchParams;
   const dateParam = getSingleParam(resolvedSearchParams.date);
@@ -59,18 +57,6 @@ export default async function CommandesPage({
   const start = startOfDay(selectedDate);
   const end = endOfDay(selectedDate);
 
-  const restaurant = await db.query.restaurants.findFirst({
-    where: eq(restaurants.userId, currentUser.userId),
-  });
-
-  if (!restaurant) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-        Restaurant introuvable.
-      </div>
-    );
-  }
-
   const historyConditions = [
     eq(commandes.restaurantId, restaurant.id),
     inArray(commandes.statut, ["servie", "annulee"]),
@@ -104,6 +90,7 @@ export default async function CommandesPage({
           .where(
             and(
               eq(commandes.restaurantId, restaurant.id),
+              ne(commandes.statut, "en_attente_paiement"),
               gte(commandes.createdAt, start),
               lte(commandes.createdAt, end),
             ),

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { clientApi } from "../api-client";
+import type { ClientLocationSample } from "../location-context";
 
 export interface RestaurantProche {
   id: string;
@@ -20,51 +21,66 @@ export interface RestaurantProche {
   distanceKm?: number;
   enLigne: boolean;
   accepteCommandes: boolean;
+  placement: "promoted" | "organic";
+  partnerBadgeEnabled: boolean;
+  discoveryToken: string;
 }
 
 interface UseRestaurantsProchesOptions {
-  lat: number;
-  lng: number;
-  rayon?: number;
+  currentLocation: ClientLocationSample | null;
   search?: string;
   cuisine?: string;
 }
 
 export function useRestaurantsProches({
-  lat,
-  lng,
-  rayon = 10,
+  currentLocation,
   search,
   cuisine,
 }: UseRestaurantsProchesOptions) {
   const [restaurants, setRestaurants] = useState<RestaurantProche[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [marketName, setMarketName] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   const charger = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    if (!currentLocation) {
+      setRestaurants([]);
+      setMarketName(null);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
 
-    const params = new URLSearchParams({
-      lat: String(lat),
-      lng: String(lng),
-      rayon: String(rayon),
-      limit: "50",
-    });
-    if (search) params.set("search", search);
-    if (cuisine) params.set("cuisine", cuisine);
-
-    const result = await clientApi.get<RestaurantProche[]>(
-      `/restaurants?${params.toString()}`,
+    const result = await clientApi.post<{
+      items: RestaurantProche[];
+      market: { name: string } | null;
+      policyMode: "off" | "shadow" | "enforce";
+    }>(
+      "/restaurants/search",
+      {
+        currentLocation,
+        search: search || undefined,
+        cuisine: cuisine || undefined,
+        page: 1,
+        limit: 50,
+      },
     );
+    if (requestId !== requestIdRef.current) return;
 
     if (result.success && result.data) {
-      setRestaurants(result.data);
+      setRestaurants(result.data.items);
+      setMarketName(result.data.market?.name ?? null);
     } else {
+      setRestaurants([]);
+      setMarketName(null);
       setError(result.error ?? "Impossible de charger les restaurants");
     }
     setIsLoading(false);
-  }, [lat, lng, rayon, search, cuisine]);
+  }, [currentLocation, search, cuisine]);
 
   useEffect(() => {
     const run = async () => {
@@ -74,5 +90,11 @@ export function useRestaurantsProches({
     void run();
   }, [charger]);
 
-  return { restaurants, isLoading, error, recharger: charger };
+  return {
+    restaurants,
+    isLoading,
+    error,
+    marketName,
+    recharger: charger,
+  };
 }

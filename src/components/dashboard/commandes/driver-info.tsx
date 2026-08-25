@@ -43,7 +43,7 @@ interface DriverInfoProps {
   avatar?: string | null;
   availableDrivers: AvailableDriver[];
   deliveryStatus: "en_attente" | "assignee" | "en_route" | "livree" | "echouee" | null;
-  commandeStatus: "recue" | "en_preparation" | "prete" | "servie" | "annulee";
+  commandeStatus: "en_attente_paiement" | "recue" | "en_preparation" | "prete" | "servie" | "annulee";
 }
 
 const statusConfig = {

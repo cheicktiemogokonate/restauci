@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { createSubscriptionRequestAction } from "@/lib/actions/restaurateur-subscriptions";
+import { createSubscriptionRequestAction } from "@/lib/actions/partner-subscriptions";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import {
@@ -16,18 +16,22 @@ import {
 
 interface RestaurateurSubscriptionButtonProps {
   planCode: string;
+  planName: string;
   isCurrent: boolean;
   isPending: boolean;
   hasAnyPending: boolean;
   disabled?: boolean;
+  unavailableLabel?: string;
 }
 
 export function RestaurateurSubscriptionButton({
   planCode,
+  planName,
   isCurrent,
   isPending,
   hasAnyPending,
-  disabled
+  disabled,
+  unavailableLabel,
 }: RestaurateurSubscriptionButtonProps) {
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -35,11 +39,15 @@ export function RestaurateurSubscriptionButton({
   const handleSubscribe = async () => {
     setLoading(true);
     try {
-      await createSubscriptionRequestAction(planCode);
-      toast.success("Votre demande a été envoyée. Notre équipe la traitera sous peu.");
+      const result = await createSubscriptionRequestAction(planCode);
+      if (result.authorizationUrl) {
+        window.location.assign(result.authorizationUrl);
+        return;
+      }
+      toast.success("Votre demande a été envoyée.");
       setShowConfirm(false);
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de la demande");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Erreur lors de la demande");
     } finally {
       setLoading(false);
     }
@@ -68,7 +76,7 @@ export function RestaurateurSubscriptionButton({
         disabled={disabled || hasAnyPending || loading}
         onClick={() => setShowConfirm(true)}
       >
-        Choisir cette offre
+        {unavailableLabel ?? "Choisir cette offre"}
       </Button>
 
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
@@ -76,10 +84,9 @@ export function RestaurateurSubscriptionButton({
           <DialogHeader>
             <DialogTitle>Confirmer votre choix</DialogTitle>
             <DialogDescription>
-              Vous êtes sur le point de demander la souscription à l'offre <strong>{planCode.replace('_', ' ')}</strong>.
+              Vous êtes sur le point de demander la souscription à l'offre <strong>{planName}</strong>.
               <br className="mt-2" />
-              Une fois votre demande validée, notre équipe vous contactera pour procéder au règlement. 
-              Votre abonnement actuel (le cas échéant) restera actif jusqu'à la validation.
+              Pour une offre payante, vous serez redirigé vers Paystack. Votre abonnement actuel reste actif jusqu’à la confirmation réelle du paiement.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">

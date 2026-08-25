@@ -1,6 +1,6 @@
 import { redis } from "@/lib/cache/redis";
 import { db } from "@/lib/db";
-import { restaurants } from "@/lib/db/schema";
+import { partnerAccounts, restaurants } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { commandeLogger } from "@/lib/loggers";
 import { eq } from "drizzle-orm";
@@ -58,15 +58,19 @@ export async function GET(request: NextRequest) {
 
     const [restaurant] = await db
       .select()
-      .from(restaurants)
-      .where(eq(restaurants.userId, userId))
+      .from(partnerAccounts)
+      .innerJoin(
+        restaurants,
+        eq(restaurants.partnerAccountId, partnerAccounts.id),
+      )
+      .where(eq(partnerAccounts.userId, userId))
       .limit(1);
 
     if (!restaurant) {
       return new Response("Restaurant introuvable", { status: 404 });
     }
 
-    const restaurantId = restaurant.id;
+    const restaurantId = restaurant.restaurants.id;
     const queueKey = `restauci:sse:queue:${restaurantId}`;
     const cursor = request.nextUrl.searchParams.get("cursor");
 

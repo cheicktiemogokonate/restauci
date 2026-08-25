@@ -1,8 +1,8 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { commandes, plats, restaurants } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { commandes, plats } from "@/lib/db/schema";
+import { getRestaurateurSession } from "@/lib/auth/get-restaurateur-session";
 import CommandeDetailsPageClient from "@/components/dashboard/commandes/commande-details-page-client";
 import { commandeToDetailsView } from "@/components/dashboard/commandes/map-commande-to-details";
 import type { Commande } from "@/types";
@@ -17,22 +17,9 @@ export default async function CommandeDetailsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) redirect("/login");
+  const { restaurant } = await getRestaurateurSession();
 
   const { id } = await params;
-
-  const restaurant = await db.query.restaurants.findFirst({
-    where: eq(restaurants.userId, currentUser.userId),
-  });
-
-  if (!restaurant) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-        Restaurant introuvable.
-      </div>
-    );
-  }
 
   const commande = await db.query.commandes.findFirst({
     where: and(eq(commandes.id, id), eq(commandes.restaurantId, restaurant.id)),

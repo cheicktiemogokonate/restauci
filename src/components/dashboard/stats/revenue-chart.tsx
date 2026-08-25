@@ -81,7 +81,7 @@ export function RevenueChart({
                   axisLine={false}
                   tickLine={false}
                   tick={{ fill: "oklch(0.5 0.02 145)", fontSize: 12 }}
-                  tickFormatter={(value) => `${value / 100} FCFA`}
+                  tickFormatter={(value) => formatPrix(Number(value) || 0)}
                 />
                 <Tooltip
                   contentStyle={{

@@ -4,6 +4,10 @@ export const COMMANDE_STATUS_META: Record<
   StatutCommande,
   { label: string; className: string }
 > = {
+  en_attente_paiement: {
+    label: "En attente de paiement",
+    className: "bg-amber-50 text-amber-700 border border-amber-100",
+  },
   recue: {
     label: "Reçue",
     className: "bg-amber-50 text-amber-700 border border-amber-100",

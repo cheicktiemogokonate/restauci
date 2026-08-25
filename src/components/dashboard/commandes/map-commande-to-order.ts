@@ -7,6 +7,8 @@ export function mapStatutToOrderStatus(
   statut: Commande["statut"],
 ): OrderStatus {
   switch (statut) {
+    case "en_attente_paiement":
+      return "en_attente_paiement";
     case "recue":
       return "recue";
     case "en_preparation":
@@ -88,6 +90,7 @@ export function commandeToOrder(
  */
 export function sortCommandesForService(a: Commande, b: Commande): number {
   const priority: Record<Commande["statut"], number> = {
+    en_attente_paiement: 5,
     recue: 0,
     en_preparation: 1,
     prete: 2,

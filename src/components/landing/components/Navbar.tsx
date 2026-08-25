@@ -22,7 +22,9 @@ export default function Navbar() {
 
   const menuItems = navigationLinks.map((link) => ({
     label: link.name,
-    ariaLabel: `Aller à la section ${link.name}`,
+    ariaLabel: link.href.startsWith("#")
+      ? `Aller à la section ${link.name}`
+      : `Ouvrir ${link.name}`,
     link: link.href,
   }));
 

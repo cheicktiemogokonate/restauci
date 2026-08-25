@@ -9,23 +9,27 @@ import {
   CenterMorphModalContent,
   CenterMorphModalTrigger,
 } from "@/components/motion/center-morph-modal";
-import { marquerCommissionsRestaurantPayeesAction } from "@/lib/actions/admin-commissions";
+import { createManualCommissionSettlementAction } from "@/lib/actions/admin-commissions";
+import { formatPrix } from "@/lib/utils/format";
 import { CheckCircle2 } from "lucide-react";
 import { type MouseEvent, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 export function CommissionPaymentButton({
-  restaurantId,
+  partnerAccountId,
   restaurantNom,
-  montantFormate,
+  montantDu,
 }: {
-  restaurantId: string;
+  partnerAccountId: string;
   restaurantNom: string;
-  montantFormate: string;
+  montantDu: number;
 }) {
   const [open, setOpen] = useState(false);
   const [referenceReglement, setReferenceReglement] = useState("");
-  const [notes, setNotes] = useState("");
+  const [justification, setJustification] = useState("");
+  const [amount, setAmount] = useState(String(montantDu));
+  const [method, setMethod] = useState<"mobile_money" | "virement" | "especes" | "cheque">("mobile_money");
+  const [paidAt, setPaidAt] = useState(new Date().toISOString().slice(0, 10));
   const [isPending, startTransition] = useTransition();
 
   const confirmerPaiement = () => {
@@ -35,17 +39,20 @@ export function CommissionPaymentButton({
     }
     startTransition(async () => {
       try {
-        const result = await marquerCommissionsRestaurantPayeesAction(
-          restaurantId,
-          referenceReglement.trim(),
-          notes.trim() || undefined,
-        );
-        toast.success(`${montantFormate} encaissés pour ${restaurantNom}.`, {
-          description: `${result.nombre} commission${result.nombre > 1 ? "s" : ""} marquée${result.nombre > 1 ? "s" : ""} comme payée${result.nombre > 1 ? "s" : ""}.`,
+        const result = await createManualCommissionSettlementAction({
+          partnerAccountId,
+          amountFcfa: Number(amount),
+          method,
+          externalReference: referenceReglement.trim(),
+          justification: justification.trim(),
+          paidAt,
+        });
+        toast.success(`${formatPrix(Number(amount))} encaissés pour ${restaurantNom}.`, {
+          description: `${result.allocations.length} ligne${result.allocations.length > 1 ? "s" : ""} de commission allouée${result.allocations.length > 1 ? "s" : ""} en FIFO.`,
         });
         setOpen(false);
         setReferenceReglement("");
-        setNotes("");
+        setJustification("");
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -65,29 +72,59 @@ export function CommissionPaymentButton({
       </CenterMorphModalTrigger>
       <CenterMorphModalContent
         ariaLabel="Confirmer l’encaissement"
-        ariaDescribedBy={`commission-payment-${restaurantId}`}
+        ariaDescribedBy={`commission-payment-${partnerAccountId}`}
         className="max-w-md rounded-2xl"
       >
         <div className="space-y-5 p-6">
           <div className="space-y-2 pr-8">
             <h2 className="text-lg font-semibold">Confirmer l’encaissement</h2>
             <p
-              id={`commission-payment-${restaurantId}`}
+              id={`commission-payment-${partnerAccountId}`}
               className="text-sm text-muted-foreground"
             >
-              Confirmez que {montantFormate} ont été réglés par {restaurantNom}.
-              Toutes ses commissions en attente seront marquées comme payées.
+              Enregistrez uniquement un règlement réellement reçu. Le montant
+              sera alloué aux commissions cash les plus anciennes, avec prise
+              en charge des paiements partiels.
             </p>
           </div>
           <div className="space-y-2">
             <label
-              htmlFor={`reference-${restaurantId}`}
+              htmlFor={`amount-${partnerAccountId}`}
+              className="text-sm font-medium text-gray-700"
+            >
+              Montant reçu (FCFA)
+            </label>
+            <Input
+              id={`amount-${partnerAccountId}`}
+              value={amount}
+              onChange={setAmount}
+              inputMode="numeric"
+              disabled={isPending}
+            />
+            <p className="text-xs text-muted-foreground">Dette actuelle : {formatPrix(montantDu)}</p>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor={`method-${partnerAccountId}`} className="text-sm font-medium text-gray-700">Moyen reçu</label>
+            <select id={`method-${partnerAccountId}`} value={method} onChange={(event) => setMethod(event.target.value as typeof method)} disabled={isPending} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <option value="mobile_money">Mobile Money</option>
+              <option value="virement">Virement</option>
+              <option value="especes">Espèces</option>
+              <option value="cheque">Chèque</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor={`paid-at-${partnerAccountId}`} className="text-sm font-medium text-gray-700">Date reçue</label>
+            <Input id={`paid-at-${partnerAccountId}`} type="date" value={paidAt} onChange={setPaidAt} disabled={isPending} />
+          </div>
+          <div className="space-y-2">
+            <label
+              htmlFor={`reference-${partnerAccountId}`}
               className="text-sm font-medium text-gray-700"
             >
               Référence de règlement{" "}
             </label>
             <Input
-              id={`reference-${restaurantId}`}
+              id={`reference-${partnerAccountId}`}
               value={referenceReglement}
               onChange={setReferenceReglement}
               placeholder="Ex. TRX-2026-001"
@@ -97,16 +134,16 @@ export function CommissionPaymentButton({
           </div>
           <div className="space-y-2">
             <label
-              htmlFor={`notes-${restaurantId}`}
+              htmlFor={`notes-${partnerAccountId}`}
               className="text-sm font-medium text-gray-700"
             >
-              Notes <span className="text-gray-400">(facultatives)</span>
+              Justification administrative
             </label>
             <Textarea
-              id={`notes-${restaurantId}`}
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="Informations utiles pour le rapprochement…"
+              id={`notes-${partnerAccountId}`}
+              value={justification}
+              onChange={(event) => setJustification(event.target.value)}
+              placeholder="Motif et éléments vérifiés avant cet encaissement…"
               maxLength={1000}
               disabled={isPending}
             />
@@ -125,7 +162,7 @@ export function CommissionPaymentButton({
               loadingText="Enregistrement…"
               successText="Encaissé"
               icon={<CheckCircle2 />}
-              disabled={referenceReglement.trim().length < 3}
+              disabled={referenceReglement.trim().length < 3 || justification.trim().length < 10 || !Number.isSafeInteger(Number(amount)) || Number(amount) <= 0 || Number(amount) > montantDu}
               onClick={(event: MouseEvent<HTMLButtonElement>) => {
                 event.preventDefault();
                 confirmerPaiement();

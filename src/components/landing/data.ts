@@ -44,6 +44,7 @@ export interface TrustedLogo {
 
 export const navigationLinks: NavigationLink[] = [
   { name: "Accueil", href: "#hero" },
+  { name: "Résidences", href: "/residences" },
   { name: "Fonctionnement", href: "#about" },
   { name: "Tarifs", href: "#pricing" },
   { name: "Contact", href: "#footer" },
@@ -155,7 +156,7 @@ export const dishesData: Dish[] = [
     name: "Burger Signature",
     image:
       "https://images.unsplash.com/photo-1550547660-d9450f859349?w=400&h=400&fit=crop&q=80",
-    price: 14.9,
+    price: 6_500,
     rating: 4.8,
     category: "Plats chauds",
     salesCount: 125,
@@ -165,7 +166,7 @@ export const dishesData: Dish[] = [
     name: "Salade César Premium",
     image:
       "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=400&fit=crop&q=80",
-    price: 12.5,
+    price: 5_000,
     rating: 4.7,
     category: "Salades",
     salesCount: 98,
@@ -175,7 +176,7 @@ export const dishesData: Dish[] = [
     name: "Pizza Pepperoni",
     image:
       "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=400&fit=crop&q=80",
-    price: 16.2,
+    price: 7_000,
     rating: 4.9,
     category: "Pizzas",
     salesCount: 145,
@@ -185,7 +186,7 @@ export const dishesData: Dish[] = [
     name: "Tartelette du Chef",
     image:
       "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=400&fit=crop&q=80",
-    price: 9.8,
+    price: 3_500,
     rating: 4.6,
     category: "Desserts",
     salesCount: 76,
@@ -195,64 +196,9 @@ export const dishesData: Dish[] = [
     name: "Filet de Saumon",
     image:
       "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=400&fit=crop&q=80",
-    price: 21.5,
+    price: 8_500,
     rating: 4.8,
     category: "Plats de poisson",
     salesCount: 89,
-  },
-];
-
-export const pricingPlans = [
-  {
-    planKey: "decouverte",
-    name: "Découverte",
-    priceMonthly: null, // pas de cycle mensuel — plan gratuit à vie
-    priceYearly: 0,
-    commissionPercent: 15,
-    description:
-      "Pour tester Toutci sans risque et démarrer votre présence en ligne.",
-    features: [
-      "Fiche restaurant publiée après validation",
-      "Gestion des commandes en temps réel",
-      "Paiement de vos gains au cycle standard",
-      "Jusqu'à 20 plats, 5 catégories",
-    ],
-    popular: false,
-    ctaText: "Commencer gratuitement",
-  },
-  {
-    planKey: "partenaire_fier",
-    name: "Partenaire Fier",
-    priceMonthly: null, // pas de cycle mensuel — annuel uniquement
-    priceYearly: 50000,
-    commissionPercent: 10,
-    description:
-      "Pour être vu en premier et bénéficier du meilleur taux de commission.",
-    features: [
-      "Tout ce qu'offre Croissance",
-      'Badge "Partenaire" sur votre fiche',
-      "Placement prioritaire dans les résultats de recherche",
-      "Paiement de vos gains accéléré",
-      "Support client prioritaire",
-    ],
-    popular: true,
-    ctaText: "Devenir Partenaire Fier",
-  },
-  {
-    planKey: "croissance",
-    name: "Croissance",
-    priceMonthly: null, // pas de cycle mensuel — annuel uniquement
-    priceYearly: 25000,
-    commissionPercent: 12,
-    description:
-      "Pour les restaurants prêts à lever leurs limites et réduire leur commission.",
-    features: [
-      "Tout ce qu'offre Découverte",
-      "Menu et catégories illimités",
-      "Commission réduite dès le paiement",
-      "Activation après validation de l’offre",
-    ],
-    popular: false,
-    ctaText: "Passer à Croissance",
   },
 ];

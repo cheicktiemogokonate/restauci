@@ -25,6 +25,12 @@ export interface CommandeTracking {
   modeCommande: string;
   adresseLivraison?: string | null;
   numeroTable?: string | null;
+  payment: {
+    provider: string | null;
+    method: "mobile_money" | "card" | string;
+    status: "pending" | "confirmed" | "failed" | "cancelled";
+    checkoutUrl: string | null;
+  } | null;
 }
 
 type SseMessage = { event: string; data: unknown };

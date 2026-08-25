@@ -3,244 +3,133 @@ import { apiResponse } from "@/lib/api/response";
 import { validateBody, validateSearchParams } from "@/lib/api/validate";
 import {
   buildPaginationMeta,
-  PAGINATION,
+  parseLimit,
   parsePage,
 } from "@/lib/config/pagination";
 import { db } from "@/lib/db";
-import { createCommande } from "@/lib/db/mutations";
-import { clients, commandes, plats, restaurants } from "@/lib/db/schema";
+import { commandes } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
+import {
+  createRestaurantOrder,
+  RestaurantOrderError,
+} from "@/modules/orders/server";
+import { scheduleRestaurantOrderCreatedEffects } from "@/lib/orders/restaurant-order-effects";
+import { createRestaurantOrderSchema } from "@/modules/orders/contracts";
 import {
   checkRateLimit,
   clientApiLimiter,
   commandeClientLimiter,
 } from "@/lib/rate-limit";
-import { formatPrix } from "@/lib/utils/format";
-import { and, count, desc, eq, ilike, inArray } from "drizzle-orm";
+import { and, count, desc, eq, ilike } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { initializePreparedPaystackPayment } from "@/modules/transactions/payment-service";
+import { PaystackGatewayError } from "@/infrastructure/paystack/gateway";
+import { restaurantOrderErrorResponse } from "./order-error-response";
+import { recordDiscoveryConversion } from "@/modules/discovery/server";
 
 const log = createLogger("v1-client-commandes");
 
-const passerCommandeSchema = z
-  .object({
-    restaurantSlug: z.string().min(1),
-    modeCommande: z.enum(["sur_place", "livraison", "emporter"]),
-    items: z
-      .array(
-        z.object({
-          platId: z.string().min(1),
-          quantite: z.number().int().min(1).max(20),
-        }),
-      )
-      .min(1, "Panier vide"),
-    // Livraison
-    adresseLivraison: z.string().max(500).optional(),
-    latitudeLivraison: z.number().optional(),
-    longitudeLivraison: z.number().optional(),
-    // Sur place
-    numeroTable: z.string().max(10).optional(),
-    // Note
-    noteClient: z.string().max(500).optional(),
-    idempotencyKey: z.string().uuid(),
-  })
-  .refine((d) => d.modeCommande !== "livraison" || !!d.adresseLivraison, {
-    message: "Adresse de livraison requise",
-    path: ["adresseLivraison"],
-  });
-
 const historiqueQuerySchema = z.object({
   search: z.string().trim().min(3).max(80).optional(),
+  page: z.string().optional(),
+  limit: z.string().optional(),
 });
 
 // POST /api/v1/client/commandes — Passer une commande
 export async function POST(request: NextRequest): Promise<Response> {
   const { session, error } = await getClientSession(request);
   if (error) return error;
+  const clientId = session.clientId;
 
-  const rl = await checkRateLimit(
-    commandeClientLimiter,
-    (await session).clientId,
-  );
+  const rl = await checkRateLimit(commandeClientLimiter, clientId);
   if (rl) return rl;
 
   const { data, error: vError } = await validateBody(
     request,
-    passerCommandeSchema,
+    createRestaurantOrderSchema,
   );
   if (vError) return vError;
 
   try {
-    // 1. Vérifier le restaurant
-    const [restaurant] = await db
-      .select({
-        id: restaurants.id,
-        actif: restaurants.actif,
-        enLigne: restaurants.enLigne,
-        accepteCommandes: restaurants.accepteCommandes,
-        fraisLivraison: restaurants.fraisLivraison,
-        commandeMinimum: restaurants.commandeMinimum,
-        modesCommande: restaurants.modesCommande,
-      })
-      .from(restaurants)
-      .where(
-        and(
-          eq(restaurants.slug, (await data).restaurantSlug),
-          eq(restaurants.actif, true),
-        ),
-      )
-      .limit(1);
-
-    if (!restaurant) {
-      return apiResponse.notFound("Restaurant");
-    }
-
-    if (!restaurant.enLigne) {
-      return apiResponse.error(
-        "Ce restaurant est fermé pour le moment",
-        "BAD_REQUEST",
-        { status: 400 },
-      );
-    }
-
-    if (!restaurant.accepteCommandes) {
-      return apiResponse.error(
-        "Ce restaurant n'accepte pas de commandes pour le moment",
-        "BAD_REQUEST",
-        { status: 400 },
-      );
-    }
-
-    if (!restaurant.modesCommande?.includes((await data).modeCommande)) {
-      return apiResponse.error(
-        `Ce restaurant n'accepte pas les commandes en mode "${(await data).modeCommande}"`,
-        "BAD_REQUEST",
-        { status: 400 },
-      );
-    }
-
-    // 2. Récupérer et vérifier les plats
-    const platIds = (await data).items.map((i) => i.platId);
-
-    const platsDB = await db
-      .select({
-        id: plats.id,
-        nom: plats.nom,
-        prix: plats.prix,
-        disponible: plats.disponible,
-        restaurantId: plats.restaurantId,
-      })
-      .from(plats)
-      .where(
-        and(inArray(plats.id, platIds), eq(plats.restaurantId, restaurant.id)),
-      );
-
-    // Vérifier que tous les plats existent et appartiennent au restaurant
-    if (platsDB.length !== platIds.length) {
-      return apiResponse.error(
-        "Certains plats sont introuvables ou n'appartiennent pas à ce restaurant",
-        "VALIDATION_ERROR",
-        { status: 422 },
-      );
-    }
-
-    // Vérifier la disponibilité
-    const indisponibles = platsDB.filter((p) => !p.disponible);
-    if (indisponibles.length > 0) {
-      return apiResponse.error(
-        `Ces plats ne sont plus disponibles : ${indisponibles.map((p) => p.nom).join(", ")}`,
-        "VALIDATION_ERROR",
-        { status: 422 },
-      );
-    }
-
-    // 3. Calculer les montants (en centimes)
-    const platsMap = new Map(platsDB.map((p) => [p.id, p]));
-
-    const itemsCalcules = (await data).items.map((item) => {
-      const plat = platsMap.get(item.platId)!;
-      return {
-        platId: item.platId,
-        nom: plat.nom,
-        prix: plat.prix,
-        quantite: item.quantite,
-      };
+    const {
+      idempotencyKey,
+      discoveryToken,
+      paymentReturnChannel,
+      ...input
+    } = data;
+    const result = await createRestaurantOrder({
+      clientId,
+      idempotencyKey,
+      input,
     });
-
-    const sousTotal = itemsCalcules.reduce(
-      (sum, item) => sum + item.prix * item.quantite,
-      0,
-    );
-
-    const fraisLivraison =
-      (await data).modeCommande === "livraison"
-        ? (restaurant.fraisLivraison ?? 0)
-        : 0;
-
-    const total = sousTotal + fraisLivraison;
-
-    // 4. Vérifier le minimum de commande
-    if (restaurant.commandeMinimum && sousTotal < restaurant.commandeMinimum) {
+    const { commande } = result;
+    if (result.created) {
+      await recordDiscoveryConversion({
+        token: discoveryToken,
+        activityType: "restaurant",
+        resourceId: commande.restaurantId,
+        conversionReferenceId: commande.id,
+      });
+    }
+    scheduleRestaurantOrderCreatedEffects(result);
+    if (result.onlinePayment && !result.created && !result.onlinePayment.checkoutUrl) {
       return apiResponse.error(
-        `Commande minimum : ${formatPrix(restaurant.commandeMinimum)}`,
-        "VALIDATION_ERROR",
-        { status: 422 },
+        "Une tentative Paystack est encore en cours de vérification. Aucun nouvel Initialize n’a été envoyé.",
+        "CONFLICT",
+        { status: 409 },
       );
     }
-
-    // 5. Récupérer les infos du client
-    const [client] = await db
-      .select({ nom: clients.nom, telephone: clients.telephone })
-      .from(clients)
-      .where(eq(clients.id, (await session).clientId))
-      .limit(1);
-
-    if (!client) return apiResponse.notFound("Client");
-
-    // 6. Créer la commande
-    // Utilise la fonction existante dans mutations.ts
-    // Elle déclenche automatiquement les notifications (Niveau 5)
-    const commande = await createCommande({
-      restaurantId: restaurant.id,
-      clientId: (await session).clientId,
-      idempotencyKey: (await data).idempotencyKey,
-      modeCommande: (await data).modeCommande,
-      nomClient: client.nom,
-      telephoneClient: client.telephone,
-      numeroTable: (await data).numeroTable,
-      adresseLivraison: (await data).adresseLivraison,
-      latitudeLivraison: (await data).latitudeLivraison,
-      longitudeLivraison: (await data).longitudeLivraison,
-      items: itemsCalcules,
-      sousTotal,
-      fraisLivraison,
-      total,
-      noteClient: (await data).noteClient,
-    });
+    const initialized = result.onlinePayment
+      ? await initializePreparedPaystackPayment({
+          paymentId: result.onlinePayment.paymentId,
+          owner: { clientId },
+          returnChannel: paymentReturnChannel,
+        })
+      : null;
 
     log.info(
-      { commandeId: commande.id, clientId: (await session).clientId, total },
+      {
+        commandeId: commande.id,
+        clientId,
+        replayed: !result.created,
+        payment: initialized
+          ? { provider: "paystack", reference: initialized.reference, authorizationUrl: initialized.authorizationUrl }
+          : { provider: null, reference: null, authorizationUrl: null },
+      },
       "Commande client passée",
     );
 
-    return apiResponse.created({
-      commande: {
-        id: commande.id,
-        numero: commande.numero,
-        statut: commande.statut,
-        total: commande.total,
-        fraisLivraison: commande.fraisLivraison,
-        sousTotal: commande.sousTotal,
-        items: itemsCalcules,
-        modeCommande: commande.modeCommande,
-        createdAt: commande.createdAt,
+    return apiResponse.success(
+      {
+        commande: {
+          id: commande.id,
+          numero: commande.numero,
+          statut: commande.statut,
+          total: commande.total,
+          fraisLivraison: commande.fraisLivraison,
+          sousTotal: commande.sousTotal,
+          items: commande.items,
+          modeCommande: commande.modeCommande,
+          createdAt: commande.createdAt,
+        },
+        replayed: !result.created,
+        payment: {
+          authorizationUrl: initialized?.authorizationUrl ?? null,
+          reference: initialized?.reference ?? null,
+        },
       },
-    });
-  } catch (err) {
-    log.error(
-      { err, clientId: (await session).clientId },
-      "Erreur création commande client",
+      { status: result.created ? 201 : 200 },
     );
+  } catch (err) {
+    if (err instanceof RestaurantOrderError) {
+      return restaurantOrderErrorResponse(err);
+    }
+    if (err instanceof PaystackGatewayError) {
+      log.warn({ code: err.code }, "Échec Initialize Paystack");
+      return apiResponse.error(err.message, "INTERNAL_ERROR", { status: 503 });
+    }
+    log.error({ err, clientId }, "Erreur création commande client");
     return apiResponse.internalError();
   }
 }
@@ -254,17 +143,14 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (rl) return rl;
 
   const { searchParams } = new URL(request.url);
-  const page = parsePage(searchParams.get("page") ?? undefined);
-  const limit = Math.min(
-    parseInt(searchParams.get("limit") ?? "10", 10),
-    PAGINATION.MAX_PAR_PAGE,
-  );
-  const offset = (page - 1) * limit;
   const { data: query, error: queryError } = validateSearchParams(
     searchParams,
     historiqueQuerySchema,
   );
   if (queryError) return queryError;
+  const page = parsePage(query.page);
+  const limit = parseLimit(query.limit, 10);
+  const offset = (page - 1) * limit;
 
   try {
     const conditions = [eq(commandes.clientId, (await session).clientId)];

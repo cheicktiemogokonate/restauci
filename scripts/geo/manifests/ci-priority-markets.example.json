@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "countryCode": "CI",
+  "snapshotDate": "YYYY-MM-DD",
+  "sourceUrl": "https://download.example.invalid/ivory-coast-YYYY-MM-DD.osm.pbf",
+  "sha256": "REMPLACER_PAR_LE_SHA256_PUBLIE_ET_VERIFIE",
+  "reviewedBy": "REMPLACER_PAR_LA_PERSONNE_AYANT_VALIDE_LA_CARTE",
+  "reviewedAt": "YYYY-MM-DDTHH:mm:ssZ",
+  "priorityMarkets": [
+    {
+      "code": "abidjan",
+      "name": "Grand Abidjan",
+      "includeRelationRefs": [],
+      "excludeRelationRefs": [],
+      "approvalRequired": true
+    },
+    {
+      "code": "bouake",
+      "name": "Bouaké",
+      "includeRelationRefs": [],
+      "excludeRelationRefs": [],
+      "approvalRequired": true
+    }
+  ],
+  "note": "Ne renseigner les relations qu'après contrôle visuel. Ce modèle ne contient volontairement aucune frontière inventée."
+}

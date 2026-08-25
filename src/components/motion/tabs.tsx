@@ -9,6 +9,7 @@ import {
   useId,
   useMemo,
   useState,
+  type KeyboardEvent,
   type ReactNode,
 } from "react";
 import { EASE_OUT } from "@/lib/ease";
@@ -115,14 +116,44 @@ export function TabsTrigger({
   const { value: current, setValue, layoutId, variant } = useTabs();
   const active = current === value;
   const usesDefaultIndicator = indicatorClassName === undefined;
+  const tabId = `${layoutId}-tab-${value}`;
+  const panelId = `${layoutId}-panel-${value}`;
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const tabList = event.currentTarget.closest<HTMLElement>("[role=tablist]");
+    const tabs = Array.from(
+      tabList?.querySelectorAll<HTMLButtonElement>("[role=tab]:not(:disabled)") ?? [],
+    );
+    const currentIndex = tabs.indexOf(event.currentTarget);
+    if (currentIndex < 0 || tabs.length === 0) return;
+
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % tabs.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabs.length - 1;
+    }
+
+    if (nextIndex === null) return;
+    event.preventDefault();
+    tabs[nextIndex]?.focus();
+    tabs[nextIndex]?.click();
+  };
 
   if (variant === "underline") {
     return (
       <button
+        id={tabId}
         type="button"
         role="tab"
         aria-selected={active}
+        aria-controls={panelId}
+        tabIndex={active ? 0 : -1}
         onClick={() => setValue(value)}
+        onKeyDown={handleKeyDown}
         className={cn(
           "relative isolate px-3 pb-2.5 pt-1 -mb-px text-sm font-medium transition-colors min-h-[44px] inline-flex items-center",
           active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
@@ -162,10 +193,14 @@ export function TabsTrigger({
         />
       ) : null}
       <button
+        id={tabId}
         type="button"
         role="tab"
         aria-selected={active}
+        aria-controls={panelId}
+        tabIndex={active ? 0 : -1}
         onClick={() => setValue(value)}
+        onKeyDown={handleKeyDown}
         className={cn(
           "relative z-10 inline-flex items-center justify-center whitespace-nowrap bg-transparent px-3.5 py-1.5 text-sm font-medium outline-none",
           usesDefaultIndicator
@@ -189,20 +224,33 @@ export function TabsTrigger({
 }
 
 export function TabsContent({ value, children, className }: { value: string; children: ReactNode; className?: string }) {
-  const { value: current } = useTabs();
+  const { value: current, layoutId } = useTabs();
   const active = current === value;
+  const tabId = `${layoutId}-tab-${value}`;
+  const panelId = `${layoutId}-panel-${value}`;
   // Inactive panels stay mounted but hidden, so their content (e.g. source
   // code) is present in the server-rendered HTML for crawlers and assistive
   // tech, instead of being dropped from the DOM.
   if (!active) {
     return (
-      <div hidden className={className}>
+      <div
+        id={panelId}
+        role="tabpanel"
+        aria-labelledby={tabId}
+        tabIndex={0}
+        hidden
+        className={className}
+      >
         {children}
       </div>
     );
   }
   return (
     <motion.div
+      id={panelId}
+      role="tabpanel"
+      aria-labelledby={tabId}
+      tabIndex={0}
       key={value}
       initial={false}
       animate={{ opacity: 1, y: 0 }}

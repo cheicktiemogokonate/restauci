@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   LucideIcon,
   Menu,
+  ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/restaurateur", icon: LayoutDashboard },
   { label: "Commandes", href: "/restaurateur/commandes", icon: ClipboardList },
   { label: "Menu", href: "/restaurateur/menu", icon: CookingPot },
+  { label: "Vérification", href: "/partenaire/verification", icon: ShieldCheck },
 ];
 
 function Logo() {

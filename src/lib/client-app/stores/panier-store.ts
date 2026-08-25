@@ -6,7 +6,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 export interface PanierItem {
   platId: string;
   nom: string;
-  prix: number; // centimes
+  prix: number; // FCFA entiers
   quantite: number;
   photoUrl?: string | null;
 }
@@ -15,10 +15,16 @@ interface PanierState {
   restaurantId: string | null;
   restaurantNom: string | null;
   restaurantSlug: string | null;
+  discoveryToken: string | null;
   items: PanierItem[];
 
   ajouterItem: (
-    restaurant: { id: string; nom: string; slug: string },
+    restaurant: {
+      id: string;
+      nom: string;
+      slug: string;
+      discoveryToken?: string | null;
+    },
     item: Omit<PanierItem, "quantite">
   ) => void;
   retirerItem: (platId: string) => void;
@@ -36,6 +42,7 @@ export const usePanierStore = create<PanierState>()(
       restaurantId: null,
       restaurantNom: null,
       restaurantSlug: null,
+      discoveryToken: null,
       items: [],
 
       ajouterItem: (restaurant, item) => {
@@ -48,6 +55,7 @@ export const usePanierStore = create<PanierState>()(
             restaurantId: restaurant.id,
             restaurantNom: restaurant.nom,
             restaurantSlug: restaurant.slug,
+            discoveryToken: restaurant.discoveryToken ?? null,
             items: [{ ...item, quantite: 1 }],
           });
           return;
@@ -60,6 +68,8 @@ export const usePanierStore = create<PanierState>()(
             restaurantId: restaurant.id,
             restaurantNom: restaurant.nom,
             restaurantSlug: restaurant.slug,
+            discoveryToken:
+              state.discoveryToken ?? restaurant.discoveryToken ?? null,
             items: state.items.map((i) =>
               i.platId === item.platId
                 ? { ...i, quantite: i.quantite + 1 }
@@ -71,6 +81,8 @@ export const usePanierStore = create<PanierState>()(
             restaurantId: restaurant.id,
             restaurantNom: restaurant.nom,
             restaurantSlug: restaurant.slug,
+            discoveryToken:
+              state.discoveryToken ?? restaurant.discoveryToken ?? null,
             items: [...state.items, { ...item, quantite: 1 }],
           });
         }
@@ -84,6 +96,7 @@ export const usePanierStore = create<PanierState>()(
                 restaurantId: null,
                 restaurantNom: null,
                 restaurantSlug: null,
+                discoveryToken: null,
                 items: [],
               }
             : { items };
@@ -98,6 +111,7 @@ export const usePanierStore = create<PanierState>()(
                   restaurantId: null,
                   restaurantNom: null,
                   restaurantSlug: null,
+                  discoveryToken: null,
                   items: [],
                 }
               : { items };
@@ -114,6 +128,7 @@ export const usePanierStore = create<PanierState>()(
           restaurantId: null,
           restaurantNom: null,
           restaurantSlug: null,
+          discoveryToken: null,
           items: [],
         }),
 

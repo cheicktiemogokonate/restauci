@@ -1,10 +1,11 @@
 import { cacheKey, TTL, withCache } from "@/lib/cache";
 import { getOffset, PAGINATION } from "@/lib/config/pagination";
-import { and, asc, count, desc, eq, gte, like, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, like, lte, ne, sql } from "drizzle-orm";
 import { db } from "./index";
 import { withDatabaseReadRetry } from "./read-retry";
-import { avis, commandes, notifications, plats } from "./schema";
+import { avis, commandes, notifications, partnerAccounts, plats, restaurants } from "./schema";
 import type { ModeCommande, StatutCommande } from "./types";
+import { isRestaurantPubliclyVisible } from "@/lib/restaurants/policy";
 
 // ============================================================================
 // USERS
@@ -13,7 +14,7 @@ import type { ModeCommande, StatutCommande } from "./types";
 export async function getUserById(id: string) {
   return db.query.users.findFirst({
     where: (u, { eq }) => eq(u.id, id),
-    with: { restaurant: true },
+    with: { partnerAccount: { with: { restaurant: true } } },
   });
 }
 
@@ -28,36 +29,22 @@ export async function getUserByEmail(email: string) {
 // ============================================================================
 
 /** Restaurant du gérant connecté — avec tout */
-export async function getMyRestaurantFull(userId: string) {
-  return db.query.restaurants.findFirst({
-    where: (r, { eq }) => eq(r.userId, userId),
-    with: {
-      abonnement: true,
-      creneaux: {
-        orderBy: (c, { asc }) => [asc(c.nom)],
-      },
-      categories: {
-        orderBy: (c, { asc }) => [asc(c.ordre)],
-        with: {
-          plats: {
-            orderBy: (p, { asc }) => [asc(p.ordre)],
-          },
-        },
-      },
-      livreurs: {
-        where: (l, { eq }) => eq(l.actif, true),
-      },
-    },
-  });
-}
-
 /** Juste le restaurant (sans les sous-données) */
 export async function getMyRestaurant(userId: string) {
   return withCache(cacheKey.restaurantByUser(userId), TTL.RESTAURANT, () =>
-    db.query.restaurants.findFirst({
-      where: (r, { eq }) => eq(r.userId, userId),
-    }),
+    db.select({ restaurant: restaurants })
+      .from(restaurants)
+      .innerJoin(partnerAccounts, eq(restaurants.partnerAccountId, partnerAccounts.id))
+      .where(eq(partnerAccounts.userId, userId))
+      .limit(1)
+      .then((rows) => rows[0]?.restaurant),
   );
+}
+
+export async function getRestaurantByPartnerAccountId(partnerAccountId: string) {
+  return db.query.restaurants.findFirst({
+    where: eq(restaurants.partnerAccountId, partnerAccountId),
+  });
 }
 
 import { getEffectivePlan } from "@/lib/subscription-plans";
@@ -67,17 +54,19 @@ import { subscriptionRequests } from "./schema";
 export async function getRestaurantById(id: string) {
   const restaurant = await db.query.restaurants.findFirst({
     where: (r, { eq }) => eq(r.id, id),
-    with: { abonnement: true }, // Legacy
   });
 
   if (!restaurant) return null;
 
-  const planInfo = await getEffectivePlan(id);
+  const planInfo = await getEffectivePlan(restaurant.partnerAccountId);
 
   const [pendingRequest] = await db
     .select()
     .from(subscriptionRequests)
-    .where(and(eq(subscriptionRequests.restaurantId, id), eq(subscriptionRequests.statut, "en_attente")))
+    .where(and(
+      eq(subscriptionRequests.partnerAccountId, restaurant.partnerAccountId),
+      eq(subscriptionRequests.statut, "en_attente"),
+    ))
     .orderBy(desc(subscriptionRequests.createdAt))
     .limit(1);
 
@@ -90,10 +79,13 @@ export async function getRestaurantById(id: string) {
 
 export async function getRestaurantBySlug(slug: string) {
   return withCache(cacheKey.restaurantPublic(slug), TTL.RESTAURANT_PUBLIC, () =>
-    db.query.restaurants.findFirst({
-      where: (r, { and, eq }) =>
-        and(eq(r.slug, slug), eq(r.actif, true), eq(r.enLigne, true)),
-    }),
+    db.query.restaurants
+      .findFirst({ where: (r, { eq }) => eq(r.slug, slug) })
+      .then((restaurant) =>
+        restaurant && isRestaurantPubliclyVisible(restaurant)
+          ? restaurant
+          : undefined,
+      ),
   );
 }
 
@@ -266,7 +258,10 @@ export async function getCommandes({
   const validLimit = Math.min(limit, PAGINATION.MAX_PAR_PAGE);
   const offset = getOffset(page, validLimit);
 
-  const conditions = [eq(commandes.restaurantId, restaurantId)];
+  const conditions = [
+    eq(commandes.restaurantId, restaurantId),
+    ne(commandes.statut, "en_attente_paiement"),
+  ];
 
   if (statut) conditions.push(eq(commandes.statut, statut));
   if (modeCommande) conditions.push(eq(commandes.modeCommande, modeCommande));
@@ -298,7 +293,7 @@ export async function getCommandes({
           offset,
           limit: validLimit,
           with: {
-            paiement: true,
+            financialTransaction: { with: { payments: true } },
             livraison: true,
           },
         }),
@@ -324,7 +319,7 @@ export async function getCommandeById(id: string, restaurantId: string) {
       and(eq(c.id, id), eq(c.restaurantId, restaurantId)),
     with: {
       client: true,
-      paiement: true,
+      financialTransaction: { with: { payments: true } },
       livraison: { with: { livreur: true } },
       avis: true,
     },
@@ -338,7 +333,7 @@ export async function getCommandeByNumero(
   return db.query.commandes.findFirst({
     where: (c, { eq, and }) =>
       and(eq(c.numero, numero), eq(c.restaurantId, restaurantId)),
-    with: { client: true, paiement: true },
+    with: { client: true, financialTransaction: { with: { payments: true } } },
   });
 }
 
@@ -350,7 +345,7 @@ export async function getCommandesCountByStatut(restaurantId: string) {
       count: count(),
     })
     .from(commandes)
-    .where(eq(commandes.restaurantId, restaurantId))
+    .where(and(eq(commandes.restaurantId, restaurantId), ne(commandes.statut, "en_attente_paiement")))
     .groupBy(commandes.statut);
 
   return result;
@@ -541,7 +536,7 @@ export async function getStatsDashboard(restaurantId: string) {
               gte(commandes.createdAt, debutMois),
             ),
           ),
-        // CA ce mois (en centimes)
+        // Chiffre d'affaires du mois en FCFA entiers.
         db
           .select({ total: sql<number>`COALESCE(SUM(${commandes.total}), 0)` })
           .from(commandes)

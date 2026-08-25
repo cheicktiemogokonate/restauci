@@ -31,9 +31,11 @@ import { toast } from "sonner";
 
 interface RequestRow {
   id: string;
-  restaurantId: string;
-  restaurantNom: string;
+  restaurantId: string | null;
+  partnerNom: string;
+  activityType: "restaurant" | "residence";
   planCode: string;
+  planNom: string;
   prixFigeFcfa: number;
   statut: string;
   createdAt: Date;
@@ -114,22 +116,25 @@ export function AdminSubscriptionRequestsTable({
         format(new Date(request.createdAt), "dd MMM yyyy", { locale: fr }),
     },
     {
-      key: "restaurantNom",
-      header: "Restaurant",
+      key: "partnerNom",
+      header: "Partenaire",
       sortable: true,
       width: "220px",
       cell: (request) => (
-        <span className="font-medium">{request.restaurantNom}</span>
+        <div>
+          <span className="block font-medium">{request.partnerNom}</span>
+          <span className="text-xs capitalize text-muted-foreground">
+            {request.activityType}
+          </span>
+        </div>
       ),
     },
     {
-      key: "planCode",
+      key: "planNom",
       header: "Offre demandée",
       sortable: true,
       width: "170px",
-      cell: (request) => (
-        <span className="capitalize">{request.planCode.replace("_", " ")}</span>
-      ),
+      cell: (request) => <span>{request.planNom}</span>,
     },
     {
       key: "prixFigeFcfa",
@@ -280,7 +285,7 @@ export function AdminSubscriptionRequestsTable({
                 id="reject-subscription-description"
                 className="text-sm text-muted-foreground"
               >
-                Le restaurant recevra le motif dans une notification.
+                Le partenaire recevra le motif dans une notification.
               </p>
             </div>
             <Textarea

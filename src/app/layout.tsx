@@ -3,18 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
-import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const manrope = Manrope({
-  variable: "--font-heading",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
@@ -23,18 +12,20 @@ export const metadata: Metadata = {
     template: "%s | Toutci",
   },
   description:
-    "Découvrez les restaurants de Côte d’Ivoire, consultez leurs menus et commandez facilement avec Toutci.",
+    "Découvrez les restaurants et les résidences vérifiées de Côte d’Ivoire avec Toutci.",
   keywords: [
     "Toutci",
     "restaurants Côte d'Ivoire",
     "commande restaurant",
     "livraison Côte d'Ivoire",
     "commande en ligne",
+    "résidences Côte d'Ivoire",
+    "logements Côte d'Ivoire",
   ],
   openGraph: {
     title: "Toutci — une app pour tout",
     description:
-      "Découvrez les restaurants, consultez leurs menus et commandez facilement.",
+      "Découvrez les restaurants et les résidences vérifiées de Côte d’Ivoire.",
     url: "/",
     siteName: "Toutci",
     locale: "fr_CI",
@@ -52,7 +43,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Toutci — une app pour tout",
     description:
-      "Découvrez les restaurants, consultez leurs menus et commandez facilement.",
+      "Découvrez les restaurants et les résidences vérifiées de Côte d’Ivoire.",
     images: ["/icon.png"],
   },
   robots: {
@@ -74,7 +65,7 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className={`${inter.variable} ${manrope.variable} h-full antialiased scroll-smooth`}
+      className="h-full scroll-smooth antialiased"
       data-scroll-behavior="smooth"
     >
       <body className="min-h-full flex flex-col font-sans bg-[#FAFBFA] text-slate-900">

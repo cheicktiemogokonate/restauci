@@ -7,7 +7,7 @@ import PlatStatsPanel from "@/components/dashboard/menu/plat-stats-panel";
 import SimilarDishes from "@/components/dashboard/menu/similar-dishes";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { toggleDisponibilitePlatAction } from "@/lib/actions/menu";
+import { setDishPublicationAction, toggleDisponibilitePlatAction } from "@/lib/actions/menu";
 import type { PlatAvecCategorie } from "@/lib/db/types";
 import { formatPrix } from "@/lib/utils/format";
 import { ArrowLeft, ImageIcon, Pencil, Trash2 } from "lucide-react";
@@ -22,7 +22,7 @@ interface CategorieOption {
 }
 
 interface MenuDetailClientProps {
-  plat: PlatAvecCategorie;
+  plat: PlatAvecCategorie & { quotaEligible: boolean; categoryQuotaEligible: boolean };
   categories: CategorieOption[];
   similarPlats: PlatAvecCategorie[];
   tags: string[];
@@ -40,6 +40,7 @@ export default function MenuDetailClient({
   const [optimisticDisponibilite, setOptimisticDisponibilite] = useOptimistic(
     plat.disponible,
   );
+  const [publicationIntent, setPublicationIntent] = useState(plat.publicationIntent);
 
   const handleDisponibiliteChange = (disponible: boolean) => {
     startAvailabilityTransition(async () => {
@@ -53,6 +54,18 @@ export default function MenuDetailClient({
       }
 
       toast.success(disponible ? "Plat rendu disponible." : "Plat masqué du menu.");
+    });
+  };
+
+  const handlePublicationChange = (published: boolean) => {
+    const previous = publicationIntent;
+    setPublicationIntent(published);
+    startAvailabilityTransition(async () => {
+      const result = await setDishPublicationAction(plat.id, published);
+      if (result.error) {
+        setPublicationIntent(previous);
+        toast.error(result.error);
+      } else toast.success(published ? "Plat marqué comme publié." : "Plat dépublié.");
     });
   };
 
@@ -184,6 +197,16 @@ export default function MenuDetailClient({
                         aria-label={`Rendre ${plat.nom} ${optimisticDisponibilite ? "indisponible" : "disponible"}`}
                         className="data-checked:bg-brand-green"
                       />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-muted/30 px-3.5 py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Publication publique</p>
+                        <p className="text-xs text-muted-foreground">
+                          {!publicationIntent ? "Non publié" : !plat.categoryQuotaEligible ? "Catégorie hors quota" : !plat.quotaEligible ? "Hors quota de l’offre" : optimisticDisponibilite ? "Visible publiquement" : "Publié mais temporairement indisponible"}
+                        </p>
+                      </div>
+                      <Switch checked={publicationIntent} onCheckedChange={handlePublicationChange} disabled={isAvailabilityPending} aria-label={`Publication de ${plat.nom}`} />
                     </div>
 
                     <Button

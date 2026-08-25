@@ -23,6 +23,7 @@
   },
   "registries": {
     "@mapcn": "https://mapcn.dev/r/{name}.json",
-    "@beui": "https://beui.dev/r/{name}.json"
+    "@beui": "https://beui.dev/r/{name}.json",
+    "@kokonutui": "https://kokonutui.com/r/{name}.json"
   }
 }

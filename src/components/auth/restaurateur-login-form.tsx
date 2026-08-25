@@ -54,8 +54,10 @@ export function RestaurateurLoginForm() {
 
       if (data.role === "admin") {
         router.push("/admin");
+      } else if (!data.hasPartnerAccount) {
+        router.push("/onboarding");
       } else {
-        router.push("/restaurateur");
+        router.push("/partenaire");
       }
     } catch (err) {
       setError("Erreur réseau");

@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ABIDJAN_CENTER } from "../map-config";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ClientLocationSample } from "../location-context";
 
 export type GeolocationStatus =
   | "idle"
@@ -11,23 +11,20 @@ export type GeolocationStatus =
   | "indisponible";
 
 interface GeolocationState {
-  lat: number;
-  lng: number;
+  currentLocation: ClientLocationSample | null;
   status: GeolocationStatus;
   demander: () => void;
 }
 
 /**
- * Hook de geolocalisation navigateur avec fallback Abidjan.
- * Ne demande JAMAIS automatiquement — l'appelant doit declencher
- * demander() suite à une action explicite de l'utilisateur
- * (bouton "Me localiser" ou equivalent), conformement aux bonnes
- * pratiques de consentement.
+ * Position actuelle dynamique. Aucune coordonnée de fallback n'est exposée :
+ * une permission refusée reste un vrai état bloquant pour Restaurants.
  */
 export function useGeolocation(): GeolocationState {
-  const [lat, setLat] = useState(ABIDJAN_CENTER[1]);
-  const [lng, setLng] = useState(ABIDJAN_CENTER[0]);
+  const [currentLocation, setCurrentLocation] =
+    useState<ClientLocationSample | null>(null);
   const [status, setStatus] = useState<GeolocationStatus>("idle");
+  const watchIdRef = useRef<number | null>(null);
 
   const demander = useCallback(() => {
     if (typeof window === "undefined" || !("geolocation" in navigator)) {
@@ -37,10 +34,17 @@ export function useGeolocation(): GeolocationState {
 
     setStatus("demande");
 
-    navigator.geolocation.getCurrentPosition(
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
+    watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
-        setLat(position.coords.latitude);
-        setLng(position.coords.longitude);
+        setCurrentLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracyMeters: position.coords.accuracy,
+          capturedAt: new Date(position.timestamp).toISOString(),
+        });
         setStatus("accordee");
       },
       (error) => {
@@ -50,7 +54,7 @@ export function useGeolocation(): GeolocationState {
       },
       {
         enableHighAccuracy: true,
-        timeout: 8000,
+        timeout: 10_000,
         maximumAge: 60000,
       },
     );
@@ -58,7 +62,12 @@ export function useGeolocation(): GeolocationState {
 
   useEffect(() => {
     void Promise.resolve().then(demander);
+    return () => {
+      if (watchIdRef.current !== null && "geolocation" in navigator) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
   }, [demander]);
 
-  return { lat, lng, status, demander };
+  return { currentLocation, status, demander };
 }

@@ -3,7 +3,7 @@ import { AuthLayout } from "@/components/auth/auth-layout";
 import { RestaurateurRegisterForm } from "@/components/auth/restaurateur-register-form";
 
 export const metadata: Metadata = {
-  title: "Inscription restaurateur",
+  title: "Inscription partenaire",
 };
 
 export default function RegisterPage() {

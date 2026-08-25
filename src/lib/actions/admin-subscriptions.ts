@@ -1,29 +1,38 @@
 "use server";
 
-import { db } from "@/lib/db";
+import { transactionalDb as db } from "@/lib/db/transaction";
 import { 
   subscriptionRequests, 
   subscriptionPeriods, 
-  subscriptionPlans,
-  auditLog,
-  notifications,
-  planCodeEnum,
-  moyenReglementEnum,
+  partnerAccounts,
 } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gt, ne, sql } from "drizzle-orm";
 import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { revalidatePath } from "next/cache";
-import { extendSubscriptionDeadline } from "@/lib/config/admin-workflows";
+import { revalidatePath, updateTag } from "next/cache";
+import {
+  buildReactivationDecision,
+} from "@/lib/subscription-policy";
+import { SUBSCRIPTION_PLANS_CACHE_TAG } from "@/lib/subscription-plans";
+import { persistAuditLog } from "@/lib/audit";
+import { persistNotification } from "@/lib/notifications";
+import {
+  cancelTransactionInTransaction,
+  getSubscriptionTransactionInTransaction,
+} from "@/modules/transactions/server";
+import {
+  publishSubscriptionCatalogueDraft,
+  restoreSubscriptionCatalogueRevisionToDraft,
+  saveSubscriptionCatalogueDraft,
+  updateSubscriptionCatalogue,
+  validateOfflineSubscriptionRequest,
+  type OfflineSubscriptionPaymentMethod,
+  type SubscriptionCataloguePayload,
+  type UpdateSubscriptionCatalogueInput,
+} from "@/modules/subscriptions/server";
 
 /**
  * Valide une demande d'abonnement et crée la période correspondante.
  */
-type PlanCode = (typeof planCodeEnum.enumValues)[number];
-type MoyenReglement = (typeof moyenReglementEnum.enumValues)[number];
-
-const PLAN_CODES = new Set<PlanCode>(planCodeEnum.enumValues);
-const MOYENS_REGLEMENT = new Set<MoyenReglement>(moyenReglementEnum.enumValues);
-
 function cleanText(value: string, label: string, min: number, max: number) {
   const cleaned = value.trim();
   if (cleaned.length < min || cleaned.length > max) {
@@ -34,120 +43,22 @@ function cleanText(value: string, label: string, min: number, max: number) {
 
 export async function validateSubscriptionRequest(
   requestId: string,
-  moyenReglement?: MoyenReglement,
+  moyenReglement?: OfflineSubscriptionPaymentMethod,
   referenceReglement?: string,
 ) {
   const session = await getAdminSession();
-
-  const result = await db.transaction(async (tx) => {
-    // 1. Récupérer la demande
-    const request = await tx.query.subscriptionRequests.findFirst({
-      where: eq(subscriptionRequests.id, requestId),
-      with: { restaurant: true }
-    });
-
-    if (!request || request.statut !== "en_attente") {
-      throw new Error("Demande invalide ou déjà traitée");
-    }
-
-    const isPaidPlan = request.prixFigeFcfa > 0;
-    const reference = referenceReglement?.trim() || null;
-    if (isPaidPlan) {
-      if (!moyenReglement || !MOYENS_REGLEMENT.has(moyenReglement)) {
-        throw new Error("Le moyen de règlement est obligatoire");
-      }
-      if (!reference || reference.length < 3 || reference.length > 255) {
-        throw new Error(
-          "La référence de règlement doit contenir entre 3 et 255 caractères",
-        );
-      }
-    }
-
-    // 2. Verrouiller atomiquement la demande pour empêcher un double traitement.
-    const [processedRequest] = await tx.update(subscriptionRequests)
-      .set({ 
-        statut: "validee",
-        traiteeParAdminId: session.userId,
-        traiteeAt: new Date()
-      })
-      .where(
-        and(
-          eq(subscriptionRequests.id, requestId),
-          eq(subscriptionRequests.statut, "en_attente"),
-        ),
-      )
-      .returning({ id: subscriptionRequests.id });
-
-    if (!processedRequest) {
-      throw new Error("Cette demande a déjà été traitée");
-    }
-
-    // 3. Récupérer le plan pour figer le taux
-    const plan = await tx.query.subscriptionPlans.findFirst({
-      where: eq(subscriptionPlans.code, request.planCode)
-    });
-
-    if (!plan) throw new Error("Plan introuvable");
-
-    // 4. Clôturer l'ancienne période active (s'il y en a une)
-    await tx.update(subscriptionPeriods)
-      .set({ 
-        statut: "expiree",
-      })
-      .where(
-        and(
-          eq(subscriptionPeriods.restaurantId, request.restaurantId),
-          eq(subscriptionPeriods.statut, "active")
-        )
-      );
-
-    // 5. Créer la nouvelle période
-    // Une période dure 1 an par défaut
-    const dateDebut = new Date();
-    const dateEcheance =
-      request.planCode === "decouverte" ? null : new Date(dateDebut);
-    dateEcheance?.setFullYear(dateEcheance.getFullYear() + 1);
-
-    await tx.insert(subscriptionPeriods).values({
-      restaurantId: request.restaurantId,
-      requestId: request.id,
-      planCode: request.planCode,
-      tauxCommissionBpsFige: plan.tauxCommissionBps,
-      prixPayeFcfa: request.prixFigeFcfa,
-      // Si un prix a été payé, on enregistre la date et le moyen
-      moyenReglement: isPaidPlan ? moyenReglement : null,
-      dateReglement: isPaidPlan ? new Date() : null,
-      referenceReglement: isPaidPlan ? reference : null,
-      valideeParAdminId: session.userId,
-      dateDebut,
-      dateEcheance,
-      statut: "active",
-    });
-
-    // 6. Audit & Notification
-    await tx.insert(auditLog).values({
-      adminId: session.userId,
-      action: "abonnement_valide",
-      ressourceType: "restaurant",
-      ressourceId: request.restaurantId,
-      details: { requestId, planCode: request.planCode }
-    });
-
-    await tx.insert(notifications).values({
-      userId: request.restaurant.userId,
-      type: "abonnement_valide",
-      titre: "Abonnement validé",
-      message: `Votre demande pour l'offre ${plan.nom} a été acceptée.`,
-      lienType: "abonnement",
-    });
-
-    return { success: true, restaurantId: request.restaurantId };
+  const result = await validateOfflineSubscriptionRequest(session.userId, {
+    requestId,
+    paymentMethod: moyenReglement,
+    paymentReference: referenceReglement,
   });
 
   revalidatePath("/admin");
   revalidatePath("/admin/a-traiter");
   revalidatePath("/admin/abonnements");
-  revalidatePath(`/admin/restaurants/${result.restaurantId}`);
+  if (result.restaurantId) {
+    revalidatePath(`/admin/restaurants/${result.restaurantId}`);
+  }
   return result;
 }
 
@@ -161,7 +72,7 @@ export async function rejectSubscriptionRequest(requestId: string, motifRefus: s
   const result = await db.transaction(async (tx) => {
     const request = await tx.query.subscriptionRequests.findFirst({
       where: eq(subscriptionRequests.id, requestId),
-      with: { restaurant: true }
+      with: { partnerAccount: { with: { user: true, restaurant: true } } },
     });
 
     if (!request || request.statut !== "en_attente") {
@@ -187,138 +98,119 @@ export async function rejectSubscriptionRequest(requestId: string, motifRefus: s
       throw new Error("Cette demande a déjà été traitée");
     }
 
-    await tx.insert(auditLog).values({
+    if (request.prixFigeFcfa > 0) {
+      const transaction = await getSubscriptionTransactionInTransaction(
+        tx,
+        request.id,
+      );
+      if (!transaction) {
+        throw new Error("Transaction financière de l’abonnement introuvable");
+      }
+      await cancelTransactionInTransaction(tx, transaction.id);
+    }
+
+    await persistAuditLog(tx, {
       adminId: session.userId,
       action: "abonnement_refuse",
-      ressourceType: "restaurant",
-      ressourceId: request.restaurantId,
+      ressourceType: "partner_account",
+      ressourceId: request.partnerAccountId,
       details: { requestId, motifRefus: motif }
     });
 
-    await tx.insert(notifications).values({
-      userId: request.restaurant.userId,
+    await persistNotification(tx, {
+      userId: request.partnerAccount.userId,
       type: "abonnement_refuse",
       titre: "Abonnement refusé",
       message: `Votre demande d'abonnement a été refusée : ${motif}`,
       lienType: "abonnement",
     });
 
-    return { success: true, restaurantId: request.restaurantId };
+    return {
+      success: true,
+      restaurantId: request.partnerAccount.restaurant?.id ?? null,
+    };
   });
 
   revalidatePath("/admin");
   revalidatePath("/admin/a-traiter");
   revalidatePath("/admin/abonnements");
-  revalidatePath(`/admin/restaurants/${result.restaurantId}`);
+  if (result.restaurantId) {
+    revalidatePath(`/admin/restaurants/${result.restaurantId}`);
+  }
   return result;
 }
 
 /**
  * Met à jour le catalogue des offres.
  */
-export async function updateSubscriptionPlan(planCode: string, data: Partial<{
-  nom: string;
-  description: string | null;
-  prixAnnuelFcfa: number;
-  tauxCommissionBps: number;
-  maxPlats: number | null;
-  maxCategories: number | null;
-  actif: boolean;
-}>) {
+export async function updateSubscriptionPlan(
+  planCode: string,
+  data: UpdateSubscriptionCatalogueInput,
+) {
   const session = await getAdminSession();
-  if (!PLAN_CODES.has(planCode as PlanCode)) {
-    throw new Error("Code d’offre invalide");
-  }
-
-  const normalizedData = {
-    nom:
-      data.nom === undefined
-        ? undefined
-        : cleanText(data.nom, "Le nom", 2, 100),
-    description:
-      data.description === undefined
-        ? undefined
-        : data.description?.trim().slice(0, 2000) || null,
-    prixAnnuelFcfa:
-      data.prixAnnuelFcfa === undefined
-        ? undefined
-        : Number(data.prixAnnuelFcfa),
-    tauxCommissionBps:
-      data.tauxCommissionBps === undefined
-        ? undefined
-        : Number(data.tauxCommissionBps),
-    maxPlats: data.maxPlats,
-    maxCategories: data.maxCategories,
-    actif: data.actif,
-  };
-
-  if (
-    normalizedData.prixAnnuelFcfa !== undefined &&
-    (!Number.isInteger(normalizedData.prixAnnuelFcfa) ||
-      normalizedData.prixAnnuelFcfa < 0)
-  ) {
-    throw new Error("Le prix annuel doit être un entier positif ou nul");
-  }
-  if (
-    normalizedData.tauxCommissionBps !== undefined &&
-    (!Number.isInteger(normalizedData.tauxCommissionBps) ||
-      normalizedData.tauxCommissionBps < 0 ||
-      normalizedData.tauxCommissionBps > 10_000)
-  ) {
-    throw new Error("Le taux de commission doit être compris entre 0 et 100 %");
-  }
-  for (const [label, value] of [
-    ["La limite de plats", normalizedData.maxPlats],
-    ["La limite de catégories", normalizedData.maxCategories],
-  ] as const) {
-    if (value !== undefined && value !== null && (!Number.isInteger(value) || value < 1)) {
-      throw new Error(`${label} doit être un entier strictement positif`);
-    }
-  }
-
-  await db.transaction(async (tx) => {
-    const [updated] = await tx.update(subscriptionPlans)
-      .set({
-        ...normalizedData,
-        updatedByAdminId: session.userId,
-        updatedAt: new Date()
-      })
-      .where(eq(subscriptionPlans.code, planCode as PlanCode))
-      .returning({ code: subscriptionPlans.code });
-
-    if (!updated) throw new Error("Offre introuvable");
-
-    await tx.insert(auditLog).values({
-      adminId: session.userId,
-      action: "catalogue_modifie",
-      ressourceType: "systeme",
-      ressourceId: planCode,
-      details: { planCode, modifications: normalizedData }
-    });
-  });
+  await updateSubscriptionCatalogue(session.userId, planCode, data);
 
   revalidatePath("/admin/abonnements");
   revalidatePath("/admin/parametres");
+  revalidatePath("/");
+  updateTag(SUBSCRIPTION_PLANS_CACHE_TAG);
+}
+
+export async function saveSubscriptionCatalogueDraftAction(
+  data: SubscriptionCataloguePayload,
+) {
+  const session = await getAdminSession();
+  const result = await saveSubscriptionCatalogueDraft(session.userId, data);
+  revalidatePath("/admin/parametres");
+  return result;
+}
+
+export async function publishSubscriptionCatalogueDraftAction() {
+  const session = await getAdminSession();
+  const result = await publishSubscriptionCatalogueDraft(session.userId);
+  revalidatePath("/admin/parametres");
+  revalidatePath("/restaurateur/facturation");
+  revalidatePath("/partenaire/facturation");
+  revalidatePath("/");
+  updateTag(SUBSCRIPTION_PLANS_CACHE_TAG);
+  return result;
+}
+
+export async function restoreSubscriptionCatalogueRevisionToDraftAction(
+  revisionId: string,
+) {
+  const session = await getAdminSession();
+  const result = await restoreSubscriptionCatalogueRevisionToDraft(
+    session.userId,
+    revisionId,
+  );
+  revalidatePath("/admin/parametres");
+  return result;
 }
 
 /**
  * Suspend la période d'abonnement active d'un restaurant.
  */
-export async function suspendreAbonnementAction(restaurantId: string, motif: string) {
+export async function suspendreAbonnementAction(partnerAccountId: string, motif: string) {
   const session = await getAdminSession();
 
   const motifNettoye = cleanText(motif, "Le motif", 5, 1000);
 
-  await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT id FROM ${partnerAccounts} WHERE id = ${partnerAccountId} FOR UPDATE`,
+    );
     const period = await tx.query.subscriptionPeriods.findFirst({
       where: and(
-        eq(subscriptionPeriods.restaurantId, restaurantId),
-        eq(subscriptionPeriods.statut, "active")
+        eq(subscriptionPeriods.partnerAccountId, partnerAccountId),
+        eq(subscriptionPeriods.statut, "active"),
+        ne(subscriptionPeriods.planCode, "decouverte"),
+        gt(subscriptionPeriods.dateEcheance, new Date()),
       ),
-      with: { restaurant: true },
+      with: { partnerAccount: { with: { user: true, restaurant: true } } },
     });
 
-    if (!period) throw new Error("Aucun abonnement actif pour ce restaurant");
+    if (!period) throw new Error("Aucun abonnement actif pour ce partenaire");
 
     const suspenduAt = new Date();
     const [updated] = await tx.update(subscriptionPeriods)
@@ -338,54 +230,71 @@ export async function suspendreAbonnementAction(restaurantId: string, motif: str
 
     if (!updated) throw new Error("Cet abonnement a déjà été traité");
 
-    await tx.insert(auditLog).values({
+    await persistAuditLog(tx, {
       adminId: session.userId,
       action: "abonnement_suspendu",
-      ressourceType: "restaurant",
-      ressourceId: restaurantId,
+      ressourceType: "partner_account",
+      ressourceId: partnerAccountId,
       details: { periodId: period.id, motif: motifNettoye },
     });
 
-    await tx.insert(notifications).values({
-      userId: period.restaurant.userId,
+    await persistNotification(tx, {
+      userId: period.partnerAccount.userId,
       type: "abonnement_suspendu",
       titre: "Abonnement suspendu",
       message: `Votre abonnement a été suspendu. Motif : ${motifNettoye}`,
       lienType: "abonnement",
     });
+
+    return { restaurantId: period.partnerAccount.restaurant?.id ?? null };
   });
 
   revalidatePath("/admin/abonnements");
-  revalidatePath(`/admin/restaurants/${restaurantId}`);
+  if (result.restaurantId) {
+    revalidatePath(`/admin/restaurants/${result.restaurantId}`);
+  }
 }
 
-export async function reactiverAbonnementAction(restaurantId: string) {
+export async function reactiverAbonnementAction(partnerAccountId: string) {
   const session = await getAdminSession();
 
-  await db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT id FROM ${partnerAccounts} WHERE id = ${partnerAccountId} FOR UPDATE`,
+    );
     const period = await tx.query.subscriptionPeriods.findFirst({
       where: and(
-        eq(subscriptionPeriods.restaurantId, restaurantId),
+        eq(subscriptionPeriods.partnerAccountId, partnerAccountId),
         eq(subscriptionPeriods.statut, "suspendue"),
       ),
       orderBy: (periods, { desc }) => [desc(periods.suspenduAt)],
-      with: { restaurant: true },
+      with: { partnerAccount: { with: { user: true, restaurant: true } } },
     });
 
-    if (!period) throw new Error("Aucun abonnement suspendu pour ce restaurant");
+    if (!period) throw new Error("Aucun abonnement suspendu pour ce partenaire");
 
     const now = new Date();
-    const adjustedDeadline = extendSubscriptionDeadline(
-      period.dateEcheance,
-      period.suspenduAt,
-      now,
-    );
+    if (!period.dateEcheance) {
+      throw new Error("Cette période payante ne possède pas d’échéance valide");
+    }
+    const decision = buildReactivationDecision(period.dateEcheance, now);
+    if (!decision.reactivated) {
+      await tx.update(subscriptionPeriods)
+        .set(decision.update)
+        .where(and(
+          eq(subscriptionPeriods.id, period.id),
+          eq(subscriptionPeriods.statut, "suspendue"),
+        ));
+      return {
+        reactivated: false as const,
+        restaurantId: period.partnerAccount.restaurant?.id ?? null,
+      };
+    }
 
     const [updated] = await tx
       .update(subscriptionPeriods)
       .set({
-        statut: "active",
-        dateEcheance: adjustedDeadline,
+        ...decision.update,
         motifSuspension: null,
         suspenduParAdminId: null,
         suspenduAt: null,
@@ -400,25 +309,35 @@ export async function reactiverAbonnementAction(restaurantId: string) {
 
     if (!updated) throw new Error("Cet abonnement a déjà été traité");
 
-    await tx.insert(auditLog).values({
+    await persistAuditLog(tx, {
       adminId: session.userId,
       action: "abonnement_reactive",
-      ressourceType: "restaurant",
-      ressourceId: restaurantId,
-      details: { periodId: period.id, dateEcheance: adjustedDeadline },
+      ressourceType: "partner_account",
+      ressourceId: partnerAccountId,
+      details: { periodId: period.id, dateEcheance: period.dateEcheance },
     });
 
-    await tx.insert(notifications).values({
-      userId: period.restaurant.userId,
+    await persistNotification(tx, {
+      userId: period.partnerAccount.userId,
       type: "systeme",
       titre: "Abonnement réactivé",
       message: "Votre abonnement Toutci a été réactivé.",
       lienType: "abonnement",
     });
+    return {
+      reactivated: true as const,
+      restaurantId: period.partnerAccount.restaurant?.id ?? null,
+    };
   });
+
+  if (!outcome.reactivated) {
+    throw new Error("Cet abonnement a expiré pendant sa suspension et ne peut plus être réactivé");
+  }
 
   revalidatePath("/admin");
   revalidatePath("/admin/a-traiter");
   revalidatePath("/admin/abonnements");
-  revalidatePath(`/admin/restaurants/${restaurantId}`);
+  if (outcome.restaurantId) {
+    revalidatePath(`/admin/restaurants/${outcome.restaurantId}`);
+  }
 }

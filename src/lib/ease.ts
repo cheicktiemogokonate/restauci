@@ -43,3 +43,10 @@ export const SPRING_MOUSE = {
   damping: 15,
   mass: 0.3,
 } as const;
+
+/** Dragged handles and fills — critically damped to follow without rebounding. */
+export const SPRING_GLIDE = {
+  stiffness: 700,
+  damping: 50,
+  mass: 0.5,
+} as const;

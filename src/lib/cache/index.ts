@@ -1,63 +1,12 @@
 import { redis } from "./redis";
 import { env } from "@/lib/env";
 import { cacheLogger } from "@/lib/loggers";
-
-export const TTL = {
-  RESTAURANT:   60 * 60,
-  CATEGORIES:   60 * 30,
-  PLATS:        60 * 15,
-  COMMANDES:    60 * 2,
-  STATS:        60 * 5,
-  DASHBOARD:    60,
-  NOTIFICATIONS: 60,
-  RESTAURANT_PUBLIC: 60 * 60 * 24,
-} as const;
-
-export const cacheKey = {
-  restaurantByUser: (userId: string) => `restauci:restaurant:user:${userId}`,
-  restaurant:       (id: string)    => `restauci:restaurant:${id}`,
-  restaurantPublic: (slug: string)  => `restauci:restaurant:public:${slug}`,
-  restaurantPublicMenu: (slug: string) => `restauci:public:menu:${slug}`,
-  restaurantsPublicAll: ()          => `restauci:restaurants:public:all`,
-  categories:       (restaurantId: string) =>
-    `restauci:categories:${restaurantId}`,
-  creneauxRestaurant: (restaurantId: string) =>
-    `restauci:creneaux:${restaurantId}`,
-  plats: (
-    restaurantId: string,
-    page: number,
-    categorieId?: string | null,
-    disponible?: boolean | null,
-    search?: string
-  ) =>
-    `restauci:plats:${restaurantId}:${page}:${categorieId ?? "all"}:${
-      disponible === undefined ? "all" : disponible
-    }:${search ?? "all"}`,
-  plat:             (id: string)    => `restauci:plat:${id}`,
-  topPlats: (
-    restaurantId: string,
-    limit: number
-  ) =>
-    `restauci:top-plats:${restaurantId}:${limit}`,
-  commandes: (
-    restaurantId: string,
-    page: number,
-    statut?: string,
-    modeCommande?: string,
-    dateDebut?: string,
-    dateFin?: string,
-    search?: string
-  ) =>
-    `restauci:commandes:${restaurantId}:${page}:${statut ?? "all"}:${
-      modeCommande ?? "all"
-    }:${dateDebut ?? "all"}:${dateFin ?? "all"}:${search ?? "all"}`,
-  stats:            (restaurantId: string) => `restauci:stats:${restaurantId}`,
-  dashboardDaily:   (restaurantId: string, jours: number) =>
-    `restauci:dashboard:daily:${restaurantId}:${jours}`,
-  dashboardModes:   (restaurantId: string) =>
-    `restauci:dashboard:modes:${restaurantId}`,
-  notifications:    (userId: string) => `restauci:notifications:${userId}`,
-} as const;
+import { db } from "@/lib/db";
+import { restaurants } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+export { cacheKey, TTL } from "./keys";
+import { cacheKey } from "./keys";
 
 export async function withCache<T>(
   key: string,
@@ -123,6 +72,10 @@ export async function invalidateRestaurantCache(
   restaurantId: string,
   slug?: string
 ): Promise<void> {
+  const resolvedSlug = slug ?? (await db.query.restaurants.findFirst({
+    where: eq(restaurants.id, restaurantId),
+    columns: { slug: true },
+  }))?.slug;
   const keys = [
     cacheKey.restaurant(restaurantId),
     cacheKey.categories(restaurantId),
@@ -131,8 +84,11 @@ export async function invalidateRestaurantCache(
     cacheKey.dashboardModes(restaurantId),
     cacheKey.restaurantsPublicAll()
   ];
-  if (slug) {
-    keys.push(cacheKey.restaurantPublic(slug), cacheKey.restaurantPublicMenu(slug));
+  if (resolvedSlug) {
+    keys.push(
+      cacheKey.restaurantPublic(resolvedSlug),
+      cacheKey.restaurantPublicMenu(resolvedSlug),
+    );
   }
 
   await invalidateCache(...keys);
@@ -141,4 +97,10 @@ export async function invalidateRestaurantCache(
   await invalidateCacheByPattern(`restauci:commandes:${restaurantId}:*`);
   await invalidateCacheByPattern(`restauci:top-plats:${restaurantId}:*`);
   await invalidateCacheByPattern(`restauci:dashboard:daily:${restaurantId}:*`);
+  await invalidateCacheByPattern(cacheKey.restaurantsPublicMarketsPattern());
+
+  // Redis porte les projections de données ; Next porte les arbres de pages.
+  // Les deux niveaux sont invalidés par la même entrée canonique.
+  revalidatePath("/client");
+  if (resolvedSlug) revalidatePath(`/restaurant/${resolvedSlug}`);
 }

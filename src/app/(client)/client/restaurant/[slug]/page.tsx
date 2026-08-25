@@ -27,10 +27,10 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function externalUrl(value: string | null | undefined) {
   if (!value) return null;
@@ -51,17 +51,35 @@ function whatsappUrl(value: string | null | undefined) {
 
 export default function RestaurantDetailPage() {
   const params = useParams<{ slug: string }>();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const geo = useGeolocation();
   const reduceMotion = useReducedMotion();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [tabDirection, setTabDirection] = useState(1);
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
+  const openedAttributionRef = useRef<string | null>(null);
+  const discoveryToken = searchParams.get("discovery");
 
-  const { restaurant, isLoading, error: restaurantError } = useRestaurantDetail(params.slug, geo.lat, geo.lng);
+  const { restaurant, isLoading, error: restaurantError } = useRestaurantDetail(
+    params.slug,
+    geo.currentLocation?.lat,
+    geo.currentLocation?.lng,
+  );
   const { categories, isLoading: isMenuLoading, error: menuError } = useRestaurantMenu(params.slug);
   const ajouterItem = usePanierStore((state) => state.ajouterItem);
   const panierItems = usePanierStore((state) => state.items);
+
+  useEffect(() => {
+    if (!discoveryToken || openedAttributionRef.current === discoveryToken) return;
+    openedAttributionRef.current = discoveryToken;
+    void fetch("/api/v1/public/discovery/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: discoveryToken, eventType: "detail_open" }),
+      keepalive: true,
+    });
+  }, [discoveryToken]);
 
   const availableCategories = useMemo(
     () => categories.filter((category) => category.plats.some((plat) => plat.disponible)),
@@ -114,9 +132,18 @@ export default function RestaurantDetailPage() {
     );
   }
 
+  const commandesOuvertes = restaurant.orderable;
+
   const handleAdd = (plat: (typeof availableCategories)[number]["plats"][number]) => {
+    if (!commandesOuvertes) return;
+
     ajouterItem(
-      { id: restaurant.id, nom: restaurant.nom, slug: restaurant.slug },
+      {
+        id: restaurant.id,
+        nom: restaurant.nom,
+        slug: restaurant.slug,
+        discoveryToken,
+      },
       { platId: plat.id, nom: plat.nom, prix: plat.prix, photoUrl: plat.photoUrl },
     );
     setLastAddedId(plat.id);
@@ -144,7 +171,9 @@ export default function RestaurantDetailPage() {
           <Link href="/client" aria-label="Retour aux restaurants"><ArrowLeft /></Link>
         </Button>
         <div className="absolute right-4 bottom-4 left-4 flex items-end justify-between gap-3 text-primary-foreground">
-          <Badge className="border-0 bg-background/95 text-primary shadow-sm hover:bg-background/95">Ouvert aux commandes</Badge>
+          <Badge className="border-0 bg-background/95 text-primary shadow-sm hover:bg-background/95">
+            {commandesOuvertes ? "Ouvert aux commandes" : "Consultation uniquement"}
+          </Badge>
           {restaurant.tempsAttente?.label && (
             <span className="flex items-center gap-1.5 text-xs font-semibold drop-shadow-sm">
               <Clock3 className="size-4" />
@@ -280,6 +309,15 @@ export default function RestaurantDetailPage() {
             <span className="text-xs text-muted-foreground">{availableCategories.reduce((count, category) => count + category.plats.filter((plat) => plat.disponible).length, 0)} plats</span>
           </div>
 
+          {!commandesOuvertes ? (
+            <Alert className="mb-4">
+              <AlertTitle>Commandes indisponibles</AlertTitle>
+              <AlertDescription>
+                Vous pouvez consulter le menu, mais ce restaurant ne reçoit pas de commandes pour le moment.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           {menuError ? (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle />
@@ -364,6 +402,7 @@ export default function RestaurantDetailPage() {
                             type="button"
                             size="icon-lg"
                             onClick={() => handleAdd(plat)}
+                            disabled={!commandesOuvertes}
                             className="relative shrink-0 rounded-xl"
                             aria-label={`Ajouter ${plat.nom} au panier`}
                           >

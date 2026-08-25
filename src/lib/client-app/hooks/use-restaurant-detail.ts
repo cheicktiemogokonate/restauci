@@ -21,7 +21,7 @@ export interface RestaurantDetail {
   siteWeb?: string | null;
   instagram?: string | null;
   whatsapp?: string | null;
-  cuisines?: string[];
+  cuisines?: string[] | null;
   noteMoyenne?: number | null;
   nombreAvis?: number;
   fraisLivraison: number;
@@ -29,6 +29,9 @@ export interface RestaurantDetail {
   modesCommande: string[];
   enLigne: boolean;
   accepteCommandes: boolean;
+  sameServiceMarket: boolean | null;
+  orderable: boolean;
+  orderabilityReason: string | null;
   geo?: {
     distanceKm: number;
     itineraire?: {

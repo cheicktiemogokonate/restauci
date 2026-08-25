@@ -9,6 +9,7 @@ const footerLinks = [
     title: "Toutci",
     links: [
       { label: "Découvrir les restaurants", href: "/client" },
+      { label: "Découvrir les résidences", href: "/residences" },
       { label: "Devenir partenaire", href: "/register" },
       { label: "Connexion restaurateur", href: "/login" },
       { label: "Tarifs", href: "#pricing" },

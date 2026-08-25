@@ -1,8 +1,10 @@
-import { pricingPlans } from "../data";
 import { PricingCard } from "./animated-glassy-pricing";
 import ShapeGrid from "./ShapeGrid";
+import type { SubscriptionCataloguePayload } from "@/modules/subscriptions/contracts";
 
-export default function Pricing() {
+type PublicPlan = SubscriptionCataloguePayload["plans"][number];
+
+export default function Pricing({ plans }: { plans: PublicPlan[] }) {
 
   return (
     <section id="pricing" className="py-24 relative overflow-hidden">
@@ -78,19 +80,25 @@ export default function Pricing() {
 
         {/* Pricing Cards Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch max-w-6xl mx-auto">
-          {pricingPlans.map((plan, index) => {
-            const currentPrice = plan.priceYearly;
+          {plans.map((plan) => {
+            const dishLimit = plan.restaurantLimits.dish;
+            const categoryLimit = plan.restaurantLimits.category;
+            const presentation = plan.presentation.restaurant;
             return (
               <PricingCard
-                key={index}
-                planName={plan.name}
-                description={plan.description}
-                price={String(currentPrice)}
-                features={plan.features}
-                buttonText={plan.ctaText}
-                isPopular={plan.popular}
-                buttonVariant={plan.popular ? "primary" : "secondary"}
-                // billingLabel={"/ table / an"}
+                key={plan.code}
+                planName={plan.nom}
+                description={plan.description ?? ""}
+                price={String(plan.prixAnnuelFcfa)}
+                features={[
+                  `Commission : ${(plan.tauxCommissionBps / 100).toLocaleString("fr-FR")} %`,
+                  dishLimit === null ? "Plats publiables illimités" : `${dishLimit} plats publiables`,
+                  categoryLimit === null ? "Catégories publiables illimitées" : `${categoryLimit} catégories publiables`,
+                  ...presentation.features,
+                ]}
+                buttonText={presentation.ctaLabel}
+                isPopular={presentation.recommended}
+                buttonVariant={presentation.recommended ? "primary" : "secondary"}
               />
             );
           })}

@@ -9,7 +9,8 @@ import { compare } from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { setClientRefreshCookie } from "@/lib/api/client-session-cookie";
+import { applyClientRefreshTransport } from "@/lib/api/client-session-cookie";
+import { clientTokenTransportSchema } from "@/lib/api/client-token-transport";
 
 const log = createLogger("v1-client-login");
 
@@ -17,6 +18,7 @@ const loginSchema = z.object({
   telephone: z.string().min(8),
   password: z.string().min(1),
   rememberMe: z.boolean().default(false),
+  tokenTransport: clientTokenTransportSchema,
 });
 
 export async function POST(req: NextRequest) {
@@ -68,7 +70,14 @@ export async function POST(req: NextRequest) {
 
     const [accessToken, refreshToken] = await Promise.all([
       signToken({ clientId: client.id, type: "client" }, accessExpiry),
-      signToken({ clientId: client.id, type: "client-refresh" }, refreshExpiry),
+      signToken(
+        {
+          clientId: client.id,
+          type: "client-refresh",
+          sessionDuration: data.rememberMe ? "extended" : "standard",
+        },
+        refreshExpiry,
+      ),
     ]);
 
     log.info({ clientId: client.id }, "Client connecté");
@@ -81,10 +90,15 @@ export async function POST(req: NextRequest) {
       client: clientSafe,
       tokens: {
         accessToken,
+        ...(data.tokenTransport === "json" ? { refreshToken } : {}),
         expiresIn: 15 * 60,
       },
     });
-    setClientRefreshCookie(response, refreshToken, refreshMaxAge);
+    applyClientRefreshTransport(response, {
+      transport: data.tokenTransport,
+      token: refreshToken,
+      maxAge: refreshMaxAge,
+    });
     return response;
   } catch (err) {
     log.error({ err }, "Erreur lors de la connexion client");

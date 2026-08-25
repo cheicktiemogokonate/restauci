@@ -1,144 +1,91 @@
+import { NextRequest } from "next/server";
+import { z } from "zod";
 import { apiResponse } from "@/lib/api/response";
 import { validateSearchParams } from "@/lib/api/validate";
-import { TTL, cacheKey, withCache } from "@/lib/cache";
 import {
   buildPaginationMeta,
   parseLimit,
   parsePage,
 } from "@/lib/config/pagination";
-import { db } from "@/lib/db";
-import { restaurants } from "@/lib/db/schema";
-import { trierParProximite } from "@/lib/geo";
 import { createLogger } from "@/lib/logger";
 import {
   checkRateLimit,
   clientApiLimiter,
   geoSearchLimiter,
 } from "@/lib/rate-limit";
-import { and, eq } from "drizzle-orm";
-import { NextRequest } from "next/server";
-import { z } from "zod";
+import { RestaurantMarketError } from "@/modules/restaurants/model";
+import { searchRestaurantsInCurrentMarket } from "@/modules/restaurants/server";
+import { restaurantMarketErrorResponse } from "./http";
 
-const log = createLogger("v1-client-restaurants");
+const log = createLogger("v1-client-restaurants-compat");
 
-const querySchema = z.object({
-  // Localisation du client (pour le tri par proximité)
-  lat: z.coerce.number().min(-90).max(90).optional(),
-  lng: z.coerce.number().min(-180).max(180).optional(),
-  // Rayon de recherche en km (défaut : 10km)
-  rayon: z.coerce.number().min(0.5).max(50).default(10),
-  // Filtres
-  search: z.string().max(100).optional(),
-  cuisine: z.string().max(100).optional(),
-  modeCommande: z.enum(["sur_place", "livraison", "emporter"]).optional(),
-  // Pagination
-  page: z.string().optional(),
-  limit: z.string().optional(),
-});
-
-export async function GET(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
-
-  // Rate limit différent si recherche géo (plus coûteuse)
-  const { searchParams } = new URL(req.url);
-  const hasGeo = searchParams.has("lat") && searchParams.has("lng");
-  const limiter = hasGeo ? geoSearchLimiter : clientApiLimiter;
-  const rl = await checkRateLimit(limiter, ip);
-  if (rl) return rl;
-
-  const { data: query, error } = validateSearchParams(
-    searchParams,
-    querySchema,
+const querySchema = z
+  .object({
+    lat: z.coerce.number().min(-90).max(90).optional(),
+    lng: z.coerce.number().min(-180).max(180).optional(),
+    accuracyMeters: z.coerce.number().min(0).max(100_000).default(1_000),
+    capturedAt: z.string().datetime({ offset: true }).optional(),
+    rayon: z.coerce.number().min(0.5).max(50).default(10),
+    search: z.string().max(100).optional(),
+    cuisine: z.string().max(100).optional(),
+    modeCommande: z.enum(["sur_place", "livraison", "emporter"]).optional(),
+    page: z.string().optional(),
+    limit: z.string().optional(),
+  })
+  .refine(
+    (value) =>
+      (value.lat === undefined && value.lng === undefined) ||
+      (value.lat !== undefined && value.lng !== undefined),
+    { message: "Latitude et longitude doivent être fournies ensemble." },
   );
+
+/**
+ * Adaptateur de compatibilité. Les nouveaux clients utilisent POST /search afin
+ * de ne pas exposer la position dans l'URL.
+ */
+export async function GET(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
+  const { searchParams } = new URL(request.url);
+  const limiter = searchParams.has("lat") && searchParams.has("lng")
+    ? geoSearchLimiter
+    : clientApiLimiter;
+  const limited = await checkRateLimit(limiter, ip);
+  if (limited) return limited;
+
+  const { data, error } = validateSearchParams(searchParams, querySchema);
   if (error) return error;
-
-  const page = parsePage(query.page);
-  const limit = parseLimit(query.limit, 20);
-
-  try {
-    // Récupérer tous les restaurants actifs (cachés 15 min)
-    const tousLesRestaurants = await withCache(
-      cacheKey.restaurantsPublicAll(),
-      TTL.RESTAURANT_PUBLIC,
-      async () =>
-        db
-          .select({
-            id: restaurants.id,
-            nom: restaurants.nom,
-            slug: restaurants.slug,
-            description: restaurants.description,
-            logoUrl: restaurants.logoUrl,
-            banniereUrl: restaurants.banniereUrl,
-            adresse: restaurants.adresse,
-            ville: restaurants.ville,
-            latitude: restaurants.latitude,
-            longitude: restaurants.longitude,
-            cuisines: restaurants.cuisines,
-            modesCommande: restaurants.modesCommande,
-            fraisLivraison: restaurants.fraisLivraison,
-            commandeMinimum: restaurants.commandeMinimum,
-            tempsPreparationMoyen: restaurants.tempsPreparationMoyen,
-            noteMoyenne: restaurants.noteMoyenne,
-            nombreAvis: restaurants.nombreAvis,
-            enLigne: restaurants.enLigne,
-            accepteCommandes: restaurants.accepteCommandes,
-          })
-          .from(restaurants)
-          .where(and(eq(restaurants.actif, true), eq(restaurants.enLigne, true))),
+  if (data.lat === undefined || data.lng === undefined) {
+    return apiResponse.error(
+      "Votre position actuelle est nécessaire pour afficher les restaurants.",
+      "CURRENT_LOCATION_REQUIRED",
+      { status: 422 },
     );
-
-    // Appliquer les filtres côté application (les données sont cachées)
-    let filtres = tousLesRestaurants;
-
-    // Filtre recherche texte
-    if (query.search) {
-      const s = query.search.toLowerCase();
-      filtres = filtres.filter(
-        (r) =>
-          r.nom.toLowerCase().includes(s) ||
-          r.description?.toLowerCase().includes(s) ||
-          r.cuisines?.some((c) => c.toLowerCase().includes(s)),
-      );
-    }
-
-    // Filtre type de cuisine
-    if (query.cuisine) {
-      const c = query.cuisine.toLowerCase();
-      filtres = filtres.filter((r) =>
-        r.cuisines?.some((cuisine) => cuisine.toLowerCase().includes(c)),
-      );
-    }
-
-    // Filtre mode de commande
-    if (query.modeCommande) {
-      filtres = filtres.filter((r) =>
-        r.modesCommande?.includes(query.modeCommande!),
-      );
-    }
-
-    // Tri par proximité et filtre par rayon si coordonnées fournies
-    let resultats: typeof filtres & { distanceKm?: number }[] = filtres;
-
-    if (query.lat !== undefined && query.lng !== undefined) {
-      const avecDistance = trierParProximite(filtres, {
-        lat: query.lat,
-        lng: query.lng,
-      });
-
-      // Filtrer par rayon
-      resultats = avecDistance.filter((r) => r.distanceKm <= query.rayon);
-    }
-
-    // Pagination manuelle (données déjà en mémoire depuis le cache)
-    const total = resultats.length;
-    const offset = (page - 1) * limit;
-    const items = resultats.slice(offset, offset + limit);
-
-    return apiResponse.success(items, {
-      meta: buildPaginationMeta(total, page, limit),
+  }
+  const page = parsePage(data.page);
+  const limit = parseLimit(data.limit, 20);
+  try {
+    const result = await searchRestaurantsInCurrentMarket({
+      currentLocation: {
+        lat: data.lat,
+        lng: data.lng,
+        accuracyMeters: data.accuracyMeters,
+        capturedAt: data.capturedAt ?? new Date().toISOString(),
+      },
+      search: data.search,
+      cuisine: data.cuisine,
+      modeCommande: data.modeCommande,
+      page,
+      limit,
+      legacyRadiusKm: data.rayon,
     });
-  } catch (err) {
-    log.error({ err }, "Erreur liste restaurants client");
+    return apiResponse.success(result.items, {
+      meta: buildPaginationMeta(result.total, page, limit),
+    });
+  } catch (error) {
+    if (error instanceof RestaurantMarketError) {
+      return restaurantMarketErrorResponse(error);
+    }
+    log.error({ error }, "Erreur liste Restaurants compatible");
     return apiResponse.internalError();
   }
 }

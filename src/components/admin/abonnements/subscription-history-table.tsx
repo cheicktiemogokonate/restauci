@@ -10,12 +10,16 @@ import { History } from "lucide-react";
 
 interface SubscriptionPeriodRow {
   id: string;
-  restaurantNom: string;
+  partnerNom: string;
+  activityType: "restaurant" | "residence";
   planCode: string;
+  planNom: string;
   statut: string;
   dateDebut: Date;
   dateEcheance: Date | null;
   prixPayeFcfa: number;
+  endedAt: Date | null;
+  endReason: string | null;
 }
 
 export function SubscriptionHistoryTable({
@@ -25,22 +29,25 @@ export function SubscriptionHistoryTable({
 }) {
   const columns: TableColumn<SubscriptionPeriodRow>[] = [
     {
-      key: "restaurantNom",
-      header: "Restaurant",
+      key: "partnerNom",
+      header: "Partenaire",
       sortable: true,
       width: "220px",
       cell: (period) => (
-        <span className="font-medium">{period.restaurantNom}</span>
+        <div>
+          <span className="block font-medium">{period.partnerNom}</span>
+          <span className="text-xs capitalize text-muted-foreground">
+            {period.activityType}
+          </span>
+        </div>
       ),
     },
     {
-      key: "planCode",
+      key: "planNom",
       header: "Offre",
       sortable: true,
       width: "160px",
-      cell: (period) => (
-        <span className="capitalize">{period.planCode.replace("_", " ")}</span>
-      ),
+      cell: (period) => <span>{period.planNom}</span>,
     },
     {
       key: "statut",
@@ -75,6 +82,25 @@ export function SubscriptionHistoryTable({
         period.dateEcheance
           ? format(new Date(period.dateEcheance), "dd MMM yyyy", { locale: fr })
           : "—",
+    },
+    {
+      key: "endedAt",
+      header: "Fin réelle",
+      sortable: true,
+      width: "150px",
+      sortValue: (period) => period.endedAt ? new Date(period.endedAt).getTime() : 0,
+      cell: (period) => period.endedAt
+        ? format(new Date(period.endedAt), "dd MMM yyyy", { locale: fr })
+        : "—",
+    },
+    {
+      key: "endReason",
+      header: "Raison de fin",
+      sortable: true,
+      width: "170px",
+      cell: (period) => period.endReason
+        ? period.endReason.replaceAll("_", " ")
+        : "—",
     },
     {
       key: "prixPayeFcfa",

@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toggleDisponibilitePlatAction } from "@/lib/actions/menu";
+import { setDishPublicationAction, toggleDisponibilitePlatAction } from "@/lib/actions/menu";
 import { formatPrix } from "@/lib/utils/format";
 import type { PlatAvecCategorie } from "@/types/dashboard";
 import {
@@ -27,12 +27,13 @@ import { useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 interface MenuCardProps {
-  plat: PlatAvecCategorie;
+  plat: PlatAvecCategorie & { quotaEligible: boolean; categoryQuotaEligible: boolean };
 }
 
 export default function MenuCard({ plat }: MenuCardProps) {
   const [isPending, startTransition] = useTransition();
   const [optimisticDispo, setOptimisticDispo] = useOptimistic(plat.disponible);
+  const [publicationIntent, setPublicationIntent] = useState(plat.publicationIntent);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleToggleDispo = () => {
@@ -49,6 +50,22 @@ export default function MenuCard({ plat }: MenuCardProps) {
       toast.success(newDispo ? "Plat rendu disponible." : "Plat masqué du menu.");
     });
   };
+
+  const handlePublication = (next: boolean) => {
+    const previous = publicationIntent;
+    setPublicationIntent(next);
+    startTransition(async () => {
+      const result = await setDishPublicationAction(plat.id, next);
+      if (result.error) {
+        setPublicationIntent(previous);
+        toast.error(result.error);
+      } else {
+        toast.success(next ? "Plat marqué comme publié." : "Plat dépublié.");
+      }
+    });
+  };
+
+  const effectiveVisible = publicationIntent && optimisticDispo && plat.quotaEligible && plat.categoryQuotaEligible;
 
   return (
     <>
@@ -127,6 +144,11 @@ export default function MenuCard({ plat }: MenuCardProps) {
           <span className="text-[11px] font-semibold text-foreground">
             {optimisticDispo ? "En vente" : "Masqué"}
           </span>
+        </div>
+
+        <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full border bg-white/95 px-2.5 py-1.5 text-[11px] font-semibold shadow-sm">
+          <Switch checked={publicationIntent} onCheckedChange={handlePublication} disabled={isPending} size="sm" aria-label={`Publication de ${plat.nom}`} />
+          <span>{effectiveVisible ? "Visible publiquement" : !publicationIntent ? "Non publié" : !plat.categoryQuotaEligible ? "Catégorie hors quota" : !plat.quotaEligible ? "Hors quota" : "Indisponible"}</span>
         </div>
 
         <div className="absolute top-3 right-3">

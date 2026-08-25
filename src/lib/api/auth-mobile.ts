@@ -1,6 +1,6 @@
 import { redis } from "@/lib/cache/redis";
 import { db } from "@/lib/db";
-import { restaurants, users } from "@/lib/db/schema";
+import { partnerAccounts, restaurants, users } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
@@ -14,7 +14,7 @@ const log = createLogger("api-mobile-auth");
 
 export interface MobileSession {
   userId: string;
-  role: "restaurateur" | "admin";
+  role: "partner" | "admin";
   restaurantId: string | null;
 }
 
@@ -81,11 +81,15 @@ export async function getMobileSession(
 
     // Récupérer le restaurantId associé au rôle actuel en base.
     let restaurantId: string | null = null;
-    if (user.role === "restaurateur") {
+    if (user.role === "partner") {
       const [restaurant] = await db
         .select({ id: restaurants.id })
-        .from(restaurants)
-        .where(eq(restaurants.userId, payload.userId as string))
+        .from(partnerAccounts)
+        .innerJoin(
+          restaurants,
+          eq(restaurants.partnerAccountId, partnerAccounts.id),
+        )
+        .where(eq(partnerAccounts.userId, payload.userId as string))
         .limit(1);
       restaurantId = restaurant?.id ?? null;
     }
@@ -122,7 +126,7 @@ export async function requireRestaurateurSession(
   const { session, error } = await getMobileSession(req);
   if (error) return { session: null, error };
 
-  if (session.role !== "restaurateur") {
+  if (session.role !== "partner") {
     return {
       session: null,
       error: apiResponse.forbidden("Accès réservé aux restaurateurs"),

@@ -70,7 +70,7 @@ export function RestaurateurRegisterForm() {
         return;
       }
 
-      router.push("/restaurateur");
+      router.push("/onboarding");
     } catch (err) {
       setError("Erreur réseau");
       console.error(err);

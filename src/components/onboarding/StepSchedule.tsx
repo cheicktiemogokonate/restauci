@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Clock, HelpCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import React, { useMemo } from "react";
 import { DaySchedule, SpecialHourException } from "./types";
 import { Button } from "../ui/button";

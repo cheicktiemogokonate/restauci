@@ -1,4 +1,6 @@
 import { RestaurateurSubscriptionButton } from "@/components/restaurateur/restaurateur-subscription-button";
+import { PayCommissionDebt } from "@/components/restaurateur/pay-commission-debt";
+import { ResumeSubscriptionPayment } from "@/components/restaurateur/resume-subscription-payment";
 import { RestaurantValidationStatus } from "@/components/dashboard/restaurant-validation-status";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,55 +14,36 @@ import {
 import { getRestaurateurSession } from "@/lib/auth/get-restaurateur-session";
 import { db } from "@/lib/db";
 import {
-  restaurants,
   subscriptionPlans,
+  subscriptionPlanLimits,
   subscriptionRequests,
+  commissions,
+  commissionSettlements,
 } from "@/lib/db/schema";
+import { getAvailableCashCommissionDebt, getCashCommissionStatus } from "@/lib/commissions/ledger";
 import { getEffectivePlan } from "@/lib/subscription-plans";
+import { getPublishedSubscriptionCatalogue } from "@/modules/subscriptions/server";
 import { formatPrix } from "@/lib/utils/format";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { and, desc, eq } from "drizzle-orm";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { redirect } from "next/navigation";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { AlertTriangle, CheckCircle2, Clock3, ReceiptText, Wallet } from "lucide-react";
 
 export const metadata = {
   title: "Facturation et Abonnement | Adon",
 };
 
 export default async function FacturationPage() {
-  const { session } = await getRestaurateurSession();
-
-  if (!session || session.role !== "restaurateur") {
-    redirect("/auth/login");
-  }
-
-  const restaurantData = await db.query.restaurants.findFirst({
-    where: eq(restaurants.userId, session.userId as string),
-    columns: {
-      id: true,
-      actif: true,
-      suspendu: true,
-      motifRejet: true,
-      motifSuspension: true,
-    },
-  });
-
-  if (!restaurantData) {
-    return (
-      <div className="p-6">
-        Veuillez d'abord compléter la configuration de votre restaurant.
-      </div>
-    );
-  }
+  const { partnerAccount, restaurant: restaurantData } =
+    await getRestaurateurSession();
 
   // 1. Offre actuelle
-  const effectivePlan = await getEffectivePlan(restaurantData.id);
+  const effectivePlan = await getEffectivePlan(partnerAccount.id);
 
   // 2. Demande en attente (s'il y en a une)
   const pendingRequest = await db.query.subscriptionRequests.findFirst({
     where: and(
-      eq(subscriptionRequests.restaurantId, restaurantData.id),
+      eq(subscriptionRequests.partnerAccountId, partnerAccount.id),
       eq(subscriptionRequests.statut, "en_attente"),
     ),
     orderBy: desc(subscriptionRequests.createdAt),
@@ -70,7 +53,45 @@ export default async function FacturationPage() {
   const plans = await db.query.subscriptionPlans.findMany({
     where: eq(subscriptionPlans.actif, true),
     orderBy: (p, { asc }) => [asc(p.ordre)],
+    with: {
+      limits: { where: eq(subscriptionPlanLimits.activityType, "restaurant") },
+    },
   });
+  const catalogue = await getPublishedSubscriptionCatalogue();
+
+  const [cashStatus, availableDebt, commissionLines, settlements] = await Promise.all([
+    getCashCommissionStatus(partnerAccount.id),
+    getAvailableCashCommissionDebt(partnerAccount.id),
+    db
+      .select({
+        id: commissions.id,
+        commandeId: commissions.commandeId,
+        amountFcfa: commissions.amountFcfa,
+        commercialStatus: commissions.commercialStatus,
+        collectionMode: commissions.collectionMode,
+        dueAt: commissions.dueAt,
+        createdAt: commissions.createdAt,
+        allocatedFcfa: sql<number>`COALESCE((
+          SELECT SUM(allocation.amount_fcfa)
+          FROM commission_settlement_allocations allocation
+          INNER JOIN commission_settlements settlement ON settlement.id = allocation.settlement_id
+          WHERE allocation.commission_id = commissions.id
+            AND settlement.statut = 'confirmed'
+        ), 0)`,
+      })
+      .from(commissions)
+      .where(eq(commissions.partnerAccountId, partnerAccount.id))
+      .orderBy(desc(commissions.createdAt))
+      .limit(20),
+    db.query.commissionSettlements.findMany({
+      where: and(
+        eq(commissionSettlements.partnerAccountId, partnerAccount.id),
+        eq(commissionSettlements.statut, "confirmed"),
+      ),
+      orderBy: [desc(commissionSettlements.paidAt)],
+      limit: 10,
+    }),
+  ]);
 
   return (
     <div className="space-y-6 container mx-auto p-6">
@@ -94,11 +115,12 @@ export default async function FacturationPage() {
             <p className="text-sm mt-1">
               Vous avez demandé à souscrire à l'offre{" "}
               <span className="font-medium capitalize">
-                {pendingRequest.planCode.replace("_", " ")}
+                {plans.find((plan) => plan.code === pendingRequest.planCode)?.nom ?? pendingRequest.planCode}
               </span>
               . Votre demande est en attente de validation. Une fois le
               règlement reçu, votre nouvelle période s'activera.
             </p>
+            {pendingRequest.prixFigeFcfa > 0 ? <ResumeSubscriptionPayment requestId={pendingRequest.id} /> : null}
           </div>
         </div>
       )}
@@ -109,6 +131,63 @@ export default async function FacturationPage() {
         motifRejet={restaurantData.motifRejet}
         motifSuspension={restaurantData.motifSuspension}
       />
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <Card className={cashStatus.cashAllowed ? "" : "border-red-300 bg-red-50/40"}>
+          <CardHeader className="pb-2">
+            <CardDescription className="flex items-center gap-2"><Wallet className="size-4" /> Dette cash actuelle</CardDescription>
+            <CardTitle>{formatPrix(cashStatus.outstandingDebt)}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {cashStatus.cashAllowed ? "Les commandes payées sur place restent disponibles." : "Le délai de grâce est expiré : les nouvelles commandes cash sont désactivées jusqu’au solde complet."}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription className="flex items-center gap-2"><Clock3 className="size-4" /> Cycle de régularisation</CardDescription>
+            <CardTitle className="text-xl">{cashStatus.cycle ? "En cours" : "Aucun cycle"}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {cashStatus.graceEndsAt
+              ? `Échéance : ${format(cashStatus.graceEndsAt, "dd MMMM yyyy", { locale: fr })}`
+              : `Déclenchement à ${formatPrix(cashStatus.threshold)}.`}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription className="flex items-center gap-2"><ReceiptText className="size-4" /> Mode de collecte actuel</CardDescription>
+            <CardTitle className="text-xl">Créance cash</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">Le paiement sur place génère une dette de commission après service. Aucun paiement fournisseur n’est simulé.</CardContent>
+        </Card>
+      </section>
+
+      <PayCommissionDebt availableDebtFcfa={availableDebt} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Historique des commissions</CardTitle>
+          <CardDescription>Snapshot contractuel par commande et solde restant après allocations confirmées.</CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-sm">
+            <thead><tr className="border-b text-left text-muted-foreground"><th className="py-3">Commande</th><th>Statut</th><th>Collecte</th><th className="text-right">Commission</th><th className="text-right">Solde</th><th className="text-right">Date</th></tr></thead>
+            <tbody>{commissionLines.map((line) => {
+              const remaining = line.commercialStatus === "due" ? Math.max(0, line.amountFcfa - Number(line.allocatedFcfa)) : 0;
+              return <tr key={line.id} className="border-b last:border-0"><td className="py-3 font-mono text-xs">{line.commandeId?.slice(0, 8) ?? "Réservation"}</td><td>{line.commercialStatus === "pending" ? "En attente de service" : line.commercialStatus === "due" ? "Due" : "Annulée"}</td><td>{line.collectionMode === "cash_receivable" ? "Cash" : "Répartition fournisseur"}</td><td className="text-right">{formatPrix(line.amountFcfa)}</td><td className="text-right font-medium">{formatPrix(remaining)}</td><td className="text-right text-muted-foreground">{format(line.createdAt, "dd/MM/yyyy")}</td></tr>;
+            })}</tbody>
+          </table>
+          {commissionLines.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Aucune commission enregistrée.</p>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Règlements confirmés</CardTitle><CardDescription>Seuls les encaissements réellement confirmés réduisent votre dette.</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          {settlements.map((settlement) => <div key={settlement.id} className="flex flex-col gap-1 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{settlement.referenceExterne}</p><p className="text-xs text-muted-foreground">{settlement.source === "manual_admin" ? "Confirmé par l’administration" : settlement.source === "paystack_direct" ? "Paystack" : "Récupération fournisseur"} · {settlement.paidAt ? format(settlement.paidAt, "dd/MM/yyyy") : "En attente"}</p></div><span className="font-semibold text-emerald-700">{formatPrix(settlement.montantFcfa)}</span></div>)}
+          {settlements.length === 0 && <p className="text-sm text-muted-foreground">Aucun règlement confirmé.</p>}
+        </CardContent>
+      </Card>
 
       {/* Offre actuelle */}
       <Card>
@@ -175,8 +254,27 @@ export default async function FacturationPage() {
         <h2 className="text-xl font-bold">Changer d'offre</h2>
         <div className="grid gap-6 md:grid-cols-3">
           {plans.map((plan) => {
+            const cataloguePlan = catalogue.plans.find(
+              (candidate) => candidate.code === plan.code,
+            );
+            if (!cataloguePlan) {
+              throw new Error(`Présentation Restaurant absente pour l'offre ${plan.code}`);
+            }
+            const presentation = cataloguePlan.presentation.restaurant;
+            const limitByResource = new Map(
+              plan.limits.map((limit) => [limit.resourceType, limit.maxCount]),
+            );
+            const maxDishes = limitByResource.get("dish");
+            const categoryLimit = limitByResource.get("category");
+            if (maxDishes === undefined || categoryLimit === undefined) {
+              throw new Error(`Quotas incomplets pour l'offre ${plan.code}`);
+            }
             const isCurrent = effectivePlan.plan?.code === plan.code;
             const isPending = pendingRequest?.planCode === plan.code;
+            const isUnavailableTransition =
+              plan.code === "decouverte" ||
+              (effectivePlan.period !== null &&
+                plan.ordre <= effectivePlan.plan.ordre);
 
             return (
               <Card
@@ -191,6 +289,9 @@ export default async function FacturationPage() {
                   </div>
                 )}
                 <CardHeader>
+                  {presentation.recommended && !isCurrent ? (
+                    <Badge className="mb-2 w-fit">Offre recommandée</Badge>
+                  ) : null}
                   <CardTitle className="capitalize text-xl">
                     {plan.nom}
                   </CardTitle>
@@ -218,28 +319,46 @@ export default async function FacturationPage() {
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                       <span>
-                        {plan.maxPlats === null
+                        {maxDishes === null
                           ? "Plats illimités"
-                          : `Jusqu'à ${plan.maxPlats} plats`}
+                          : `Jusqu'à ${maxDishes} plats publiables`}
                       </span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                       <span>
-                        {plan.maxCategories === null
+                        {categoryLimit === null
                           ? "Catégories illimitées"
-                          : `Jusqu'à ${plan.maxCategories} catégories`}
+                          : `Jusqu'à ${categoryLimit} catégories publiables`}
                       </span>
                     </li>
+                    {presentation.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
                   </ul>
                 </CardContent>
                 <CardFooter>
                   <RestaurateurSubscriptionButton
                     planCode={plan.code}
+                    planName={plan.nom}
                     isCurrent={isCurrent}
                     isPending={isPending}
                     hasAnyPending={!!pendingRequest}
-                    disabled={!restaurantData.actif || restaurantData.suspendu}
+                    disabled={
+                      !restaurantData.actif ||
+                      restaurantData.suspendu ||
+                      isUnavailableTransition
+                    }
+                    unavailableLabel={
+                      plan.code === "decouverte"
+                        ? "Plan gratuit automatique"
+                        : isUnavailableTransition
+                          ? "Changement non disponible"
+                          : undefined
+                    }
                   />
                 </CardFooter>
               </Card>

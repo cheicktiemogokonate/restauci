@@ -1,8 +1,8 @@
 import { apiResponse } from "@/lib/api/response";
 import { validateSearchParams } from "@/lib/api/validate";
-import { TTL, cacheKey, withCache } from "@/lib/cache";
 import { db } from "@/lib/db";
-import { commandes, restaurants } from "@/lib/db/schema";
+import { commandes } from "@/lib/db/schema";
+import { getRestaurantBySlug } from "@/lib/db/queries";
 import {
   calculerItineraire,
   calculerTempsAttente,
@@ -14,13 +14,27 @@ import { checkRateLimit, clientApiLimiter } from "@/lib/rate-limit";
 import { and, count, eq, inArray } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { toPublicRestaurantDTO } from "@/lib/restaurants/public-dto";
+import { env } from "@/lib/env";
+import {
+  getServiceMarketCapability,
+  resolveServiceMarketAtCoordinates,
+} from "@/modules/service-markets/server";
+import { evaluateRestaurantOrderability } from "@/modules/restaurants/model";
 
 const log = createLogger("v1-client-restaurant-detail");
 
-const querySchema = z.object({
-  lat: z.coerce.number().optional(),
-  lng: z.coerce.number().optional(),
-});
+const querySchema = z
+  .object({
+    lat: z.coerce.number().min(-90).max(90).optional(),
+    lng: z.coerce.number().min(-180).max(180).optional(),
+  })
+  .refine(
+    (value) =>
+      (value.lat === undefined && value.lng === undefined) ||
+      (value.lat !== undefined && value.lng !== undefined),
+    { message: "Latitude et longitude doivent être fournies ensemble." },
+  );
 
 export async function GET(
   request: NextRequest,
@@ -41,26 +55,36 @@ export async function GET(
 
   try {
     // Restaurant de base (caché 1h)
-    const restaurant = await withCache(
-      cacheKey.restaurantPublic(slug),
-      TTL.RESTAURANT_PUBLIC,
-      async () => {
-        const [r] = await db
-          .select()
-          .from(restaurants)
-          .where(
-            and(
-              eq(restaurants.slug, slug),
-              eq(restaurants.actif, true),
-              eq(restaurants.enLigne, true),
-            ),
-          )
-          .limit(1);
-        return r ?? null;
-      },
-    );
+    const restaurant = await getRestaurantBySlug(slug);
 
     if (!restaurant) return apiResponse.notFound("Restaurant");
+
+    let sameServiceMarket: boolean | null = null;
+    if (query?.lat !== undefined && query.lng !== undefined) {
+      const resolution = await resolveServiceMarketAtCoordinates({
+        lat: query.lat,
+        lng: query.lng,
+      });
+      sameServiceMarket =
+        resolution.status === "resolved" && restaurant.serviceMarketId !== null
+          ? resolution.market.id === restaurant.serviceMarketId
+          : false;
+    }
+    const capability = restaurant.serviceMarketId
+      ? await getServiceMarketCapability(
+          restaurant.serviceMarketId,
+          "restaurant",
+        )
+      : null;
+    const orderability = evaluateRestaurantOrderability({
+      restaurant,
+      policyMode: env.RESTAURANT_GEO_POLICY_MODE,
+      hasMarketAssignment: Boolean(
+        restaurant.serviceMarketId && restaurant.serviceMarketVersionId,
+      ),
+      sameServiceMarket,
+      restaurantCapabilityActive: capability?.status === "active",
+    });
 
     // Nombre de commandes en cours (temps réel — pas caché)
     const [{ commandesEnCours }] = await db
@@ -108,12 +132,11 @@ export async function GET(
       });
     }
 
-    // Ne pas exposer userId
-    const { userId, ...restaurantPublic } = restaurant;
-    void userId;
-
     return apiResponse.success({
-      ...restaurantPublic,
+      ...toPublicRestaurantDTO(restaurant),
+      sameServiceMarket,
+      orderable: orderability.orderable,
+      orderabilityReason: orderability.reason,
       // Infos géo (null si pas de coordonnées client)
       geo:
         distanceKm !== null

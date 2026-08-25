@@ -11,10 +11,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 const paiementLabels: Record<string, string> = {
-  en_attente: "En attente",
-  paye: "Payé",
-  echoue: "Échoué",
-  rembourse: "Remboursé",
+  pending: "En attente",
+  confirmed: "Confirmé",
+  failed: "Échoué",
+  cancelled: "Annulé",
 };
 
 export default async function AdminCommandeDetailPage({
@@ -80,7 +80,7 @@ export default async function AdminCommandeDetailPage({
         </section>
         <section className="rounded-xl border bg-white p-5">
           <div className="mb-4 text-sm font-semibold text-gray-900">Commission plateforme</div>
-          {commande.commissionMontant === null ? <p className="text-sm text-gray-500">Aucune commission n’a encore été calculée.</p> : <dl className="space-y-2 text-sm"><Info label="Taux appliqué" value={`${(commande.commissionTauxBps ?? 0) / 100}%`} /><Info label="Montant" value={formatPrix(commande.commissionMontant)} /><Info label="Statut" value={commande.commissionStatut === "en_attente" ? "En attente" : commande.commissionStatut === "payee" ? "Payée" : "Annulée"} /></dl>}
+          {commande.commissionMontant === null ? <p className="text-sm text-gray-500">Aucun snapshot de commission associé.</p> : <dl className="space-y-2 text-sm"><Info label="Taux figé" value={`${(commande.commissionTauxBps ?? 0) / 100}%`} /><Info label="Montant" value={formatPrix(commande.commissionMontant)} /><Info label="Statut commercial" value={commande.commissionStatut === "pending" ? "En attente de service" : commande.commissionStatut === "due" ? "Due" : "Annulée"} /></dl>}
         </section>
       </div>
     </AdminPage>

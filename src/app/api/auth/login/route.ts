@@ -1,6 +1,6 @@
 import { comparePassword, setAuthCookie, signToken } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { partnerAccounts, users } from "@/lib/db/schema";
 import { authLogger } from "@/lib/loggers";
 import { authLimiter, checkRateLimit } from "@/lib/rate-limit";
 import { loginSchema } from "@/lib/validations/auth";
@@ -107,8 +107,15 @@ export async function POST(request: NextRequest) {
     const token = await signToken({
       userId: user[0].id,
       email: user[0].email,
-      role: user[0].role as "restaurateur" | "admin",
+      role: user[0].role,
     });
+
+    const partnerAccount = user[0].role === "partner"
+      ? await db.query.partnerAccounts.findFirst({
+          where: eq(partnerAccounts.userId, user[0].id),
+          columns: { id: true },
+        })
+      : null;
 
     // Poser le cookie
     const response = NextResponse.json(
@@ -117,6 +124,7 @@ export async function POST(request: NextRequest) {
         email: user[0].email,
         nom: user[0].nom,
         role: user[0].role,
+        hasPartnerAccount: Boolean(partnerAccount),
       },
       { status: 200 },
     );

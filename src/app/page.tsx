@@ -2,8 +2,7 @@ import Navbar from "@/components/landing/components/Navbar";
 import Pricing from "@/components/landing/components/Pricing";
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
-
-export const revalidate = false; // Static page
+import { getPublishedSubscriptionCatalogue } from "@/modules/subscriptions/server";
 
 const Hero = dynamic(() => import("@/components/landing/components/Hero"), {
   loading: () => <div />,
@@ -19,10 +18,11 @@ const HoverFooter = dynamic(() => import("@/components/landing/ui/demo"), {
 export const metadata: Metadata = {
   title: "Toutci — une app pour tout",
   description:
-    "Toutci connecte les clients aux restaurants de Côte d’Ivoire. Découvrez les menus, commandez et suivez votre commande.",
+    "Découvrez des restaurants et des résidences vérifiées en Côte d’Ivoire avec Toutci.",
 };
 
-export default function Home() {
+export default async function Home() {
+  const catalogue = await getPublishedSubscriptionCatalogue();
   return (
     <div className="relative min-h-screen font-sans selection:bg-brand-green selection:text-white">
       {/* 1. Header Navigation */}
@@ -35,7 +35,7 @@ export default function Home() {
       <AboutPlatform />
 
       {/* Offres restaurateurs */}
-      <Pricing />
+      <Pricing plans={catalogue.plans.filter((plan) => plan.actif)} />
 
       {/* Pied de page */}
       <HoverFooter />

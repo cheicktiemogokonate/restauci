@@ -34,7 +34,7 @@ export interface PanierItem {
 export interface JWTPayload {
   userId: string;
   email: string;
-  role: "restaurateur" | "admin";
+  role: "partner" | "admin";
   nom?: string;
   avatarUrl?: string;
 }

@@ -12,7 +12,7 @@ export type { PlatAvecCategorie };
 export interface StatsDashboard {
   commandesAujourdhui: number;
   commandesMois: number;
-  chiffreAffairesMois: number; // en centimes
+  chiffreAffairesMois: number; // FCFA entiers
   commandesEnCours: number;
   commandesEnPreparation: number;
   commandesPrêtes: number;

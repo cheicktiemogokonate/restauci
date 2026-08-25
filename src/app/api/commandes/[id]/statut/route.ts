@@ -20,7 +20,7 @@ export async function PATCH(
 
   try {
     const session = await getCurrentUser();
-    if (!session || session.role !== "restaurateur") {
+    if (!session || session.role !== "partner") {
       commandeLogger.warn(
         { ip, reason: "unauthorized access attempt" },
         "Unauthorized status update attempt",
@@ -145,7 +145,7 @@ export async function PATCH(
       );
     }
 
-    // 🔗 pg_notify supprimé (mort — Redis via sendNotification/pushSseEvent gère déjà cet événement, voir mutations.ts createCommande)
+    // 🔗 pg_notify supprimé (mort — Redis via sendNotification/pushSseEvent gère déjà cet événement)
     // const pgClient = await pool.connect();
     // try {
     //   await pgClient.query("SELECT pg_notify($1, $2)", [

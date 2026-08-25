@@ -1,0 +1,5 @@
+ALTER TABLE "subscription_periods" ADD CONSTRAINT "subscription_periods_paid_only" CHECK ("subscription_periods"."plan_code" <> 'decouverte' OR "subscription_periods"."statut" NOT IN ('active', 'suspendue'));--> statement-breakpoint
+ALTER TABLE "subscription_periods" ADD CONSTRAINT "subscription_periods_valid_planned_dates" CHECK ("subscription_periods"."plan_code" = 'decouverte' OR ("subscription_periods"."date_echeance" IS NOT NULL AND "subscription_periods"."date_echeance" > "subscription_periods"."date_debut"));--> statement-breakpoint
+ALTER TABLE "subscription_periods" ADD CONSTRAINT "subscription_periods_coherent_end" CHECK (("subscription_periods"."ended_at" IS NULL) = ("subscription_periods"."end_reason" IS NULL));--> statement-breakpoint
+ALTER TABLE "subscription_plans" ADD CONSTRAINT "subscription_plans_taux_commission_bps_valide" CHECK ("subscription_plans"."taux_commission_bps" BETWEEN 0 AND 10000);--> statement-breakpoint
+ALTER TABLE "subscription_plans" ADD CONSTRAINT "subscription_plans_ordre_non_negatif" CHECK ("subscription_plans"."ordre" >= 0);

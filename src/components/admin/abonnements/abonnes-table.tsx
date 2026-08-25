@@ -22,20 +22,17 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 interface Subscriber {
-  restaurantId: string;
-  restaurantNom: string;
+  partnerAccountId: string;
+  restaurantId: string | null;
+  partnerNom: string;
+  activityType: "restaurant" | "residence";
   planCode: string;
+  planNom: string;
   statut: string;
   dateDebut: Date;
   dateEcheance: Date | null;
   tauxCommissionBpsFige: number;
 }
-
-const planLabels: Record<string, string> = {
-  decouverte: "Découverte",
-  croissance: "Croissance",
-  partenaire_fier: "Partenaire Fier",
-};
 
 export function AbonnesTable({ subscribers }: { subscribers: Subscriber[] }) {
   const router = useRouter();
@@ -48,8 +45,8 @@ export function AbonnesTable({ subscribers }: { subscribers: Subscriber[] }) {
     if (!selected || !motif.trim()) return;
     setIsSubmitting(true);
     try {
-      await suspendreAbonnementAction(selected.restaurantId, motif);
-      toast.success("Abonnement suspendu et restaurant notifié");
+      await suspendreAbonnementAction(selected.partnerAccountId, motif);
+      toast.success("Abonnement suspendu et partenaire notifié");
       setSelected(null);
       setMotif("");
       router.refresh();
@@ -65,10 +62,10 @@ export function AbonnesTable({ subscribers }: { subscribers: Subscriber[] }) {
   };
 
   const reactivate = async (subscriber: Subscriber) => {
-    setReactivatingId(subscriber.restaurantId);
+    setReactivatingId(subscriber.partnerAccountId);
     try {
-      await reactiverAbonnementAction(subscriber.restaurantId);
-      toast.success("Abonnement réactivé et restaurant notifié");
+      await reactiverAbonnementAction(subscriber.partnerAccountId);
+      toast.success("Abonnement réactivé et partenaire notifié");
       router.refresh();
     } catch (error) {
       toast.error(
@@ -83,21 +80,25 @@ export function AbonnesTable({ subscribers }: { subscribers: Subscriber[] }) {
 
   const columns: TableColumn<Subscriber>[] = [
     {
-      key: "restaurantNom",
-      header: "Restaurant",
+      key: "partnerNom",
+      header: "Partenaire",
       sortable: true,
       width: "220px",
       cell: (subscriber) => (
-        <span className="font-medium">{subscriber.restaurantNom}</span>
+        <div>
+          <span className="block font-medium">{subscriber.partnerNom}</span>
+          <span className="text-xs capitalize text-muted-foreground">
+            {subscriber.activityType}
+          </span>
+        </div>
       ),
     },
     {
-      key: "planCode",
+      key: "planNom",
       header: "Offre",
       sortable: true,
       width: "160px",
-      cell: (subscriber) =>
-        planLabels[subscriber.planCode] ?? subscriber.planCode,
+      cell: (subscriber) => subscriber.planNom,
     },
     {
       key: "dateDebut",
@@ -155,10 +156,10 @@ export function AbonnesTable({ subscribers }: { subscribers: Subscriber[] }) {
           <Button
             variant="outline"
             size="sm"
-            disabled={reactivatingId === subscriber.restaurantId}
+            disabled={reactivatingId === subscriber.partnerAccountId}
             onClick={() => reactivate(subscriber)}
           >
-            {reactivatingId === subscriber.restaurantId
+            {reactivatingId === subscriber.partnerAccountId
               ? "Réactivation…"
               : "Réactiver"}
           </Button>
@@ -180,7 +181,7 @@ export function AbonnesTable({ subscribers }: { subscribers: Subscriber[] }) {
       <Table
         data={subscribers}
         columns={columns}
-        getRowId={(subscriber) => subscriber.restaurantId}
+        getRowId={(subscriber) => subscriber.partnerAccountId}
         defaultSort={{ key: "dateEcheance", direction: "asc" }}
         resizable
         reorderable
@@ -216,7 +217,7 @@ export function AbonnesTable({ subscribers }: { subscribers: Subscriber[] }) {
                 className="text-sm text-muted-foreground"
               >
                 {selected
-                  ? `${selected.restaurantNom} sera notifié de cette suspension.`
+                  ? `${selected.partnerNom} sera notifié de cette suspension.`
                   : ""}
               </p>
             </div>

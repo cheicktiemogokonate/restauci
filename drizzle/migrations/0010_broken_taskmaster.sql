@@ -1,0 +1,4 @@
+ALTER TABLE "subscription_periods" DROP CONSTRAINT "subscription_periods_paid_only";--> statement-breakpoint
+ALTER TABLE "subscription_periods" DROP CONSTRAINT "subscription_periods_valid_planned_dates";--> statement-breakpoint
+ALTER TABLE "subscription_periods" ADD CONSTRAINT "subscription_periods_discovery_is_historical_only" CHECK ("subscription_periods"."plan_code" <> 'decouverte' OR "subscription_periods"."statut" NOT IN ('active', 'suspendue'));--> statement-breakpoint
+ALTER TABLE "subscription_periods" ADD CONSTRAINT "subscription_periods_valid_planned_dates" CHECK ("subscription_periods"."plan_code" = 'decouverte' OR ("subscription_periods"."date_echeance" IS NOT NULL AND "subscription_periods"."date_echeance" > "subscription_periods"."date_debut"));

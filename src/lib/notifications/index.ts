@@ -7,20 +7,45 @@ import { notifications, pushSubscriptions } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
 import { pushSseEvent } from "@/lib/realtime/sse-push";
 import { and, eq } from "drizzle-orm";
+import type { DbExecutor } from "@/lib/db/transaction";
+import type { TypeNotification } from "@/lib/db/types";
 
 const log = createLogger("notifications");
 
-export interface NotificationPayload {
+export interface PersistedNotificationInput {
+  userId?: string;
+  clientId?: string;
+  type: TypeNotification;
+  titre: string;
+  message: string;
+  lienType?: string;
+  lienId?: string;
+}
+
+type DeliverableNotificationType = Extract<
+  TypeNotification,
+  | "nouvelle_commande"
+  | "commande_prete"
+  | "commande_annulee"
+  | "nouveau_avis"
+  | "restaurant_valide"
+  | "restaurant_rejete"
+  | "commission_cash_threshold"
+  | "systeme"
+>;
+
+export interface NotificationPayload extends PersistedNotificationInput {
   userId: string;
   restaurantId: string;
-  type:
-    | "nouvelle_commande"
-    | "commande_prete"
-    | "commande_annulee"
-    | "nouveau_avis"
-    | "restaurant_valide"
-    | "restaurant_rejete"
-    | "systeme";
+  type: DeliverableNotificationType;
+  data?: Record<string, unknown>;
+  son?: string;
+  badge?: number;
+}
+
+export interface ClientNotificationPayload {
+  clientId: string;
+  type: TypeNotification;
   titre: string;
   message: string;
   lienType?: string;
@@ -28,6 +53,26 @@ export interface NotificationPayload {
   data?: Record<string, unknown>;
   son?: string;
   badge?: number;
+}
+
+/** Écriture obligatoire, utilisable dans la transaction métier appelante. */
+export async function persistNotification(
+  executor: Pick<DbExecutor, "insert">,
+  payload: PersistedNotificationInput,
+) {
+  if ((!payload.userId && !payload.clientId) || (payload.userId && payload.clientId)) {
+    throw new Error("Une notification doit avoir exactement un destinataire");
+  }
+  const [notification] = await executor.insert(notifications).values({
+    userId: payload.userId ?? null,
+    clientId: payload.clientId ?? null,
+    type: payload.type,
+    titre: payload.titre,
+    message: payload.message,
+    lienType: payload.lienType ?? null,
+    lienId: payload.lienId ?? null,
+  }).returning();
+  return notification;
 }
 
 /**
@@ -43,24 +88,47 @@ export interface NotificationPayload {
 export async function sendNotification(
   payload: NotificationPayload,
 ): Promise<void> {
-  const { userId, restaurantId, type, titre, message, lienType, lienId, data } =
-    payload;
-
   // 1. Persister en DB (synchrones — on veut s'assurer que c'est sauvegarde)
   try {
-    await db.insert(notifications).values({
-      userId,
-      type: type,
-      titre,
-      message,
-      lienType: lienType ?? null,
-      lienId: lienId ?? null,
-    });
+    await persistNotification(db, payload);
   } catch (err) {
     log.error({ err }, "Erreur sauvegarde notification DB");
   }
 
-  // 2-4. Envoyer via les canaux push en parallele (best-effort)
+  await deliverNotification(payload);
+}
+
+/** Notification consommateur persistée puis diffusée sur ses appareils Expo. */
+export async function sendClientNotification(
+  payload: ClientNotificationPayload,
+): Promise<void> {
+  try {
+    await persistNotification(db, payload);
+  } catch (err) {
+    log.error({ err }, "Erreur sauvegarde notification client");
+  }
+  await sendClientExpoPush(payload.clientId, {
+    titre: payload.titre,
+    message: payload.message,
+    data: {
+      type: payload.type,
+      lienType: payload.lienType,
+      lienId: payload.lienId,
+      ...payload.data,
+    },
+    son: payload.son,
+    badge: payload.badge,
+  });
+}
+
+/** Diffusion externe uniquement ; ne crée aucune notification persistée. */
+export async function deliverNotification(
+  payload: NotificationPayload,
+): Promise<void> {
+  const { userId, restaurantId, type, titre, message, lienType, lienId, data } =
+    payload;
+
+  // Envoyer via les canaux push en parallèle (best-effort).
   // On utilise Promise.allSettled pour ne pas bloquer si l'un echoue
   await Promise.allSettled([
     // SSE temps reel (dashboard web ouvert)
@@ -86,7 +154,7 @@ export async function sendNotification(
     }),
 
     // Expo Push (app mobile)
-    sendExpoPush(userId, {
+    sendUserExpoPush(userId, {
       titre,
       message,
       data: { type, lienId, lienType, ...data },
@@ -210,8 +278,8 @@ interface ExpoPushPayload {
   badge?: number;
 }
 
-async function sendExpoPush(
-  userId: string,
+async function sendExpoPushToOwner(
+  owner: { userId: string } | { clientId: string },
   payload: ExpoPushPayload,
 ): Promise<void> {
   let Expo: typeof import("expo-server-sdk") | null;
@@ -227,7 +295,9 @@ async function sendExpoPush(
     .from(pushSubscriptions)
     .where(
       and(
-        eq(pushSubscriptions.userId, userId),
+        "userId" in owner
+          ? eq(pushSubscriptions.userId, owner.userId)
+          : eq(pushSubscriptions.clientId, owner.clientId),
         eq(pushSubscriptions.type, "expo"),
       ),
     );
@@ -238,13 +308,13 @@ async function sendExpoPush(
     accessToken: process.env.EXPO_ACCESS_TOKEN,
   });
 
-  const messages: import("expo-server-sdk").ExpoPushMessage[] = subscriptions
-    .filter(
+  const validSubscriptions = subscriptions.filter(
       (sub): sub is typeof sub & { expoToken: string } =>
         sub.expoToken !== null &&
         sub.expoToken !== undefined &&
         Expo!.Expo.isExpoPushToken(sub.expoToken),
-    )
+    );
+  const messages: import("expo-server-sdk").ExpoPushMessage[] = validSubscriptions
     .map((sub) => ({
       to: sub.expoToken,
       title: payload.titre,
@@ -259,7 +329,13 @@ async function sendExpoPush(
   // Envoyer par chunks (max 100 par batch)
   const chunks = expo.chunkPushNotifications(messages);
 
+  let subscriptionOffset = 0;
   for (const chunk of chunks) {
+    const chunkSubscriptions = validSubscriptions.slice(
+      subscriptionOffset,
+      subscriptionOffset + chunk.length,
+    );
+    subscriptionOffset += chunk.length;
     try {
       const tickets = await expo.sendPushNotificationsAsync(chunk);
 
@@ -267,7 +343,7 @@ async function sendExpoPush(
         const ticket = tickets[i];
         if (ticket.status === "error") {
           if (ticket.details?.error === "DeviceNotRegistered") {
-            const sub = subscriptions[i];
+            const sub = chunkSubscriptions[i];
             if (sub) {
               await db
                 .delete(pushSubscriptions)
@@ -286,4 +362,18 @@ async function sendExpoPush(
       log.error({ err }, "Erreur envoi Expo Push batch");
     }
   }
+}
+
+async function sendUserExpoPush(
+  userId: string,
+  payload: ExpoPushPayload,
+) {
+  return sendExpoPushToOwner({ userId }, payload);
+}
+
+export async function sendClientExpoPush(
+  clientId: string,
+  payload: ExpoPushPayload,
+) {
+  return sendExpoPushToOwner({ clientId }, payload);
 }

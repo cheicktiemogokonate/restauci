@@ -1,0 +1,33 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "relation/900000001",
+        "name": "Zone de test A",
+        "country_code": "CI",
+        "admin_level": "8",
+        "test_only": true
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-4.1, 5.2], [-4.0, 5.2], [-4.0, 5.3], [-4.1, 5.3], [-4.1, 5.2]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "relation/900000002",
+        "name": "Zone de test B",
+        "country_code": "CI",
+        "admin_level": "8",
+        "test_only": true
+      },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [[[[-5.1, 6.2], [-5.0, 6.2], [-5.0, 6.3], [-5.1, 6.3], [-5.1, 6.2]]]]
+      }
+    }
+  ]
+}

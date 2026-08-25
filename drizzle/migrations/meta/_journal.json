@@ -50,6 +50,160 @@
       "when": 1786180761519,
       "tag": "0006_blushing_king_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786449996409,
+      "tag": "0007_parallel_the_hunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786454951288,
+      "tag": "0008_slippery_mole_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786455017045,
+      "tag": "0009_keen_blue_marvel",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786455133923,
+      "tag": "0010_broken_taskmaster",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786457691586,
+      "tag": "0011_partner_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786600819000,
+      "tag": "0012_quota_publication_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786611600000,
+      "tag": "0013_unified_restaurant_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786698000000,
+      "tag": "0014_commission_cash_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786701600000,
+      "tag": "0015_restrict_audit_admin_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787212800000,
+      "tag": "0016_transactions_payments_mvp",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787216400000,
+      "tag": "0017_paystack_mvp",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787461200000,
+      "tag": "0018_service_markets_postgis",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787464800000,
+      "tag": "0019_partner_identity_kyc",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787468400000,
+      "tag": "0020_residence_subscription_catalogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787554800000,
+      "tag": "0021_residences_domain",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1787637600000,
+      "tag": "0022_residence_manual_publication",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787724000000,
+      "tag": "0023_residence_booking",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787810400000,
+      "tag": "0024_discovery_catalogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787896800000,
+      "tag": "0025_residence_public_discovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787983200000,
+      "tag": "0026_discovery_attribution",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788069600000,
+      "tag": "0027_client_mobile_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788156000000,
+      "tag": "0028_mobile_payment_return",
+      "breakpoints": true
     }
   ]
 }

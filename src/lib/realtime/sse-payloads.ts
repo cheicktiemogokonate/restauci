@@ -5,8 +5,8 @@ import type { Commande } from "@/lib/db/types";
  *
  * Source unique de vérité pour la forme des données poussées vers le
  * dashboard restaurateur via la queue Redis `restauci:sse:queue:<restaurantId>`.
- * Tous les chemins de création de commande (API POST, createCommande)
- * doivent passer par ici pour garantir un contrat cohérent côté consommateur.
+ * Le service canonique createRestaurantOrder passe par ici pour garantir un
+ * contrat cohérent côté consommateur.
  *
  * Les `Date` sont sérialisées en ISO strings — le client les repasse via
  * `new Date(...)` comme pour les commandes chargées côté serveur.

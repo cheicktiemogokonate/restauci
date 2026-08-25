@@ -13,7 +13,7 @@ import { getCommissionsAdmin, getCommissionsParRestaurantAdmin } from "@/lib/db/
 import { ChevronLeft, ChevronRight, ShoppingBag, Store, Wallet } from "lucide-react";
 import Link from "next/link";
 
-const statutsValides = new Set(["en_attente", "payee", "annulee"]);
+const statutsValides = new Set(["pending", "due", "void"]);
 
 function parseStartDate(value?: string) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
@@ -36,7 +36,7 @@ export default async function AdminCommissionsPage({
   await getAdminSession();
   const params = await searchParams;
   const statut = statutsValides.has(params.statut ?? "")
-    ? (params.statut as "en_attente" | "payee" | "annulee")
+    ? (params.statut as "pending" | "due" | "void")
     : "tous";
   const hasFilters = Boolean(params.restaurant || params.statut || params.dateDebut || params.dateFin);
   const page = parsePage(params.page);

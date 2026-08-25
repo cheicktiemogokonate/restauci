@@ -26,6 +26,10 @@ export interface OrderDetailsHeaderProps {
 }
 
 const statusConfig = {
+  en_attente_paiement: {
+    label: "Paiement requis",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+  },
   recue: {
     label: "À traiter",
     className: "bg-blue-50 text-blue-700 border-blue-200",

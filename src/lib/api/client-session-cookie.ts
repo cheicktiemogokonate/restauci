@@ -25,3 +25,18 @@ export function clearClientRefreshCookie(response: NextResponse) {
     maxAge: 0,
   });
 }
+
+export function applyClientRefreshTransport(
+  response: NextResponse,
+  input: {
+    transport: "cookie" | "json";
+    token: string;
+    maxAge: number;
+  },
+) {
+  if (input.transport === "json") {
+    clearClientRefreshCookie(response);
+    return;
+  }
+  setClientRefreshCookie(response, input.token, input.maxAge);
+}

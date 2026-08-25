@@ -8,6 +8,8 @@ import { RESTAURANT_TYPE_OPTIONS } from "@/lib/onboarding/settings";
 import { SubscriptionLimitError } from "@/lib/subscription-plans";
 import { restaurantSchema } from "@/lib/validations/restaurant";
 import { redirect } from "next/navigation";
+import { requirePartnerActivity } from "@/lib/auth/partner-account";
+import { RestaurantMarketError } from "@/modules/restaurants/model";
 
 const log = createLogger("actions-onboarding");
 
@@ -63,6 +65,7 @@ export async function finaliserOnboarding(data: OnboardingData) {
   // 1. Vérifier la session
   const session = await getCurrentUser();
   if (!session) redirect("/login");
+  const partnerAccount = await requirePartnerActivity("restaurant");
 
   // 2. Vérifier qu'un restaurant n'existe pas déjà
   const hasRestaurant = await getMyRestaurant(session.userId);
@@ -135,7 +138,7 @@ export async function finaliserOnboarding(data: OnboardingData) {
   // 3. Créer le restaurant en DB
   try {
     await createRestaurant({
-      userId: session.userId,
+      partnerAccountId: partnerAccount.id,
       nom: parsed.data.nom,
       telephone: parsed.data.telephone,
       adresse: parsed.data.adresse,
@@ -158,6 +161,9 @@ export async function finaliserOnboarding(data: OnboardingData) {
   } catch (error) {
     log.error({ error, userId: session.userId }, "finaliserOnboarding error");
     if (error instanceof SubscriptionLimitError) {
+      return { error: error.message };
+    }
+    if (error instanceof RestaurantMarketError) {
       return { error: error.message };
     }
     return { error: "Impossible de créer le restaurant. Réessaye." };

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  extendSubscriptionDeadline,
   getAdminRestaurantStatus,
   normalizeSettlementInput,
 } from "../src/lib/config/admin-workflows";
@@ -46,23 +45,4 @@ describe("workflows administrateur", () => {
     );
   });
 
-  it("prolonge l’échéance de la durée de suspension", () => {
-    const deadline = new Date("2026-12-31T00:00:00.000Z");
-    const suspendedAt = new Date("2026-07-01T00:00:00.000Z");
-    const reactivatedAt = new Date("2026-07-11T00:00:00.000Z");
-
-    expect(
-      extendSubscriptionDeadline(deadline, suspendedAt, reactivatedAt),
-    ).toEqual(new Date("2027-01-10T00:00:00.000Z"));
-  });
-
-  it("conserve une échéance illimitée à la réactivation", () => {
-    expect(
-      extendSubscriptionDeadline(
-        null,
-        new Date("2026-07-01T00:00:00.000Z"),
-        new Date("2026-07-11T00:00:00.000Z"),
-      ),
-    ).toBeNull();
-  });
 });

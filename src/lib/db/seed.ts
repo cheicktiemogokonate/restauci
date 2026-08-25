@@ -11,8 +11,10 @@ import {
   commandes,
   creneauxHoraires,
   plats,
+  partnerAccounts,
   restaurants,
   subscriptionPeriods,
+  subscriptionPeriodLimits,
   users,
 } from "./schema";
 
@@ -42,17 +44,22 @@ async function seed() {
       email: "orlando@restauci.com",
       password: passwordHash,
       telephone: "+225 07 00 00 00",
-      role: "restaurateur",
+      role: "partner",
       emailVerifie: true,
     })
     .returning();
   console.log("✅ User créé:", user.email);
 
+  const [partnerAccount] = await db
+    .insert(partnerAccounts)
+    .values({ userId: user.id, activityType: "restaurant" })
+    .returning();
+
   // ── 2. Restaurant ────────────────────────────────────────────────────────
   const [restaurant] = await db
     .insert(restaurants)
     .values({
-      userId: user.id,
+      partnerAccountId: partnerAccount.id,
       nom: "Bella Italia Abidjan",
       slug: "bella-italia-abidjan",
       description:
@@ -64,8 +71,8 @@ async function seed() {
       pays: "Côte d'Ivoire",
       latitude: 5.3599,
       longitude: -3.99,
-      fraisLivraison: 150000, // 1500 FCFA en centimes
-      commandeMinimum: 500000, // 5000 FCFA
+      fraisLivraison: 1500,
+      commandeMinimum: 5000,
       modesCommande: ["sur_place", "livraison", "emporter"],
       cuisines: ["Italienne", "Pizza", "Pâtes"],
       actif: true,
@@ -79,13 +86,16 @@ async function seed() {
   // ── 3. Abonnement (nouveau système subscription_periods) ────────────────
   const [proPlan] = await db.query.subscriptionPlans.findFirst({
     where: (p, { eq }) => eq(p.code, "partenaire_fier"),
+    with: { limits: { where: (limit, { eq }) => eq(limit.activityType, "restaurant") } },
   }).then((row) => row ? [row] : []);
 
   if (proPlan) {
     const dateEcheance = new Date();
     dateEcheance.setFullYear(dateEcheance.getFullYear() + 1);
+    const periodId = crypto.randomUUID();
     await db.insert(subscriptionPeriods).values({
-      restaurantId: restaurant.id,
+      id: periodId,
+      partnerAccountId: partnerAccount.id,
       planCode: "partenaire_fier",
       tauxCommissionBpsFige: proPlan.tauxCommissionBps,
       prixPayeFcfa: proPlan.prixAnnuelFcfa,
@@ -93,6 +103,15 @@ async function seed() {
       dateEcheance,
       statut: "active",
     });
+    if (proPlan.limits.length !== 2) throw new Error("Quotas du seed incomplets");
+    await db.insert(subscriptionPeriodLimits).values(
+      proPlan.limits.map((limit) => ({
+        subscriptionPeriodId: periodId,
+        activityType: limit.activityType,
+        resourceType: limit.resourceType,
+        maxCount: limit.maxCount,
+      })),
+    );
   }
 
   // ── 4. Créneaux horaires ─────────────────────────────────────────────────
@@ -132,12 +151,12 @@ async function seed() {
     await db
       .insert(categories)
       .values([
-        { restaurantId: restaurant.id, nom: "Pizzas", ordre: 1 },
-        { restaurantId: restaurant.id, nom: "Pâtes", ordre: 2 },
-        { restaurantId: restaurant.id, nom: "Burgers", ordre: 3 },
-        { restaurantId: restaurant.id, nom: "Salades", ordre: 4 },
-        { restaurantId: restaurant.id, nom: "Desserts", ordre: 5 },
-        { restaurantId: restaurant.id, nom: "Boissons", ordre: 6 },
+        { restaurantId: restaurant.id, nom: "Pizzas", ordre: 1, firstPublishedAt: new Date() },
+        { restaurantId: restaurant.id, nom: "Pâtes", ordre: 2, firstPublishedAt: new Date() },
+        { restaurantId: restaurant.id, nom: "Burgers", ordre: 3, firstPublishedAt: new Date() },
+        { restaurantId: restaurant.id, nom: "Salades", ordre: 4, firstPublishedAt: new Date() },
+        { restaurantId: restaurant.id, nom: "Desserts", ordre: 5, firstPublishedAt: new Date() },
+        { restaurantId: restaurant.id, nom: "Boissons", ordre: 6, firstPublishedAt: new Date() },
       ])
       .returning();
   console.log("✅ Catégories créées");
@@ -151,7 +170,7 @@ async function seed() {
       nom: "Smokey Supreme Pizza",
       description:
         "Sauce tomate, mozzarella, pepperoni, poivrons, olives noires",
-      prix: 1200000, // 12 000 FCFA
+      prix: 12000,
       disponible: true,
       ordre: 1,
       tags: ["Personnalisable"],
@@ -162,7 +181,7 @@ async function seed() {
       categorieId: catPizza.id,
       nom: "Margherita",
       description: "Sauce tomate, mozzarella di bufala, basilic frais",
-      prix: 900000,
+      prix: 9000,
       disponible: true,
       ordre: 2,
       tags: ["Végétarien"],
@@ -173,7 +192,7 @@ async function seed() {
       categorieId: catPates.id,
       nom: "Spaghetti Carbonara",
       description: "Spaghetti, lardons fumés, jaune d'œuf, pecorino",
-      prix: 1500000,
+      prix: 15000,
       disponible: true,
       ordre: 1,
       nutrition: { calories: 680, proteines: 28, lipides: 24, glucides: 88 },
@@ -183,7 +202,7 @@ async function seed() {
       categorieId: catPates.id,
       nom: "Penne à la crème",
       description: "Penne, crème fraîche, champignons, jambon, parmesan",
-      prix: 1800000,
+      prix: 18000,
       disponible: true,
       ordre: 2,
     },
@@ -193,7 +212,7 @@ async function seed() {
       categorieId: catBurger.id,
       nom: "Cheeseburger classique",
       description: "Steak haché, cheddar, salade, tomate, oignon, sauce maison",
-      prix: 1000000,
+      prix: 10000,
       disponible: true,
       ordre: 1,
       tags: ["Promo"],
@@ -204,7 +223,7 @@ async function seed() {
       categorieId: catSalade.id,
       nom: "Salade César",
       description: "Romaine, croûtons, parmesan, sauce César",
-      prix: 800000,
+      prix: 8000,
       disponible: true,
       ordre: 1,
     },
@@ -214,7 +233,7 @@ async function seed() {
       categorieId: catDessert.id,
       nom: "Moelleux au chocolat",
       description: "Cœur fondant, boule de glace vanille",
-      prix: 1000000,
+      prix: 10000,
       disponible: true,
       ordre: 1,
       tags: ["Personnalisable"],
@@ -225,7 +244,7 @@ async function seed() {
       categorieId: catBoisson.id,
       nom: "Eau minérale",
       description: "50cl",
-      prix: 200000,
+      prix: 2000,
       disponible: true,
       ordre: 1,
     },
@@ -234,11 +253,11 @@ async function seed() {
       categorieId: catBoisson.id,
       nom: "Coca-Cola",
       description: "33cl",
-      prix: 350000,
+      prix: 3500,
       disponible: true,
       ordre: 2,
     },
-  ]);
+  ].map((dish) => ({ ...dish, firstPublishedAt: new Date() })));
   console.log("✅ Plats créés");
 
   // ── 7. Client de test ─────────────────────────────────────────────────────
@@ -265,15 +284,15 @@ async function seed() {
       {
         platId: "seed-pizza",
         nom: "Smokey Supreme Pizza",
-        prix: 1200000,
+        prix: 12000,
         quantite: 1,
       },
-      { platId: "seed-salade", nom: "Salade César", prix: 800000, quantite: 1 },
+      { platId: "seed-salade", nom: "Salade César", prix: 8000, quantite: 1 },
     ],
-    sousTotal: 2000000,
+    sousTotal: 20000,
     fraisLivraison: 0,
     remise: 0,
-    total: 2000000,
+    total: 20000,
     tempsPreparationEstime: 25,
     heureAcceptee: new Date(),
     heurePrete: new Date(),

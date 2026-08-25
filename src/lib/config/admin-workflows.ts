@@ -37,15 +37,3 @@ export function normalizeSettlementInput(
 
   return { reference, notes: normalizedNotes };
 }
-
-export function extendSubscriptionDeadline(
-  deadline: Date | null,
-  suspendedAt: Date | null,
-  reactivatedAt: Date,
-) {
-  if (!deadline) return null;
-  const suspensionDuration = suspendedAt
-    ? Math.max(0, reactivatedAt.getTime() - suspendedAt.getTime())
-    : 0;
-  return new Date(deadline.getTime() + suspensionDuration);
-}

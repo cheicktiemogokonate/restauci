@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password, nom, telephone, planCode } = validation.data;
+    const { email, password, nom, telephone } = validation.data;
 
     // Log tentative d'inscription (sans le mot de passe)
     authLogger.info({ ip, email, nom }, "Registration attempt");
@@ -80,50 +80,37 @@ export async function POST(request: NextRequest) {
     // Hasher le password
     const hashedPassword = await hashPassword(password);
 
-    // Insérer le nouvel utilisateur (exclure password de returning)
-    const newUser = await db
-      .insert(users)
-      .values({
-        email,
-        password: hashedPassword,
-        nom,
-        telephone,
-        role: "restaurateur",
-        pendingPlanCode: planCode,
-      })
-      .returning({
-        id: users.id,
-        email: users.email,
-        nom: users.nom,
-        role: users.role,
-        createdAt: users.createdAt,
-      });
+    const userId = crypto.randomUUID();
+    await db.insert(users).values({
+      id: userId,
+      email,
+      password: hashedPassword,
+      nom,
+      telephone,
+      role: "partner",
+    });
 
-    if (!newUser[0]) {
-      authLogger.error(
-        { ip, email, reason: "user creation failed" },
-        "Registration failed",
-      );
-      return NextResponse.json(
-        { error: "Erreur lors de la création de l'utilisateur" },
-        { status: 500 },
-      );
-    }
+    const newUser = {
+      id: userId,
+      email,
+      nom,
+      role: "partner" as const,
+    };
 
     // Signer le JWT token
     const token = await signToken({
-      userId: newUser[0].id,
-      email: newUser[0].email,
-      role: newUser[0].role as "restaurateur" | "admin",
+      userId: newUser.id,
+      email: newUser.email,
+      role: newUser.role,
     });
 
     // Poser le cookie
     const response = NextResponse.json(
       {
-        id: newUser[0].id,
-        email: newUser[0].email,
-        nom: newUser[0].nom,
-        role: newUser[0].role,
+        id: newUser.id,
+        email: newUser.email,
+        nom: newUser.nom,
+        role: newUser.role,
       },
       { status: 201 },
     );
@@ -131,7 +118,7 @@ export async function POST(request: NextRequest) {
     await setAuthCookie(token);
 
     authLogger.info(
-      { ip, email, userId: newUser[0].id },
+      { ip, email, userId: newUser.id },
       "Registration successful",
     );
     return response;

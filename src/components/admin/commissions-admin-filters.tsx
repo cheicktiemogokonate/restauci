@@ -65,9 +65,9 @@ export function CommissionsAdminFilters({
             <SelectTrigger><SelectValue placeholder="Tous les statuts" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="tous">Tous les statuts</SelectItem>
-              <SelectItem value="en_attente">En attente</SelectItem>
-              <SelectItem value="payee">Payée</SelectItem>
-              <SelectItem value="annulee">Annulée</SelectItem>
+              <SelectItem value="pending">En attente de service</SelectItem>
+              <SelectItem value="due">Due</SelectItem>
+              <SelectItem value="void">Annulée</SelectItem>
             </SelectContent>
           </Select>
         </div>

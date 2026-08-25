@@ -1,16 +1,22 @@
+"use client";
+
 import {
   Map,
   MapControls,
   MapMarker,
   MarkerContent,
 } from "@/components/ui/map";
-import { Locate, MapPin, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { LocateFixed, MapPin } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+
+const COTE_D_IVOIRE_CENTER = { lat: 7.69, lng: -5.03 };
 
 interface InteractiveMapProps {
-  latitude: number;
-  longitude: number;
-  commune: string;
+  latitude: number | null;
+  longitude: number | null;
+  commune?: string;
+  disabled?: boolean;
   onCoordinatesChange: (
     lat: number,
     lng: number,
@@ -20,82 +26,135 @@ interface InteractiveMapProps {
   ) => void;
 }
 
+function hasCoordinates(latitude: number | null, longitude: number | null) {
+  return (
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    !(latitude === 0 && longitude === 0)
+  );
+}
+
 export default function InteractiveMap({
   latitude,
   longitude,
-  commune,
+  commune = "",
+  disabled = false,
   onCoordinatesChange,
 }: InteractiveMapProps) {
-  const [pinPos, setPinPos] = useState({
-    lat: latitude || 7.6905,
-    lng: longitude || -5.03,
-  });
+  const initialPoint = hasCoordinates(latitude, longitude)
+    ? { lat: latitude as number, lng: longitude as number }
+    : COTE_D_IVOIRE_CENTER;
+  const [pinPos, setPinPos] = useState(initialPoint);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (latitude && longitude) {
-      Promise.resolve().then(() => {
-        setPinPos({ lat: latitude, lng: longitude });
-      });
-    }
+    if (!hasCoordinates(latitude, longitude)) return;
+    const next = { lat: latitude as number, lng: longitude as number };
+    Promise.resolve().then(() => setPinPos(next));
   }, [latitude, longitude]);
 
-  const handleDragEnd = (lngLat: { lng: number; lat: number }) => {
-    const finalLat = Number(lngLat.lat.toFixed(5));
-    const finalLng = Number(lngLat.lng.toFixed(5));
-    setPinPos({ lat: finalLat, lng: finalLng });
-    onCoordinatesChange(finalLat, finalLng, commune);
+  const updatePoint = useCallback(
+    (point: { lng: number; lat: number }) => {
+      const finalLat = Number(point.lat.toFixed(6));
+      const finalLng = Number(point.lng.toFixed(6));
+      setPinPos({ lat: finalLat, lng: finalLng });
+      setLocationError(null);
+      onCoordinatesChange(finalLat, finalLng, commune);
+    },
+    [commune, onCoordinatesChange],
+  );
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError("La géolocalisation n’est pas disponible sur cet appareil.");
+      return;
+    }
+
+    setIsLocating(true);
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        updatePoint({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setIsLocating(false);
+      },
+      () => {
+        setIsLocating(false);
+        setLocationError(
+          "Position indisponible. Autorisez la localisation ou placez le marqueur manuellement.",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+    );
   };
 
-  const handleRecentrer = () => {
-    navigator.geolocation?.getCurrentPosition((position) => {
-      const current = {
-        lat: Number(position.coords.latitude.toFixed(5)),
-        lng: Number(position.coords.longitude.toFixed(5)),
-      };
-      setPinPos(current);
-      onCoordinatesChange(current.lat, current.lng, commune);
-    });
-  };
+  const isConfirmed = hasCoordinates(latitude, longitude);
 
   return (
-    <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-xs relative bg-sky-50/20 h-75">
-      <div className="absolute top-4 right-4 z-20 flex gap-2">
-        <button
+    <div className="space-y-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-foreground">Emplacement précis</p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Cliquez sur la carte ou faites glisser le marqueur.
+          </p>
+        </div>
+        <Button
           type="button"
-          onClick={handleRecentrer}
-          className="flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-xs font-semibold text-gray-700 rounded-lg shadow-sm transition-all"
+          variant="outline"
+          size="sm"
+          onClick={useCurrentLocation}
+          disabled={disabled || isLocating}
+          className="w-full sm:w-auto"
         >
-          <RefreshCw className="w-3.5 h-3.5 text-gray-400" />
-          <span>Me localiser</span>
-        </button>
+          <LocateFixed className="size-4" />
+          {isLocating ? "Localisation…" : "Utiliser ma position"}
+        </Button>
       </div>
 
-      <Map
-        className="absolute inset-0 w-full h-full"
-        viewport={{ center: [pinPos.lng, pinPos.lat], zoom: 12 }}
-      >
-        <MapControls showZoom showLocate position="bottom-right" />
-        <MapMarker
-          longitude={pinPos.lng}
-          latitude={pinPos.lat}
-          draggable
-          onDragEnd={handleDragEnd}
+      <div className="relative h-72 overflow-hidden rounded-xl border bg-slate-100 sm:h-80">
+        <Map
+          className="h-full w-full"
+          viewport={{ center: [pinPos.lng, pinPos.lat], zoom: isConfirmed ? 15 : 7 }}
+          onViewportChange={() => undefined}
+          onMapClick={disabled ? undefined : updatePoint}
         >
-          <MarkerContent>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#10b981]/20 border border-[#10b981] animate-pulse relative">
-              <div className="absolute h-6 w-6 rounded-full bg-[#10b981] flex items-center justify-center text-white shadow-md">
-                <MapPin className="h-4 w-4" />
+          <MapControls
+            showZoom
+            showLocate={!disabled}
+            position="bottom-right"
+            onLocate={(point) =>
+              updatePoint({ lat: point.latitude, lng: point.longitude })
+            }
+          />
+          <MapMarker
+            longitude={pinPos.lng}
+            latitude={pinPos.lat}
+            draggable={!disabled}
+            onDragEnd={disabled ? undefined : updatePoint}
+          >
+            <MarkerContent>
+              <div className="flex size-9 items-center justify-center rounded-full border-2 border-white bg-brand-green text-white shadow-md">
+                <MapPin className="size-4" fill="currentColor" />
               </div>
-            </div>
-          </MarkerContent>
-        </MapMarker>
-      </Map>
+            </MarkerContent>
+          </MapMarker>
+        </Map>
+      </div>
 
-      <div className="absolute bottom-4 left-4 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg border border-gray-100 text-[10px] font-mono text-gray-700 shadow-sm flex items-center space-x-2">
-        <Locate className="w-3 h-3 text-emerald-600 animate-pulse" />
-        <span>
-          GPS: {pinPos.lat.toFixed(4)}°, {pinPos.lng.toFixed(4)}° ({commune})
-        </span>
+      <div aria-live="polite" className="text-xs">
+        {locationError ? (
+          <p className="text-destructive">{locationError}</p>
+        ) : (
+          <p className={isConfirmed ? "text-emerald-700" : "text-muted-foreground"}>
+            {isConfirmed
+              ? "Position enregistrée automatiquement. Vous pouvez encore l’ajuster."
+              : "Placez le marqueur pour confirmer la position. Les coordonnées restent masquées."}
+          </p>
+        )}
       </div>
     </div>
   );

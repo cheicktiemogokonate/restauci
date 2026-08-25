@@ -1,4 +1,5 @@
-import { getCategoriesRestaurant, getCreneauxRestaurant, getRestaurantBySlug } from "@/lib/db/queries";
+import { getCreneauxRestaurant, getRestaurantBySlug } from "@/lib/db/queries";
+import { getPublicRestaurantMenu } from "@/lib/quota-entitlements";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
@@ -65,7 +66,7 @@ interface Dish {
   id: string;
   name: string;
   description: string;
-  price: number; // in centimes (FCFA)
+  price: number; // FCFA entiers
   image: string;
   categoryId: string;
   categoryName: string;
@@ -85,18 +86,13 @@ export default async function RestaurantPage({ params }: RestaurantPageProps) {
   // Les deux sources sont indépendantes : les charger en parallèle raccourcit
   // le temps d'affichage de la vitrine publique.
   const [categoriesWithPlats, creneauxList] = await Promise.all([
-    getCategoriesRestaurant(restaurant.id),
+    getPublicRestaurantMenu(restaurant.id),
     getCreneauxRestaurant(restaurant.id).catch((error) => {
       console.error("Failed to fetch creneauxHoraires:", error);
       return [];
     }),
   ]);
-  const publicCategories = categoriesWithPlats
-    .filter((category) => category.visible)
-    .map((category) => ({
-      ...category,
-      plats: (category.plats ?? []).filter((plat) => plat.disponible),
-    }));
+  const publicCategories = categoriesWithPlats;
 
   // Flatten all plats from categories for availability checking
   const platsList: Plat[] = publicCategories.flatMap(
@@ -122,7 +118,7 @@ export default async function RestaurantPage({ params }: RestaurantPageProps) {
       id: plat.id,
       name: plat.nom,
       description: plat.description || "",
-      price: plat.prix, // Price in centimes (FCFA)
+      price: plat.prix,
       image:
         plat.photoUrl ||
         "/assets/images/dish_poulet_kedjenou_1781800228146.jpg", // Fallback image

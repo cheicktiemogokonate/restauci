@@ -1,17 +1,18 @@
 import { getClientSession } from "@/lib/api/auth-client";
 import { apiResponse } from "@/lib/api/response";
 import { db } from "@/lib/db";
-import { commandes, livraisons, restaurants } from "@/lib/db/schema";
+import { commandes, financialTransactions, livraisons, payments, restaurants } from "@/lib/db/schema";
+import { transitionRestaurantOrder } from "@/lib/db/commandes-mutations";
 import { createLogger } from "@/lib/logger";
 import { checkRateLimit, clientApiLimiter } from "@/lib/rate-limit";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
-import { after } from "next/server";
-import { pushSseEvent } from "@/lib/realtime/sse-push";
+import { FinancialTransactionError } from "@/modules/transactions/model";
 
 const log = createLogger("v1-client-commande-detail");
 
 const STATUT_LABELS_CLIENT: Record<string, string> = {
+  en_attente_paiement: "En attente de paiement",
   recue: "Commande reçue",
   en_preparation: "En préparation",
   prete: "Prête pour la livraison",
@@ -83,8 +84,23 @@ export async function GET(
             },
           })
         : null;
+    const [providerPayment] = await db.select({
+      provider: payments.provider,
+      method: payments.method,
+      status: payments.status,
+      checkoutUrl: payments.checkoutUrl,
+    }).from(payments)
+      .innerJoin(financialTransactions, eq(financialTransactions.id, payments.transactionId))
+      .where(and(
+        eq(financialTransactions.restaurantOrderId, commande.id),
+        eq(payments.provider, "paystack"),
+      ))
+      .orderBy(desc(payments.createdAt))
+      .limit(1);
     const timelineEtapes: readonly string[] =
-      commande.modeCommande === "livraison"
+      commande.statut === "en_attente_paiement"
+        ? (["en_attente_paiement"] as const)
+        : commande.modeCommande === "livraison"
         ? (["recue", "en_preparation", "prete", "en_route", "servie"] as const)
         : STATUT_ETAPES;
     const effectiveStatus =
@@ -126,6 +142,7 @@ export async function GET(
       livraisonStatut: livraison?.statut ?? null,
       estAnnulee: commande.statut === "annulee",
       timeline: commande.statut === "annulee" ? [] : etapes,
+      payment: providerPayment ?? null,
     });
   } catch (err) {
     log.error(
@@ -148,21 +165,12 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    const [commande] = await db
-      .update(commandes)
-      .set({ statut: "annulee", updatedAt: new Date() })
-      .where(
-        and(
-          eq(commandes.id, id),
-          eq(commandes.clientId, (await session).clientId),
-          eq(commandes.statut, "recue"),
-        ),
-      )
-      .returning({
-        id: commandes.id,
-        numero: commandes.numero,
-        restaurantId: commandes.restaurantId,
-      });
+    const commande = await transitionRestaurantOrder({
+      id,
+      clientId: (await session).clientId,
+      targetStatus: "annulee",
+      allowedPreviousStatuses: ["en_attente_paiement", "recue"],
+    });
 
     if (!commande) {
       return apiResponse.error(
@@ -172,23 +180,14 @@ export async function PATCH(
       );
     }
 
-    after(async () => {
-      await pushSseEvent(commande.restaurantId, "statut", {
-        statut: "annulee",
-        commandeId: commande.id,
-        lienId: commande.id,
-        numero: commande.numero,
-        timestamp: new Date().toISOString(),
-      }).catch((err) =>
-        log.error({ err, commandeId: commande.id }, "Notification annulation échouée"),
-      );
-    });
-
     return apiResponse.success({
       id: commande.id,
       statut: "annulee",
     });
   } catch (err) {
+    if (err instanceof FinancialTransactionError && err.code === "TRANSACTION_ALREADY_PAID") {
+      return apiResponse.error(err.message, "CONFLICT", { status: 409 });
+    }
     log.error(
       { err, clientId: (await session).clientId, commandeId: id },
       "Erreur annulation commande client",

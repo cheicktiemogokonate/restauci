@@ -3,6 +3,7 @@ import { getRestaurantBySlug } from "@/lib/db/queries";
 import { createLogger } from "@/lib/logger";
 import { apiLimiter, checkRateLimit } from "@/lib/rate-limit";
 import { NextRequest } from "next/server";
+import { toPublicRestaurantDTO } from "@/lib/restaurants/public-dto";
 
 const log = createLogger("v1-public-restaurant");
 
@@ -22,14 +23,7 @@ export async function GET(
       return apiResponse.notFound("Restaurant");
     }
 
-    // Ne pas exposer les champs sensibles
-    const {
-      userId, // Ne pas exposer
-      ...safeData
-    } = restaurant;
-    void userId;
-
-    return apiResponse.success(safeData);
+    return apiResponse.success(toPublicRestaurantDTO(restaurant));
   } catch (err) {
     log.error({ err, slug }, "Erreur page publique restaurant");
     return apiResponse.internalError();

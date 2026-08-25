@@ -9,8 +9,8 @@ import MenuCard from "./menu-card";
 import MenuFilters from "./menu-filters";
 
 interface MenuManagerProps {
-  categories: (Categorie & { platCount: number })[];
-  initialPlats: PlatAvecCategorie[];
+  categories: (Categorie & { platCount: number; quotaEligible: boolean })[];
+  initialPlats: (PlatAvecCategorie & { quotaEligible: boolean; categoryQuotaEligible: boolean })[];
   menuStats: { total: number; disponibles: number; indisponibles: number };
   totalPlats: number;
   currentPage: number;
@@ -18,6 +18,10 @@ interface MenuManagerProps {
   currentQ?: string;
   currentCategorie?: string;
   currentDispo?: string;
+  quotaSummary: {
+    category: { used: number; total: number; limit: number | null };
+    dish: { used: number; total: number; limit: number | null };
+  };
 }
 
 export default function MenuManager({
@@ -30,6 +34,7 @@ export default function MenuManager({
   currentQ,
   currentCategorie,
   currentDispo,
+  quotaSummary,
 }: MenuManagerProps) {
   return (
     <div className="flex flex-1 flex-col min-h-full overflow-hidden bg-background">
@@ -55,7 +60,21 @@ export default function MenuManager({
           <div className="mt-6 grid grid-cols-3 divide-x divide-border/70 rounded-2xl border border-border/70 bg-background/75">
             <div className="px-3 py-3 sm:px-5"><p className="text-lg font-bold">{menuStats.total}</p><p className="text-xs text-muted-foreground">Au menu</p></div>
             <div className="px-3 py-3 sm:px-5"><p className="flex items-center gap-1.5 text-lg font-bold text-brand-green"><Eye className="h-4 w-4" />{menuStats.disponibles}</p><p className="text-xs text-muted-foreground">Disponibles</p></div>
-            <div className="px-3 py-3 sm:px-5"><p className="flex items-center gap-1.5 text-lg font-bold text-muted-foreground"><EyeOff className="h-4 w-4" />{menuStats.indisponibles}</p><p className="text-xs text-muted-foreground">Masqués</p></div>
+            <div className="px-3 py-3 sm:px-5"><p className="flex items-center gap-1.5 text-lg font-bold text-muted-foreground"><EyeOff className="h-4 w-4" />{menuStats.indisponibles}</p><p className="text-xs text-muted-foreground">Indisponibles</p></div>
+          </div>
+          <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            {(["category", "dish"] as const).map((resource) => {
+              const quota = quotaSummary[resource];
+              return (
+                <div key={resource} className="rounded-xl border border-border/70 bg-background/75 px-4 py-3">
+                  <p className="font-semibold">{resource === "category" ? "Catégories" : "Plats"} publiables</p>
+                  <p className="text-muted-foreground">
+                    {quota.limit === null ? "Illimité" : `${quota.used} / ${quota.limit} places utilisées`}
+                    {quota.total > quota.used ? ` · ${quota.total - quota.used} hors quota` : ""}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
 

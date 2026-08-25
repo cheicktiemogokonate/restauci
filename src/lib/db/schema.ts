@@ -5,23 +5,67 @@ import {
   integer,
   boolean,
   timestamp,
+  date,
   jsonb,
   doublePrecision,
   real,
   time,
   varchar,
+  uuid,
   uniqueIndex,
   index,
+  check,
+  customType,
+  primaryKey,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
+import {
+  PAYMENT_METHODS,
+  PAYMENT_NETWORKS,
+  type PaymentReturnChannel,
+  PAYMENT_STATUSES,
+  TRANSACTION_STATUSES,
+  TRANSACTION_TYPES,
+} from "@/modules/transactions/model";
+import {
+  GEO_ASSIGNMENT_STATUSES,
+  GEO_SOURCE_OBJECT_TYPES,
+  GEO_SOURCE_TYPES,
+  SERVICE_ACTIVITY_TYPES,
+  SERVICE_MARKET_AREA_OPERATIONS,
+  SERVICE_MARKET_CAPABILITY_STATUSES,
+  SERVICE_MARKET_STATUSES,
+} from "@/modules/service-markets/model";
+import {
+  IDENTITY_DOCUMENT_SIDES,
+  IDENTITY_DOCUMENT_TYPES,
+  IDENTITY_VERIFICATION_STATUSES,
+  type IdentityDocumentContentType,
+} from "@/modules/identity/model";
+import {
+  RESIDENCE_AUDIT_ACTIONS,
+  RESIDENCE_RESERVATION_STATUSES,
+} from "@/modules/residences/model";
+import type { SubscriptionCataloguePayload } from "@/modules/subscriptions/contracts";
 
 // ============================================================================
 // ENUMS
 // ============================================================================
 
 export const roleEnum = pgEnum("role", [
-  "restaurateur",
+  "partner",
   "admin",
+]);
+
+export const activityTypeEnum = pgEnum("activity_type", [
+  "restaurant",
+  "residence",
+]);
+
+export const quotaResourceTypeEnum = pgEnum("quota_resource_type", [
+  "category",
+  "dish",
+  "residence",
 ]);
 
 export const modeCommandeEnum = pgEnum("mode_commande", [
@@ -31,6 +75,7 @@ export const modeCommandeEnum = pgEnum("mode_commande", [
 ]);
 
 export const statutCommandeEnum = pgEnum("statut_commande", [
+  "en_attente_paiement",
   "recue",
   "en_preparation",
   "prete",
@@ -38,19 +83,55 @@ export const statutCommandeEnum = pgEnum("statut_commande", [
   "annulee",
 ]);
 
-export const statutPaiementEnum = pgEnum("statut_paiement", [
-  "en_attente",
-  "paye",
-  "rembourse",
-  "echoue",
-]);
-
-export const methodePaiementEnum = pgEnum("methode_paiement", [
-  "especes",
-  "carte",
-  "mobile_money",
-  "en_ligne",
-]);
+export const transactionTypeEnum = pgEnum("transaction_type", TRANSACTION_TYPES);
+export const transactionStatusEnum = pgEnum(
+  "transaction_status",
+  TRANSACTION_STATUSES,
+);
+export const paymentStatusEnum = pgEnum("payment_status", PAYMENT_STATUSES);
+export const paymentMethodEnum = pgEnum("payment_method", PAYMENT_METHODS);
+export const paymentNetworkEnum = pgEnum("payment_network", PAYMENT_NETWORKS);
+export const serviceMarketStatusEnum = pgEnum(
+  "service_market_status",
+  SERVICE_MARKET_STATUSES,
+);
+export const serviceMarketCapabilityStatusEnum = pgEnum(
+  "service_market_capability_status",
+  SERVICE_MARKET_CAPABILITY_STATUSES,
+);
+export const serviceActivityTypeEnum = pgEnum(
+  "service_activity_type",
+  SERVICE_ACTIVITY_TYPES,
+);
+export const geoAssignmentStatusEnum = pgEnum(
+  "geo_assignment_status",
+  GEO_ASSIGNMENT_STATUSES,
+);
+export const geoSourceEnum = pgEnum("geo_source", GEO_SOURCE_TYPES);
+export const geoSourceObjectTypeEnum = pgEnum(
+  "geo_source_object_type",
+  GEO_SOURCE_OBJECT_TYPES,
+);
+export const serviceMarketAreaOperationEnum = pgEnum(
+  "service_market_area_operation",
+  SERVICE_MARKET_AREA_OPERATIONS,
+);
+export const identityVerificationStatusEnum = pgEnum(
+  "identity_verification_status",
+  IDENTITY_VERIFICATION_STATUSES,
+);
+export const identityDocumentTypeEnum = pgEnum(
+  "identity_document_type",
+  IDENTITY_DOCUMENT_TYPES,
+);
+export const identityDocumentSideEnum = pgEnum(
+  "identity_document_side",
+  IDENTITY_DOCUMENT_SIDES,
+);
+export const residenceReservationStatusEnum = pgEnum(
+  "residence_reservation_status",
+  RESIDENCE_RESERVATION_STATUSES,
+);
 
 export const statutLivraisonEnum = pgEnum("statut_livraison", [
   "en_attente",
@@ -82,20 +163,7 @@ export const typeNotificationEnum = pgEnum("type_notification", [
   "abonnement_expire",
   "restaurant_valide",
   "restaurant_rejete",
-]);
-
-export const statutAbonnementEnum = pgEnum("statut_abonnement", [
-  "essai",
-  "actif",
-  "expire",
-  "suspendu",
-]);
-
-export const planAbonnementEnum = pgEnum("plan_abonnement", [
-  "gratuit",
-  "starter",
-  "pro",
-  "entreprise",
+  "commission_cash_threshold",
 ]);
 
 // ── Nouveau : code d'offre du catalogue (3 offres fixes)
@@ -103,6 +171,18 @@ export const planCodeEnum = pgEnum("plan_code", [
   "decouverte",
   "croissance",
   "partenaire_fier",
+]);
+
+export const discoveryEventTypeEnum = pgEnum("discovery_event_type", [
+  "impression",
+  "click",
+  "detail_open",
+  "conversion",
+]);
+
+export const discoveryPlacementEnum = pgEnum("discovery_placement", [
+  "promoted",
+  "organic",
 ]);
 
 // ── Statut d'une demande d'abonnement
@@ -117,20 +197,53 @@ export const statutDemandeEnum = pgEnum("statut_demande_abonnement", [
 export const statutPeriodeEnum = pgEnum("statut_periode_abonnement", [
   "active",
   "expiree",
+  "terminee",
   "suspendue",
   "annulee",
+]);
+
+export const raisonFinPeriodeEnum = pgEnum("raison_fin_periode_abonnement", [
+  "expiration_naturelle",
+  "upgrade",
+  "annulation",
 ]);
 
 // ── Moyen de règlement (paiement abonnement)
 export const moyenReglementEnum = pgEnum("moyen_reglement", [
   "mobile_money",
+  "carte",
   "virement",
   "especes",
   "cheque",
 ]);
 
+export const commissionCommercialStatusEnum = pgEnum(
+  "commission_commercial_status",
+  ["pending", "due", "void"],
+);
+
+export const commissionCollectionModeEnum = pgEnum(
+  "commission_collection_mode",
+  ["cash_receivable", "provider_split"],
+);
+
+export const commissionSettlementSourceEnum = pgEnum(
+  "commission_settlement_source",
+  ["manual_admin", "provider_recovery", "paystack_direct"],
+);
+
+export const paymentProviderAccountStatusEnum = pgEnum(
+  "payment_provider_account_status",
+  ["active", "disabled"],
+);
+
+export const commissionSettlementStatusEnum = pgEnum(
+  "commission_settlement_status",
+  ["pending", "confirmed", "failed", "void"],
+);
+
 // ============================================================================
-// USERS  (restaurateurs & admins)
+// USERS  (partenaires & admins)
 // ============================================================================
 
 export const users = pgTable(
@@ -141,7 +254,7 @@ export const users = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     email: varchar("email", { length: 255 }).notNull().unique(),
     password: text("password").notNull(),
-    role: roleEnum("role").notNull().default("restaurateur"),
+    role: roleEnum("role").notNull().default("partner"),
     nom: varchar("nom", { length: 255 }).notNull(),
     telephone: varchar("telephone", { length: 20 }).notNull(),
     avatarUrl: text("avatar_url"),
@@ -154,7 +267,6 @@ export const users = pgTable(
     suspendu: boolean("suspendu").notNull().default(false),
     motifSuspension: text("motif_suspension"),
     suspenduAt: timestamp("suspendu_at", { withTimezone: true }),
-    pendingPlanCode: planCodeEnum("pending_plan_code"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -169,6 +281,332 @@ export const users = pgTable(
 );
 
 // ============================================================================
+// PARTNER ACCOUNTS (identité commerciale transversale)
+// ============================================================================
+
+export const partnerAccounts = pgTable(
+  "partner_accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    activityType: activityTypeEnum("activity_type").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    userUnique: uniqueIndex("partner_accounts_user_id_unique").on(table.userId),
+    activityTypeIdx: index("partner_accounts_activity_type_idx").on(table.activityType),
+  }),
+);
+
+// ============================================================================
+// IDENTITY — KYC PROPRIÉTAIRE MANUEL
+// ============================================================================
+
+export const partnerIdentityVerifications = pgTable(
+  "partner_identity_verifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    partnerAccountId: uuid("partner_account_id")
+      .notNull()
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
+    status: identityVerificationStatusEnum("status")
+      .notNull()
+      .default("not_submitted"),
+    legalName: varchar("legal_name", { length: 255 }),
+    documentType: identityDocumentTypeEnum("document_type"),
+    documentCountryCode: varchar("document_country_code", { length: 2 }),
+    documentExpiresOn: date("document_expires_on"),
+    rejectionReason: text("rejection_reason"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewedByAdminId: varchar("reviewed_by_admin_id", { length: 36 }).references(
+      () => users.id,
+      { onDelete: "restrict" },
+    ),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    partnerUnique: uniqueIndex(
+      "partner_identity_verifications_partner_unique",
+    ).on(table.partnerAccountId),
+    pendingReviewIdx: index(
+      "partner_identity_verifications_pending_review_idx",
+    )
+      .on(table.submittedAt, table.id)
+      .where(sql`${table.status} = 'pending'`),
+    reviewedByAdminIdx: index(
+      "partner_identity_verifications_reviewed_by_admin_idx",
+    ).on(table.reviewedByAdminId),
+    countryCodeValid: check(
+      "partner_identity_verifications_country_code_valid",
+      sql`${table.documentCountryCode} IS NULL OR ${table.documentCountryCode} ~ '^[A-Z]{2}$'`,
+    ),
+    lifecycleCoherent: check(
+      "partner_identity_verifications_lifecycle_coherent",
+      sql`(${table.status} = 'not_submitted' AND ${table.submittedAt} IS NULL AND ${table.reviewedAt} IS NULL AND ${table.reviewedByAdminId} IS NULL AND ${table.verifiedAt} IS NULL AND ${table.rejectionReason} IS NULL)
+        OR (${table.status} = 'pending' AND ${table.legalName} IS NOT NULL AND ${table.documentType} IS NOT NULL AND ${table.documentCountryCode} IS NOT NULL AND ${table.documentExpiresOn} IS NOT NULL AND ${table.submittedAt} IS NOT NULL AND ${table.reviewedAt} IS NULL AND ${table.reviewedByAdminId} IS NULL AND ${table.verifiedAt} IS NULL AND ${table.rejectionReason} IS NULL)
+        OR (${table.status} = 'verified' AND ${table.legalName} IS NOT NULL AND ${table.documentType} IS NOT NULL AND ${table.documentCountryCode} IS NOT NULL AND ${table.documentExpiresOn} IS NOT NULL AND ${table.submittedAt} IS NOT NULL AND ${table.reviewedAt} IS NOT NULL AND ${table.reviewedByAdminId} IS NOT NULL AND ${table.verifiedAt} IS NOT NULL AND ${table.rejectionReason} IS NULL)
+        OR (${table.status} = 'rejected' AND ${table.legalName} IS NOT NULL AND ${table.documentType} IS NOT NULL AND ${table.documentCountryCode} IS NOT NULL AND ${table.documentExpiresOn} IS NOT NULL AND ${table.submittedAt} IS NOT NULL AND ${table.reviewedAt} IS NOT NULL AND ${table.reviewedByAdminId} IS NOT NULL AND ${table.verifiedAt} IS NULL AND length(trim(${table.rejectionReason})) >= 10)`,
+    ),
+  }),
+);
+
+export const partnerIdentityDocuments = pgTable(
+  "partner_identity_documents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    verificationId: uuid("verification_id")
+      .notNull()
+      .references(() => partnerIdentityVerifications.id, {
+        onDelete: "restrict",
+      }),
+    side: identityDocumentSideEnum("side").notNull(),
+    storageKey: text("storage_key").notNull(),
+    contentType: varchar("content_type", { length: 50 })
+      .notNull()
+      .$type<IdentityDocumentContentType>(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: varchar("sha256", { length: 64 }).notNull(),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    verificationSideUnique: uniqueIndex(
+      "partner_identity_documents_verification_side_unique",
+    ).on(table.verificationId, table.side),
+    storageKeyUnique: uniqueIndex(
+      "partner_identity_documents_storage_key_unique",
+    ).on(table.storageKey),
+    contentTypeValid: check(
+      "partner_identity_documents_content_type_valid",
+      sql`${table.contentType} IN ('image/jpeg', 'image/png', 'application/pdf')`,
+    ),
+    sizeValid: check(
+      "partner_identity_documents_size_valid",
+      sql`${table.sizeBytes} > 0 AND ${table.sizeBytes} <= ${8 * 1024 * 1024}`,
+    ),
+    sha256Valid: check(
+      "partner_identity_documents_sha256_valid",
+      sql`${table.sha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+  }),
+);
+
+export const paymentProviderAccounts = pgTable(
+  "payment_provider_accounts",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    partnerAccountId: uuid("partner_account_id")
+      .notNull()
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
+    provider: varchar("provider", { length: 50 }).notNull(),
+    providerAccountReference: varchar("provider_account_reference", { length: 255 }).notNull(),
+    status: paymentProviderAccountStatusEnum("status").notNull().default("active"),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
+    linkedByAdminId: varchar("linked_by_admin_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    partnerProviderUnique: uniqueIndex("payment_provider_accounts_partner_provider_unique").on(
+      table.partnerAccountId,
+      table.provider,
+    ),
+    providerReferenceUnique: uniqueIndex("payment_provider_accounts_provider_reference_unique").on(
+      table.provider,
+      table.providerAccountReference,
+    ),
+    activeLookupIdx: index("payment_provider_accounts_active_lookup_idx").on(
+      table.partnerAccountId,
+      table.provider,
+      table.status,
+    ),
+    providerPaystackOnly: check(
+      "payment_provider_accounts_paystack_only",
+      sql`${table.provider} = 'paystack'`,
+    ),
+    lifecycleCoherent: check(
+      "payment_provider_accounts_lifecycle_coherent",
+      sql`(${table.status} = 'active' AND ${table.disabledAt} IS NULL) OR (${table.status} = 'disabled' AND ${table.disabledAt} IS NOT NULL)`,
+    ),
+  }),
+);
+
+// ============================================================================
+// SERVICE MARKETS (géographie commerciale transversale)
+// ============================================================================
+
+const multiPolygon4326 = customType<{
+  data: string;
+  driverData: string;
+}>({
+  dataType() {
+    return "geometry(MultiPolygon,4326)";
+  },
+});
+
+export const geoSourceAreas = pgTable(
+  "geo_source_areas",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    source: geoSourceEnum("source").notNull().default("osm"),
+    sourceType: geoSourceObjectTypeEnum("source_type")
+      .notNull()
+      .default("relation"),
+    sourceRef: varchar("source_ref", { length: 255 }).notNull(),
+    sourceVersion: varchar("source_version", { length: 100 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    nameLocal: varchar("name_local", { length: 255 }),
+    countryCode: varchar("country_code", { length: 2 }).notNull(),
+    adminLevel: varchar("admin_level", { length: 20 }),
+    tags: jsonb("tags").$type<Record<string, string>>().notNull().default({}),
+    geometry: multiPolygon4326("geometry").notNull(),
+    geometryChecksum: varchar("geometry_checksum", { length: 64 }).notNull(),
+    sourceUpdatedAt: timestamp("source_updated_at", { withTimezone: true }),
+    importedAt: timestamp("imported_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    sourceVersionUnique: uniqueIndex("geo_source_areas_source_version_unique").on(
+      table.source,
+      table.sourceRef,
+      table.sourceVersion,
+    ),
+    countryIdx: index("geo_source_areas_country_idx").on(table.countryCode),
+  }),
+);
+
+export const serviceMarkets = pgTable(
+  "service_markets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    code: varchar("code", { length: 80 }).notNull().unique(),
+    name: varchar("name", { length: 255 }).notNull(),
+    countryCode: varchar("country_code", { length: 2 }).notNull(),
+    status: serviceMarketStatusEnum("status").notNull().default("draft"),
+    activeVersionId: uuid("active_version_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => ({
+    countryStatusIdx: index("service_markets_country_status_idx").on(
+      table.countryCode,
+      table.status,
+    ),
+  }),
+);
+
+export const serviceMarketVersions = pgTable(
+  "service_market_versions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    serviceMarketId: uuid("service_market_id")
+      .notNull()
+      .references(() => serviceMarkets.id, { onDelete: "restrict" }),
+    version: integer("version").notNull(),
+    geometry: multiPolygon4326("geometry").notNull(),
+    geometryChecksum: varchar("geometry_checksum", { length: 64 }).notNull(),
+    sourceManifest: jsonb("source_manifest")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdByUserId: varchar("created_by_user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+  },
+  (table) => ({
+    marketVersionUnique: uniqueIndex("service_market_versions_market_version_unique").on(
+      table.serviceMarketId,
+      table.version,
+    ),
+    marketLifecycleIdx: index("service_market_versions_market_lifecycle_idx").on(
+      table.serviceMarketId,
+      table.publishedAt,
+      table.retiredAt,
+    ),
+  }),
+);
+
+export const serviceMarketCapabilities = pgTable(
+  "service_market_capabilities",
+  {
+    serviceMarketId: uuid("service_market_id")
+      .notNull()
+      .references(() => serviceMarkets.id, { onDelete: "restrict" }),
+    activityType: serviceActivityTypeEnum("activity_type").notNull(),
+    status: serviceMarketCapabilityStatusEnum("status")
+      .notNull()
+      .default("disabled"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    prelaunchAt: timestamp("prelaunch_at", { withTimezone: true }),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    pausedAt: timestamp("paused_at", { withTimezone: true }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.serviceMarketId, table.activityType] }),
+    activityStatusIdx: index("service_market_capabilities_activity_status_idx").on(
+      table.activityType,
+      table.status,
+    ),
+  }),
+);
+
+export const serviceMarketVersionAreas = pgTable(
+  "service_market_version_areas",
+  {
+    serviceMarketVersionId: uuid("service_market_version_id")
+      .notNull()
+      .references(() => serviceMarketVersions.id, { onDelete: "cascade" }),
+    geoSourceAreaId: uuid("geo_source_area_id")
+      .notNull()
+      .references(() => geoSourceAreas.id, { onDelete: "restrict" }),
+    operation: serviceMarketAreaOperationEnum("operation")
+      .notNull()
+      .default("include"),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.serviceMarketVersionId, table.geoSourceAreaId],
+    }),
+  }),
+);
+
+// ============================================================================
 // RESTAURANTS
 // ============================================================================
 
@@ -178,10 +616,10 @@ export const restaurants = pgTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    userId: varchar("user_id", { length: 36 })
+    partnerAccountId: uuid("partner_account_id")
       .notNull()
       .unique()
-      .references(() => users.id, { onDelete: "cascade" }),
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
     nom: varchar("nom", { length: 255 }).notNull(),
     slug: varchar("slug", { length: 255 }).notNull().unique(),
     description: text("description"),
@@ -193,9 +631,21 @@ export const restaurants = pgTable(
     pays: varchar("pays", { length: 100 }).default("Côte d'Ivoire"),
     latitude: doublePrecision("latitude").notNull(),
     longitude: doublePrecision("longitude").notNull(),
+    serviceMarketId: uuid("service_market_id").references(
+      () => serviceMarkets.id,
+      { onDelete: "restrict" },
+    ),
+    serviceMarketVersionId: uuid("service_market_version_id").references(
+      () => serviceMarketVersions.id,
+      { onDelete: "restrict" },
+    ),
+    geoAssignmentStatus: geoAssignmentStatusEnum("geo_assignment_status")
+      .notNull()
+      .default("pending_review"),
+    geoAssignedAt: timestamp("geo_assigned_at", { withTimezone: true }),
     logoUrl: text("logo_url"),
     banniereUrl: text("banniere_url"),
-    // Finances (montants en centimes / FCFA entiers)
+    // Tous les montants métier Toutci sont stockés en FCFA entiers.
     fraisLivraison: integer("frais_livraison").notNull().default(0),
     commandeMinimum: integer("commande_minimum").notNull().default(0),
     // Modes & config
@@ -225,8 +675,6 @@ export const restaurants = pgTable(
     // Suspension
     suspendu: boolean("suspendu").notNull().default(false),
     motifSuspension: text("motif_suspension"),
-    // Commission
-    tauxCommissionBps: integer("taux_commission_bps").notNull().default(1000),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -236,14 +684,230 @@ export const restaurants = pgTable(
   },
   (table) => ({
     slugIdx:   uniqueIndex("idx_restaurants_slug").on(table.slug),
-    userIdIdx: uniqueIndex("idx_restaurants_user_id").on(table.userId),
     villeIdx:  index("idx_restaurants_ville").on(table.ville),
     actifIdx:  index("idx_restaurants_actif").on(table.actif),
     villeActifIdx: index("idx_restaurants_ville_actif").on(
       table.ville,
       table.actif
     ),
+    marketVisibilityIdx: index("restaurants_market_visibility_idx").on(
+      table.serviceMarketId,
+      table.actif,
+      table.suspendu,
+    ),
+    fraisLivraisonNonNegatif: check(
+      "restaurants_frais_livraison_non_negatif",
+      sql`${table.fraisLivraison} >= 0`,
+    ),
+    commandeMinimumNonNegative: check(
+      "restaurants_commande_minimum_non_negative",
+      sql`${table.commandeMinimum} >= 0`,
+    ),
   })
+);
+
+// ============================================================================
+// RESIDENCES
+// ============================================================================
+
+export const residences = pgTable(
+  "residences",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    partnerAccountId: uuid("partner_account_id")
+      .notNull()
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
+    title: varchar("title", { length: 160 }).notNull(),
+    slug: varchar("slug", { length: 200 }).notNull(),
+    description: text("description").notNull(),
+    pricePerNightFcfa: integer("price_per_night_fcfa").notNull(),
+    maxGuests: integer("max_guests").notNull(),
+    address: text("address").notNull(),
+    city: varchar("city", { length: 100 }).notNull(),
+    country: varchar("country", { length: 100 })
+      .notNull()
+      .default("Côte d’Ivoire"),
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+    publicationIntent: boolean("publication_intent").notNull().default(false),
+    publicationEnabledAt: timestamp("publication_enabled_at", {
+      withTimezone: true,
+    }),
+    firstPublishedAt: timestamp("first_published_at", { withTimezone: true }),
+    actif: boolean("actif").notNull().default(false),
+    motifRejet: text("motif_rejet"),
+    validatedByAdminId: varchar("validated_by_admin_id", { length: 36 })
+      .references(() => users.id, { onDelete: "set null" }),
+    validatedAt: timestamp("validated_at", { withTimezone: true }),
+    suspendu: boolean("suspendu").notNull().default(false),
+    motifSuspension: text("motif_suspension"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    slugUnique: uniqueIndex("residences_slug_unique").on(table.slug),
+    partnerIdx: index("residences_partner_account_idx").on(
+      table.partnerAccountId,
+      table.createdAt,
+    ),
+    moderationIdx: index("residences_moderation_idx").on(
+      table.publicationIntent,
+      table.actif,
+      table.suspendu,
+      table.createdAt,
+    ),
+    publicationEnabledIdx: index("residences_publication_enabled_idx").on(
+      table.partnerAccountId,
+      table.publicationEnabledAt,
+    ),
+    publicDiscoveryIdx: index("residences_public_discovery_idx")
+      .on(table.firstPublishedAt, table.id)
+      .where(
+        sql`${table.publicationIntent} = true AND ${table.publicationEnabledAt} IS NOT NULL AND ${table.firstPublishedAt} IS NOT NULL AND ${table.actif} = true AND ${table.suspendu} = false AND ${table.archivedAt} IS NULL`,
+      ),
+    pricePositive: check(
+      "residences_price_per_night_positive",
+      sql`${table.pricePerNightFcfa} > 0`,
+    ),
+    capacityPositive: check(
+      "residences_max_guests_positive",
+      sql`${table.maxGuests} > 0`,
+    ),
+    coordinatesCoherent: check(
+      "residences_coordinates_coherent",
+      sql`(${table.latitude} IS NULL AND ${table.longitude} IS NULL) OR (${table.latitude} BETWEEN -90 AND 90 AND ${table.longitude} BETWEEN -180 AND 180)`,
+    ),
+    moderationCoherent: check(
+      "residences_moderation_coherent",
+      sql`(${table.actif} = false OR (${table.validatedAt} IS NOT NULL AND ${table.validatedByAdminId} IS NOT NULL AND ${table.motifRejet} IS NULL)) AND (${table.suspendu} = false OR length(trim(${table.motifSuspension})) >= 10)`,
+    ),
+  }),
+);
+
+export const residenceImages = pgTable(
+  "residence_images",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    residenceId: uuid("residence_id")
+      .notNull()
+      .references(() => residences.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    altText: varchar("alt_text", { length: 255 }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    residenceIdx: index("residence_images_residence_idx").on(
+      table.residenceId,
+      table.sortOrder,
+    ),
+    residenceUrlUnique: uniqueIndex("residence_images_residence_url_unique").on(
+      table.residenceId,
+      table.url,
+    ),
+    sortOrderNonNegative: check(
+      "residence_images_sort_order_non_negative",
+      sql`${table.sortOrder} >= 0`,
+    ),
+  }),
+);
+
+export const residenceReservations = pgTable(
+  "residence_reservations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    residenceId: uuid("residence_id")
+      .notNull()
+      .references(() => residences.id, { onDelete: "restrict" }),
+    partnerAccountId: uuid("partner_account_id")
+      .notNull()
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
+    clientId: varchar("client_id", { length: 36 })
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    status: residenceReservationStatusEnum("status")
+      .notNull()
+      .default("en_attente_paiement"),
+    checkIn: date("check_in").notNull(),
+    checkOut: date("check_out").notNull(),
+    nights: integer("nights").notNull(),
+    guests: integer("guests").notNull(),
+    pricePerNightSnapshotFcfa: integer("price_per_night_snapshot_fcfa")
+      .notNull(),
+    subtotalFcfa: integer("subtotal_fcfa").notNull(),
+    totalFcfa: integer("total_fcfa").notNull(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    residenceDatesIdx: index("residence_reservations_residence_dates_idx")
+      .on(table.residenceId, table.checkIn, table.checkOut)
+      .where(sql`${table.status} <> 'annulee'`),
+    clientCreatedIdx: index("residence_reservations_client_created_idx").on(
+      table.clientId,
+      table.createdAt,
+    ),
+    partnerCreatedIdx: index("residence_reservations_partner_created_idx").on(
+      table.partnerAccountId,
+      table.createdAt,
+    ),
+    statusCreatedIdx: index("residence_reservations_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+    stayValid: check(
+      "residence_reservations_stay_valid",
+      sql`${table.checkIn} < ${table.checkOut} AND ${table.nights} > 0 AND ${table.guests} > 0`,
+    ),
+    amountsValid: check(
+      "residence_reservations_amounts_valid",
+      sql`${table.pricePerNightSnapshotFcfa} > 0 AND ${table.subtotalFcfa} > 0 AND ${table.totalFcfa} = ${table.subtotalFcfa} AND ${table.subtotalFcfa} = ${table.pricePerNightSnapshotFcfa} * ${table.nights}`,
+    ),
+    lifecycleValid: check(
+      "residence_reservations_lifecycle_valid",
+      sql`(${table.status} = 'en_attente_paiement' AND ${table.confirmedAt} IS NULL AND ${table.cancelledAt} IS NULL)
+        OR (${table.status} = 'confirmee' AND ${table.confirmedAt} IS NOT NULL AND ${table.cancelledAt} IS NULL)
+        OR (${table.status} = 'annulee' AND ${table.cancelledAt} IS NOT NULL)`,
+    ),
+  }),
+);
+
+export const residenceUnavailablePeriods = pgTable(
+  "residence_unavailable_periods",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    residenceId: uuid("residence_id")
+      .notNull()
+      .references(() => residences.id, { onDelete: "restrict" }),
+    checkIn: date("check_in").notNull(),
+    checkOut: date("check_out").notNull(),
+    reason: varchar("reason", { length: 255 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    residenceDatesIdx: index(
+      "residence_unavailable_periods_residence_dates_idx",
+    ).on(table.residenceId, table.checkIn, table.checkOut),
+    stayValid: check(
+      "residence_unavailable_periods_stay_valid",
+      sql`${table.checkIn} < ${table.checkOut}`,
+    ),
+  }),
 );
 
 // ============================================================================
@@ -264,9 +928,6 @@ export const subscriptionPlans = pgTable(
     prixAnnuelFcfa: integer("prix_annuel_fcfa").notNull().default(0),
     // Taux de commission en points de base (1500 = 15 %)
     tauxCommissionBps: integer("taux_commission_bps").notNull(),
-    // Limites (null = illimité)
-    maxPlats: integer("max_plats"),        // null = illimité
-    maxCategories: integer("max_categories"), // null = illimité
     // Affichage
     ordre: integer("ordre").notNull().default(0),
     actif: boolean("actif").notNull().default(true),
@@ -280,11 +941,260 @@ export const subscriptionPlans = pgTable(
   (table) => ({
     codeIdx: uniqueIndex("idx_subscription_plans_code").on(table.code),
     ordreIdx: index("idx_subscription_plans_ordre").on(table.ordre),
+    prixAnnuelNonNegatif: check(
+      "subscription_plans_prix_annuel_fcfa_non_negatif",
+      sql`${table.prixAnnuelFcfa} >= 0`,
+    ),
+    tauxCommissionValide: check(
+      "subscription_plans_taux_commission_bps_valide",
+      sql`${table.tauxCommissionBps} BETWEEN 0 AND 10000`,
+    ),
+    ordreNonNegatif: check(
+      "subscription_plans_ordre_non_negatif",
+      sql`${table.ordre} >= 0`,
+    ),
   })
 );
 
+export const subscriptionPlanLimits = pgTable(
+  "subscription_plan_limits",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    planId: varchar("plan_id", { length: 36 })
+      .notNull()
+      .references(() => subscriptionPlans.id, { onDelete: "cascade" }),
+    activityType: activityTypeEnum("activity_type").notNull(),
+    resourceType: quotaResourceTypeEnum("resource_type").notNull(),
+    maxCount: integer("max_count"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    planResourceUnique: uniqueIndex("subscription_plan_limits_plan_activity_resource_unique")
+      .on(table.planId, table.activityType, table.resourceType),
+    planIdx: index("subscription_plan_limits_plan_idx").on(table.planId),
+    maxCountValid: check(
+      "subscription_plan_limits_max_count_valid",
+      sql`${table.maxCount} IS NULL OR ${table.maxCount} >= 0`,
+    ),
+    compatibleResource: check(
+      "subscription_plan_limits_activity_resource_valid",
+      sql`(${table.activityType} = 'restaurant' AND ${table.resourceType} IN ('category', 'dish')) OR (${table.activityType} = 'residence' AND ${table.resourceType} = 'residence')`,
+    ),
+  }),
+);
+
+export const subscriptionPlanExposureBenefits = pgTable(
+  "subscription_plan_exposure_benefits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: varchar("plan_id", { length: 36 })
+      .notNull()
+      .references(() => subscriptionPlans.id, { onDelete: "cascade" }),
+    activityType: activityTypeEnum("activity_type").notNull(),
+    exposureWeight: integer("exposure_weight").notNull(),
+    searchPromotedEligible: boolean("search_promoted_eligible")
+      .notNull()
+      .default(false),
+    marketFeaturedEligible: boolean("market_featured_eligible")
+      .notNull()
+      .default(false),
+    homepageFeaturedEligible: boolean("homepage_featured_eligible")
+      .notNull()
+      .default(false),
+    partnerBadgeEnabled: boolean("partner_badge_enabled")
+      .notNull()
+      .default(false),
+    recommended: boolean("recommended").notNull().default(false),
+    ctaLabel: varchar("cta_label", { length: 80 }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    planActivityUnique: uniqueIndex(
+      "subscription_plan_exposure_benefits_plan_activity_unique",
+    ).on(table.planId, table.activityType),
+    planIdx: index("subscription_plan_exposure_benefits_plan_idx").on(
+      table.planId,
+    ),
+    activityWeightIdx: index(
+      "subscription_plan_exposure_benefits_activity_weight_idx",
+    ).on(table.activityType, table.exposureWeight),
+    weightValid: check(
+      "subscription_plan_exposure_benefits_weight_valid",
+      sql`${table.exposureWeight} BETWEEN 1 AND 100`,
+    ),
+  }),
+);
+
+export const subscriptionPlanFeatureItems = pgTable(
+  "subscription_plan_feature_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: varchar("plan_id", { length: 36 })
+      .notNull()
+      .references(() => subscriptionPlans.id, { onDelete: "cascade" }),
+    activityType: activityTypeEnum("activity_type").notNull(),
+    label: varchar("label", { length: 160 }).notNull(),
+    sortOrder: integer("sort_order").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    planActivityOrderUnique: uniqueIndex(
+      "subscription_plan_feature_items_plan_activity_order_unique",
+    ).on(table.planId, table.activityType, table.sortOrder),
+    planActivityIdx: index(
+      "subscription_plan_feature_items_plan_activity_idx",
+    ).on(table.planId, table.activityType),
+    orderValid: check(
+      "subscription_plan_feature_items_order_valid",
+      sql`${table.sortOrder} >= 0`,
+    ),
+  }),
+);
+
+export const discoveryPolicySettings = pgTable(
+  "discovery_policy_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    activityType: activityTypeEnum("activity_type").notNull().unique(),
+    enabled: boolean("enabled").notNull().default(true),
+    sponsoredShareBps: integer("sponsored_share_bps").notNull().default(2_500),
+    rotationWindowMinutes: integer("rotation_window_minutes")
+      .notNull()
+      .default(1_440),
+    maxPromotedPerPartner: integer("max_promoted_per_partner")
+      .notNull()
+      .default(1),
+    updatedByAdminId: varchar("updated_by_admin_id", { length: 36 }).references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    updatedByIdx: index("discovery_policy_settings_updated_by_idx").on(
+      table.updatedByAdminId,
+    ),
+    sponsoredShareValid: check(
+      "discovery_policy_settings_sponsored_share_valid",
+      sql`${table.sponsoredShareBps} BETWEEN 0 AND 5000`,
+    ),
+    rotationWindowValid: check(
+      "discovery_policy_settings_rotation_window_valid",
+      sql`${table.rotationWindowMinutes} BETWEEN 15 AND 10080`,
+    ),
+    partnerLimitValid: check(
+      "discovery_policy_settings_partner_limit_valid",
+      sql`${table.maxPromotedPerPartner} BETWEEN 1 AND 10`,
+    ),
+  }),
+);
+
+export const discoveryEvents = pgTable(
+  "discovery_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attributionId: uuid("attribution_id").notNull(),
+    eventType: discoveryEventTypeEnum("event_type").notNull(),
+    activityType: activityTypeEnum("activity_type").notNull(),
+    resourceId: varchar("resource_id", { length: 36 }).notNull(),
+    partnerAccountId: uuid("partner_account_id")
+      .notNull()
+      .references(() => partnerAccounts.id, { onDelete: "cascade" }),
+    planCode: planCodeEnum("plan_code").notNull(),
+    placement: discoveryPlacementEnum("placement").notNull(),
+    contextHash: varchar("context_hash", { length: 64 }).notNull(),
+    conversionReferenceId: varchar("conversion_reference_id", { length: 36 }),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    attributionEventUnique: uniqueIndex(
+      "discovery_events_attribution_event_unique",
+    ).on(table.attributionId, table.eventType),
+    reportingIdx: index("discovery_events_reporting_idx").on(
+      table.occurredAt,
+      table.activityType,
+      table.planCode,
+      table.placement,
+    ),
+    partnerIdx: index("discovery_events_partner_idx").on(
+      table.partnerAccountId,
+      table.occurredAt,
+    ),
+    conversionReferenceUnique: uniqueIndex(
+      "discovery_events_conversion_reference_unique",
+    )
+      .on(table.activityType, table.conversionReferenceId)
+      .where(sql`${table.eventType} = 'conversion'`),
+    conversionReferenceValid: check(
+      "discovery_events_conversion_reference_valid",
+      sql`(${table.eventType} = 'conversion' AND ${table.conversionReferenceId} IS NOT NULL) OR (${table.eventType} <> 'conversion' AND ${table.conversionReferenceId} IS NULL)`,
+    ),
+  }),
+);
+
+export const subscriptionCatalogueDraft = pgTable(
+  "subscription_catalogue_draft",
+  {
+    id: integer("id").primaryKey().default(1),
+    payload: jsonb("payload").$type<SubscriptionCataloguePayload>().notNull(),
+    updatedByAdminId: varchar("updated_by_admin_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    singleton: check("subscription_catalogue_draft_singleton", sql`${table.id} = 1`),
+    updatedByIdx: index("subscription_catalogue_draft_updated_by_idx").on(
+      table.updatedByAdminId,
+    ),
+  }),
+);
+
+export const subscriptionCatalogueRevisions = pgTable(
+  "subscription_catalogue_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    version: integer("version").generatedAlwaysAsIdentity().unique(),
+    payload: jsonb("payload").$type<SubscriptionCataloguePayload>().notNull(),
+    publishedByAdminId: varchar("published_by_admin_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    publishedAt: timestamp("published_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    publishedByIdx: index("subscription_catalogue_revisions_published_by_idx").on(
+      table.publishedByAdminId,
+    ),
+    publishedAtIdx: index("subscription_catalogue_revisions_published_at_idx").on(
+      table.publishedAt,
+    ),
+  }),
+);
+
 // ============================================================================
-// DEMANDES D'ABONNEMENT (restaurant → demande de changement/renouvellement)
+// DEMANDES D'ABONNEMENT (partner account → changement/renouvellement)
 // ============================================================================
 
 export const subscriptionRequests = pgTable(
@@ -293,9 +1203,9 @@ export const subscriptionRequests = pgTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    restaurantId: varchar("restaurant_id", { length: 36 })
+    partnerAccountId: uuid("partner_account_id")
       .notNull()
-      .references(() => restaurants.id, { onDelete: "cascade" }),
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
     // Offre demandée et montant figé au moment de la demande
     planCode: planCodeEnum("plan_code").notNull(),
     prixFigeFcfa: integer("prix_fige_fcfa").notNull().default(0),
@@ -310,17 +1220,24 @@ export const subscriptionRequests = pgTable(
       .$defaultFn(() => new Date()),
   },
   (table) => ({
-    restaurantIdx: index("idx_sub_requests_restaurant").on(table.restaurantId),
+    partnerAccountIdx: index("subscription_requests_partner_account_idx").on(table.partnerAccountId),
     statutIdx: index("idx_sub_requests_statut").on(table.statut),
-    restaurantStatutIdx: index("idx_sub_requests_restaurant_statut").on(
-      table.restaurantId,
+    partnerAccountStatutIdx: index("subscription_requests_partner_account_statut_idx").on(
+      table.partnerAccountId,
       table.statut
+    ),
+    onePendingPerPartnerAccount: uniqueIndex("subscription_requests_one_pending_per_partner_account")
+      .on(table.partnerAccountId)
+      .where(sql`${table.statut} = 'en_attente'`),
+    prixFigeNonNegatif: check(
+      "subscription_requests_prix_fige_fcfa_non_negatif",
+      sql`${table.prixFigeFcfa} >= 0`,
     ),
   })
 );
 
 // ============================================================================
-// PÉRIODES D'ABONNEMENT ACTIVES (historique par restaurant)
+// PÉRIODES D'ABONNEMENT ACTIVES (historique par partner account)
 // ============================================================================
 
 export const subscriptionPeriods = pgTable(
@@ -329,9 +1246,9 @@ export const subscriptionPeriods = pgTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    restaurantId: varchar("restaurant_id", { length: 36 })
+    partnerAccountId: uuid("partner_account_id")
       .notNull()
-      .references(() => restaurants.id, { onDelete: "cascade" }),
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
     // Demande qui a déclenché cette période (null pour Découverte auto)
     requestId: varchar("request_id", { length: 36 })
       .references(() => subscriptionRequests.id, { onDelete: "set null" }),
@@ -352,6 +1269,10 @@ export const subscriptionPeriods = pgTable(
       .$defaultFn(() => new Date()),
     dateEcheance: timestamp("date_echeance", { withTimezone: true }), // null = découverte (pas d'échéance)
     statut: statutPeriodeEnum("statut").notNull().default("active"),
+    // Une fin réelle distincte de l'échéance prévue conserve l'historique
+    // des upgrades et autres clôtures anticipées sans ambiguïté.
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    endReason: raisonFinPeriodeEnum("end_reason"),
     // Motif de suspension/annulation si applicable
     motifSuspension: text("motif_suspension"),
     suspenduParAdminId: varchar("suspendu_par_admin_id", { length: 36 })
@@ -362,14 +1283,64 @@ export const subscriptionPeriods = pgTable(
       .$defaultFn(() => new Date()),
   },
   (table) => ({
-    restaurantIdx: index("idx_sub_periods_restaurant").on(table.restaurantId),
+    partnerAccountIdx: index("subscription_periods_partner_account_idx").on(table.partnerAccountId),
     statutIdx: index("idx_sub_periods_statut").on(table.statut),
-    restaurantStatutIdx: index("idx_sub_periods_restaurant_statut").on(
-      table.restaurantId,
+    partnerAccountStatutIdx: index("subscription_periods_partner_account_statut_idx").on(
+      table.partnerAccountId,
       table.statut
     ),
     echeanceIdx: index("idx_sub_periods_echeance").on(table.dateEcheance),
+    oneEffectivePaidPeriod: uniqueIndex("subscription_periods_one_active_paid_per_partner_account")
+      .on(table.partnerAccountId)
+      .where(sql`${table.statut} = 'active' AND ${table.planCode} <> 'decouverte'`),
+    prixPayeNonNegatif: check(
+      "subscription_periods_prix_paye_fcfa_non_negatif",
+      sql`${table.prixPayeFcfa} >= 0`,
+    ),
+    historicalDiscoveryOnly: check(
+      "subscription_periods_discovery_is_historical_only",
+      sql`${table.planCode} <> 'decouverte' OR ${table.statut} NOT IN ('active', 'suspendue')`,
+    ),
+    validPlannedDates: check(
+      "subscription_periods_valid_planned_dates",
+      sql`${table.planCode} = 'decouverte' OR (${table.dateEcheance} IS NOT NULL AND ${table.dateEcheance} > ${table.dateDebut})`,
+    ),
+    coherentEnd: check(
+      "subscription_periods_coherent_end",
+      sql`(${table.endedAt} IS NULL) = (${table.endReason} IS NULL)`,
+    ),
   })
+);
+
+export const subscriptionPeriodLimits = pgTable(
+  "subscription_period_limits",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    subscriptionPeriodId: varchar("subscription_period_id", { length: 36 })
+      .notNull()
+      .references(() => subscriptionPeriods.id, { onDelete: "restrict" }),
+    activityType: activityTypeEnum("activity_type").notNull(),
+    resourceType: quotaResourceTypeEnum("resource_type").notNull(),
+    maxCount: integer("max_count"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    periodResourceUnique: uniqueIndex("subscription_period_limits_period_activity_resource_unique")
+      .on(table.subscriptionPeriodId, table.activityType, table.resourceType),
+    periodIdx: index("subscription_period_limits_period_idx").on(table.subscriptionPeriodId),
+    maxCountValid: check(
+      "subscription_period_limits_max_count_valid",
+      sql`${table.maxCount} IS NULL OR ${table.maxCount} >= 0`,
+    ),
+    compatibleResource: check(
+      "subscription_period_limits_activity_resource_valid",
+      sql`(${table.activityType} = 'restaurant' AND ${table.resourceType} IN ('category', 'dish')) OR (${table.activityType} = 'residence' AND ${table.resourceType} = 'residence')`,
+    ),
+  }),
 );
 
 // ============================================================================
@@ -382,59 +1353,92 @@ export const commissionSettlements = pgTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    restaurantId: varchar("restaurant_id", { length: 36 })
+    partnerAccountId: uuid("partner_account_id")
       .notNull()
-      .references(() => restaurants.id, { onDelete: "cascade" }),
-    // Admin qui a enregistré l'encaissement
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
     adminId: varchar("admin_id", { length: 36 })
+      .references(() => users.id, { onDelete: "restrict" }),
+    source: commissionSettlementSourceEnum("source").notNull(),
+    statut: commissionSettlementStatusEnum("statut")
       .notNull()
-      .references(() => users.id, { onDelete: "set null" }),
-    // Montant total encaissé (centimes)
-    montantTotal: integer("montant_total").notNull(),
-    nombreCommissions: integer("nombre_commissions").notNull(),
-    referenceReglement: varchar("reference_reglement", { length: 255 }),
-    notes: text("notes"),
-    settledAt: timestamp("settled_at", { withTimezone: true })
+      .default("confirmed"),
+    montantFcfa: integer("montant_fcfa").notNull(),
+    moyenReglement: moyenReglementEnum("moyen_reglement"),
+    referenceExterne: varchar("reference_externe", { length: 255 }).notNull(),
+    justification: text("justification").notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
-    createdAt: timestamp("created_at", { withTimezone: true })
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
   },
   (table) => ({
-    restaurantIdx: index("idx_settlements_restaurant").on(table.restaurantId),
-    settledAtIdx: index("idx_settlements_settled_at").on(table.settledAt),
+    partnerIdx: index("commission_settlements_partner_idx").on(table.partnerAccountId),
+    partnerPaidAtIdx: index("commission_settlements_partner_paid_at_idx").on(
+      table.partnerAccountId,
+      table.paidAt,
+    ),
+    referenceUnique: uniqueIndex("commission_settlements_source_reference_unique").on(
+      table.source,
+      table.referenceExterne,
+    ),
+    montantPositif: check(
+      "commission_settlements_montant_positif",
+      sql`${table.montantFcfa} > 0`,
+    ),
+    manualAdminCoherent: check(
+      "commission_settlements_manual_admin_coherent",
+      sql`${table.source} <> 'manual_admin' OR (${table.adminId} IS NOT NULL AND ${table.moyenReglement} IS NOT NULL AND ((${table.statut} = 'pending' AND ${table.confirmedAt} IS NULL) OR (${table.statut} = 'confirmed' AND ${table.confirmedAt} IS NOT NULL)))`,
+    ),
   })
 );
 
-// ============================================================================
-// ABONNEMENTS  (plan du restaurant) - LEGACY
-// ============================================================================
+export const commissionPolicySettings = pgTable(
+  "commission_policy_settings",
+  {
+    id: integer("id").primaryKey().default(1),
+    cashDebtThresholdFcfa: integer("cash_debt_threshold_fcfa").notNull().default(10_000),
+    cashGraceDays: integer("cash_grace_days").notNull().default(7),
+    cashDebtRecoveryMaxBps: integer("cash_debt_recovery_max_bps").notNull().default(5_000),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    singleton: check("commission_policy_settings_singleton", sql`${table.id} = 1`),
+    thresholdValid: check("commission_policy_settings_threshold_valid", sql`${table.cashDebtThresholdFcfa} >= 0`),
+    graceValid: check("commission_policy_settings_grace_valid", sql`${table.cashGraceDays} >= 0`),
+    recoveryValid: check("commission_policy_settings_recovery_valid", sql`${table.cashDebtRecoveryMaxBps} BETWEEN 0 AND 5000`),
+  }),
+);
 
-export const abonnements = pgTable("abonnements", {
-  id: varchar("id", { length: 36 })
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  restaurantId: varchar("restaurant_id", { length: 36 })
-    .notNull()
-    .unique()
-    .references(() => restaurants.id, { onDelete: "cascade" }),
-  plan: planAbonnementEnum("plan").notNull().default("gratuit"),
-  statut: statutAbonnementEnum("statut").notNull().default("essai"),
-  dateDebut: timestamp("date_debut", { withTimezone: true })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  dateFin: timestamp("date_fin", { withTimezone: true }),
-  // Limites du plan
-  maxPlats: integer("max_plats").notNull().default(20),
-  maxCategories: integer("max_categories").notNull().default(5),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const commissionDebtCycles = pgTable(
+  "commission_debt_cycles",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+    partnerAccountId: uuid("partner_account_id")
+      .notNull()
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
+    thresholdSnapshotFcfa: integer("threshold_snapshot_fcfa").notNull(),
+    graceDaysSnapshot: integer("grace_days_snapshot").notNull(),
+    triggeredAt: timestamp("triggered_at", { withTimezone: true }).notNull(),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    partnerIdx: index("commission_debt_cycles_partner_idx").on(table.partnerAccountId),
+    oneActivePerPartner: uniqueIndex("commission_debt_cycles_one_active_per_partner")
+      .on(table.partnerAccountId)
+      .where(sql`${table.closedAt} IS NULL`),
+    snapshotsValid: check("commission_debt_cycles_snapshots_valid", sql`${table.thresholdSnapshotFcfa} >= 0 AND ${table.graceDaysSnapshot} >= 0`),
+    closureValid: check("commission_debt_cycles_closure_valid", sql`${table.closedAt} IS NULL OR ${table.closedAt} >= ${table.triggeredAt}`),
+  }),
+);
 
 // ============================================================================
 // CRENEAUX HORAIRES
@@ -493,7 +1497,8 @@ export const categories = pgTable(
     description: text("description"),
     imageUrl: text("image_url"),
     ordre: integer("ordre").notNull().default(0),
-    visible: boolean("visible").notNull().default(true),
+    publicationIntent: boolean("publication_intent").notNull().default(true),
+    firstPublishedAt: timestamp("first_published_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -506,9 +1511,15 @@ export const categories = pgTable(
       table.restaurantId,
       table.ordre
     ),
-    restaurantVisibleIdx: index("idx_categories_restaurant_visible").on(
+    restaurantPublicationIdx: index("idx_categories_restaurant_publication").on(
       table.restaurantId,
-      table.visible
+      table.publicationIntent
+    ),
+    quotaOrderIdx: index("idx_categories_quota_order").on(
+      table.restaurantId,
+      table.firstPublishedAt,
+      table.createdAt,
+      table.id,
     ),
   })
 );
@@ -535,10 +1546,12 @@ export const plats = pgTable(
     ),
     nom: varchar("nom", { length: 255 }).notNull(),
     description: text("description"),
-    // Prix en centimes (FCFA entiers ou centimes EUR)
+    // Prix en FCFA entiers.
     prix: integer("prix").notNull(),
     photoUrl: text("photo_url"),
     disponible: boolean("disponible").notNull().default(true),
+    publicationIntent: boolean("publication_intent").notNull().default(true),
+    firstPublishedAt: timestamp("first_published_at", { withTimezone: true }),
     ordre: integer("ordre").notNull().default(0),
     // Métadonnées
     tags: text("tags").array().default([]),
@@ -570,11 +1583,19 @@ export const plats = pgTable(
       table.restaurantId,
       table.disponible
     ),
+    quotaOrderIdx: index("idx_plats_quota_order").on(
+      table.restaurantId,
+      table.categorieId,
+      table.firstPublishedAt,
+      table.createdAt,
+      table.id,
+    ),
     nomIdx: index("idx_plats_nom").on(table.nom),
     restaurantNomIdx: index("idx_plats_restaurant_nom").on(
       table.restaurantId,
       table.nom
     ),
+    prixPositif: check("plats_prix_positif", sql`${table.prix} > 0`),
   })
 );
 
@@ -599,7 +1620,7 @@ export const clients = pgTable(
     longitudeDefaut: doublePrecision("longitude_defaut"),
     // Fidélité
     nombreCommandes: integer("nombre_commandes").notNull().default(0),
-    totalDepense: integer("total_depense").notNull().default(0), // centimes
+    totalDepense: integer("total_depense").notNull().default(0), // FCFA entiers
     // Auth
     emailVerifie: boolean("email_verifie").notNull().default(false),
     actif: boolean("actif").notNull().default(true),
@@ -615,6 +1636,10 @@ export const clients = pgTable(
   (table) => ({
     telephoneIdx: uniqueIndex("idx_clients_telephone").on(table.telephone),
     emailIdx:     index("idx_clients_email").on(table.email),
+    totalDepenseNonNegatif: check(
+      "clients_total_depense_non_negatif",
+      sql`${table.totalDepense} >= 0`,
+    ),
   })
 );
 
@@ -637,6 +1662,7 @@ export const commandes = pgTable(
       { onDelete: "no action" }
     ),
     idempotencyKey: varchar("idempotency_key", { length: 64 }),
+    idempotencyRequestHash: varchar("idempotency_request_hash", { length: 64 }),
     modeCommande: modeCommandeEnum("mode_commande").notNull(),
     statut: statutCommandeEnum("statut").notNull().default("recue"),
     // Sur place
@@ -649,9 +1675,22 @@ export const commandes = pgTable(
     latitudeLivraison: doublePrecision("latitude_livraison"),
     longitudeLivraison: doublePrecision("longitude_livraison"),
     distanceKm: real("distance_km"),
+    serviceMarketId: uuid("service_market_id").references(
+      () => serviceMarkets.id,
+      { onDelete: "restrict" },
+    ),
+    serviceMarketVersionId: uuid("service_market_version_id").references(
+      () => serviceMarketVersions.id,
+      { onDelete: "restrict" },
+    ),
+    clientLocationCapturedAt: timestamp("client_location_captured_at", {
+      withTimezone: true,
+    }),
+    clientLocationAccuracyM: real("client_location_accuracy_m"),
+    geoPolicyVersion: varchar("geo_policy_version", { length: 50 }),
     // Articles (snapshot au moment de la commande)
     items: jsonb("items").notNull().$type<CommandeItemDB[]>(),
-    // Montants (centimes)
+    // Montants en FCFA entiers.
     sousTotal: integer("sous_total").notNull(),
     fraisLivraison: integer("frais_livraison").notNull().default(0),
     remise: integer("remise").notNull().default(0),
@@ -679,6 +1718,14 @@ export const commandes = pgTable(
       table.clientId,
       table.idempotencyKey
     ),
+    serviceMarketIdx: index("commandes_service_market_idx").on(
+      table.serviceMarketId,
+      table.createdAt,
+    ),
+    livraisonLocationCoherent: check(
+      "commandes_livraison_location_coherent",
+      sql`${table.modeCommande} <> 'livraison' OR (${table.adresseLivraison} IS NOT NULL AND ${table.latitudeLivraison} IS NOT NULL AND ${table.longitudeLivraison} IS NOT NULL)`,
+    ),
     statutIdx:      index("idx_commandes_statut").on(table.statut),
     createdAtIdx:   index("idx_commandes_created_at").on(table.createdAt),
     restaurantStatutIdx: index("idx_commandes_restaurant_statut").on(
@@ -689,32 +1736,55 @@ export const commandes = pgTable(
       table.restaurantId,
       table.createdAt
     ),
+    montantsNonNegatifs: check(
+      "commandes_montants_non_negatifs",
+      sql`${table.sousTotal} >= 0 AND ${table.fraisLivraison} >= 0 AND ${table.remise} >= 0 AND ${table.total} >= 0`,
+    ),
+    totalCoherent: check(
+      "commandes_total_coherent",
+      sql`${table.total} = ${table.sousTotal} + ${table.fraisLivraison} - ${table.remise}`,
+    ),
   })
 );
 
 // ============================================================================
-// PAIEMENTS
+// TRANSACTIONS FINANCIÈRES ET TENTATIVES DE PAIEMENT
 // ============================================================================
 
-export const paiements = pgTable(
-  "paiements",
+export const financialTransactions = pgTable(
+  "transactions",
   {
     id: varchar("id", { length: 36 })
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    commandeId: varchar("commande_id", { length: 36 })
+    type: transactionTypeEnum("type").notNull(),
+    status: transactionStatusEnum("status").notNull().default("pending"),
+    partnerAccountId: uuid("partner_account_id")
       .notNull()
-      .unique()
-      .references(() => commandes.id, { onDelete: "cascade" }),
-    montant: integer("montant").notNull(),           // centimes
-    methode: methodePaiementEnum("methode").notNull(),
-    statut: statutPaiementEnum("statut").notNull().default("en_attente"),
-    // Référence externe (Mobile Money, Stripe, etc.)
-    referenceExterne: varchar("reference_externe", { length: 255 }),
-    // Mobile Money spécifique
-    numeroMobileMoney: varchar("numero_mobile_money", { length: 20 }),
-    operateur: varchar("operateur", { length: 50 }),  // "Orange Money", "MTN", "Wave"
-    payeAt: timestamp("paye_at", { withTimezone: true }),
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
+    clientId: varchar("client_id", { length: 36 }).references(() => clients.id, {
+      onDelete: "restrict",
+    }),
+    amountFcfa: integer("amount_fcfa").notNull(),
+    currency: varchar("currency", { length: 3 }).notNull().default("XOF"),
+    restaurantOrderId: varchar("restaurant_order_id", { length: 36 }).references(
+      () => commandes.id,
+      { onDelete: "restrict" },
+    ),
+    subscriptionRequestId: varchar("subscription_request_id", { length: 36 }).references(
+      () => subscriptionRequests.id,
+      { onDelete: "restrict" },
+    ),
+    commissionSettlementId: varchar("commission_settlement_id", { length: 36 }).references(
+      () => commissionSettlements.id,
+      { onDelete: "restrict" },
+    ),
+    residenceReservationId: uuid("residence_reservation_id").references(
+      () => residenceReservations.id,
+      { onDelete: "restrict" },
+    ),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -723,9 +1793,122 @@ export const paiements = pgTable(
       .$defaultFn(() => new Date()),
   },
   (table) => ({
-    commandeIdx: index("idx_paiements_commande").on(table.commandeId),
-    statutIdx:   index("idx_paiements_statut").on(table.statut),
+    typeStatusIdx: index("transactions_type_status_idx").on(table.type, table.status),
+    partnerStatusIdx: index("transactions_partner_status_idx").on(
+      table.partnerAccountId,
+      table.status,
+    ),
+    restaurantOrderUnique: uniqueIndex("transactions_restaurant_order_unique")
+      .on(table.restaurantOrderId)
+      .where(sql`${table.restaurantOrderId} IS NOT NULL`),
+    subscriptionRequestUnique: uniqueIndex("transactions_subscription_request_unique")
+      .on(table.subscriptionRequestId)
+      .where(sql`${table.subscriptionRequestId} IS NOT NULL`),
+    commissionSettlementUnique: uniqueIndex("transactions_commission_settlement_unique")
+      .on(table.commissionSettlementId)
+      .where(sql`${table.commissionSettlementId} IS NOT NULL`),
+    residenceReservationUnique: uniqueIndex(
+      "transactions_residence_reservation_unique",
+    )
+      .on(table.residenceReservationId)
+      .where(sql`${table.residenceReservationId} IS NOT NULL`),
+    amountPositive: check(
+      "transactions_amount_positive",
+      sql`${table.amountFcfa} > 0`,
+    ),
+    currencyXof: check("transactions_currency_xof", sql`${table.currency} = 'XOF'`),
+    sourceCoherent: check(
+      "transactions_source_coherent",
+      sql`(${table.type} = 'commande_restaurant' AND ${table.restaurantOrderId} IS NOT NULL AND ${table.subscriptionRequestId} IS NULL AND ${table.commissionSettlementId} IS NULL AND ${table.residenceReservationId} IS NULL)
+        OR (${table.type} = 'abonnement_partenaire' AND ${table.restaurantOrderId} IS NULL AND ${table.subscriptionRequestId} IS NOT NULL AND ${table.commissionSettlementId} IS NULL AND ${table.residenceReservationId} IS NULL)
+        OR (${table.type} = 'commission_settlement' AND ${table.restaurantOrderId} IS NULL AND ${table.subscriptionRequestId} IS NULL AND ${table.commissionSettlementId} IS NOT NULL AND ${table.residenceReservationId} IS NULL)
+        OR (${table.type} = 'reservation_residence' AND ${table.restaurantOrderId} IS NULL AND ${table.subscriptionRequestId} IS NULL AND ${table.commissionSettlementId} IS NULL AND ${table.residenceReservationId} IS NOT NULL)`,
+    ),
+    lifecycleCoherent: check(
+      "transactions_lifecycle_coherent",
+      sql`(${table.status} = 'pending' AND ${table.paidAt} IS NULL AND ${table.cancelledAt} IS NULL)
+        OR (${table.status} = 'paid' AND ${table.paidAt} IS NOT NULL AND ${table.cancelledAt} IS NULL)
+        OR (${table.status} = 'cancelled' AND ${table.paidAt} IS NULL AND ${table.cancelledAt} IS NOT NULL)`,
+    ),
   })
+);
+
+export const payments = pgTable(
+  "payments",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    transactionId: varchar("transaction_id", { length: 36 })
+      .notNull()
+      .references(() => financialTransactions.id, { onDelete: "restrict" }),
+    provider: varchar("provider", { length: 50 }),
+    method: paymentMethodEnum("method").notNull(),
+    network: paymentNetworkEnum("network"),
+    status: paymentStatusEnum("status").notNull().default("pending"),
+    amountFcfa: integer("amount_fcfa").notNull(),
+    providerReference: varchar("provider_reference", { length: 255 }),
+    checkoutUrl: text("checkout_url"),
+    returnChannel: varchar("return_channel", { length: 10 })
+      .$type<PaymentReturnChannel>()
+      .notNull()
+      .default("web"),
+    recoverySettlementId: varchar("recovery_settlement_id", { length: 36 }).references(
+      () => commissionSettlements.id,
+      { onDelete: "restrict" },
+    ),
+    idempotencyKey: varchar("idempotency_key", { length: 128 }),
+    confirmedByAdminId: varchar("confirmed_by_admin_id", { length: 36 }).references(
+      () => users.id,
+      { onDelete: "restrict" },
+    ),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    failedAt: timestamp("failed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    transactionIdx: index("payments_transaction_idx").on(table.transactionId),
+    statusIdx: index("payments_status_idx").on(table.status),
+    providerReferenceUnique: uniqueIndex("payments_provider_reference_unique")
+      .on(table.provider, table.providerReference)
+      .where(sql`${table.provider} IS NOT NULL AND ${table.providerReference} IS NOT NULL`),
+    returnChannelCheck: check(
+      "payments_return_channel_check",
+      sql`${table.returnChannel} IN ('web', 'mobile')`,
+    ),
+    idempotencyUnique: uniqueIndex("payments_transaction_idempotency_unique")
+      .on(table.transactionId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
+    recoverySettlementUnique: uniqueIndex("payments_recovery_settlement_unique")
+      .on(table.recoverySettlementId)
+      .where(sql`${table.recoverySettlementId} IS NOT NULL`),
+    amountPositive: check("payments_amount_positive", sql`${table.amountFcfa} > 0`),
+    providerReferenceCoherent: check(
+      "payments_provider_reference_coherent",
+      sql`${table.providerReference} IS NULL OR ${table.provider} IS NOT NULL`,
+    ),
+    cashProviderCoherent: check(
+      "payments_cash_provider_coherent",
+      sql`${table.method} <> 'cash' OR ${table.provider} IS NULL`,
+    ),
+    networkCoherent: check(
+      "payments_network_coherent",
+      sql`${table.network} IS NULL OR ${table.method} = 'mobile_money'`,
+    ),
+    lifecycleCoherent: check(
+      "payments_lifecycle_coherent",
+      sql`(${table.status} = 'pending' AND ${table.confirmedAt} IS NULL AND ${table.failedAt} IS NULL AND ${table.cancelledAt} IS NULL)
+        OR (${table.status} = 'confirmed' AND ${table.confirmedAt} IS NOT NULL AND ${table.failedAt} IS NULL AND ${table.cancelledAt} IS NULL)
+        OR (${table.status} = 'failed' AND ${table.confirmedAt} IS NULL AND ${table.failedAt} IS NOT NULL AND ${table.cancelledAt} IS NULL)
+        OR (${table.status} = 'cancelled' AND ${table.confirmedAt} IS NULL AND ${table.failedAt} IS NULL AND ${table.cancelledAt} IS NOT NULL)`,
+    ),
+  }),
 );
 
 // ============================================================================
@@ -829,7 +2012,7 @@ export const promotions = pgTable(
     nom: varchar("nom", { length: 255 }).notNull(),
     description: text("description"),
     type: typePromotionEnum("type").notNull(),
-    valeur: integer("valeur").notNull().default(0), // % ou montant fixe en centimes
+    valeur: integer("valeur").notNull().default(0), // % ou montant fixe en FCFA entiers
     codePromo: varchar("code_promo", { length: 50 }).unique(),
     // Contraintes
     montantMinCommande: integer("montant_min_commande").default(0),
@@ -853,6 +2036,14 @@ export const promotions = pgTable(
     restaurantActifIdx: index("idx_promotions_restaurant_actif").on(
       table.restaurantId,
       table.actif
+    ),
+    valeurNonNegative: check(
+      "promotions_valeur_non_negative",
+      sql`${table.valeur} >= 0`,
+    ),
+    montantMinNonNegatif: check(
+      "promotions_montant_min_commande_non_negatif",
+      sql`${table.montantMinCommande} >= 0`,
     ),
   })
 );
@@ -957,8 +2148,9 @@ export const notifications = pgTable(
 export interface CommandeItemDB {
   platId: string;
   nom: string;
-  prix: number;       // centimes, snapshot au moment de la commande
+  prix: number;       // FCFA entiers, snapshot au moment de la commande
   quantite: number;
+  totalLigne?: number; // présent sur toutes les nouvelles commandes (anciens JSON compatibles)
   note?: string;      // note spéciale pour ce plat
 }
 
@@ -983,7 +2175,19 @@ export const auditActionEnum = pgEnum("audit_action", [
   "abonnement_expire",
   "abonnement_regrade",
   "catalogue_modifie",
+  "quota_catalogue_modifie",
   "commissions_encaissees",
+  "politique_commission_modifiee",
+  "provider_account_associe",
+  "provider_account_desactive",
+  "service_market_created",
+  "service_market_version_created",
+  "service_market_version_published",
+  "service_market_capability_changed",
+  "geo_source_areas_imported",
+  "identity_verification_verified",
+  "identity_verification_rejected",
+  ...RESIDENCE_AUDIT_ACTIONS,
 ]);
 
 export const auditLog = pgTable(
@@ -996,7 +2200,7 @@ export const auditLog = pgTable(
     // Qui a fait l'action
     adminId: varchar("admin_id", { length: 36 })
       .notNull()
-      .references(() => users.id, { onDelete: "set null" }),
+      .references(() => users.id, { onDelete: "restrict" }),
 
     action: auditActionEnum("action").notNull(),
 
@@ -1032,12 +2236,6 @@ export const auditLogRelations = relations(auditLog, ({ one }) => ({
 // COMMISSIONS  (calcul des montants dus par les restaurants)
 // ============================================================================
 
-export const statutCommissionEnum = pgEnum("statut_commission", [
-  "en_attente",   // calculée mais pas encore payée
-  "payee",        // le restaurant a payé (action manuelle admin)
-  "annulee",      // annulée (ex: commande remboursée)
-]);
-
 export const commissions = pgTable(
   "commissions",
   {
@@ -1046,44 +2244,91 @@ export const commissions = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
 
     commandeId: varchar("commande_id", { length: 36 })
+      .references(() => commandes.id, { onDelete: "restrict" }),
+
+    residenceReservationId: uuid("residence_reservation_id").references(
+      () => residenceReservations.id,
+      { onDelete: "restrict" },
+    ),
+
+    partnerAccountId: uuid("partner_account_id")
       .notNull()
-      .unique()
-      .references(() => commandes.id, { onDelete: "cascade" }),
-
-    restaurantId: varchar("restaurant_id", { length: 36 })
+      .references(() => partnerAccounts.id, { onDelete: "restrict" }),
+    baseAmountFcfa: integer("base_amount_fcfa").notNull(),
+    rateBpsSnapshot: integer("rate_bps_snapshot").notNull(),
+    amountFcfa: integer("amount_fcfa").notNull(),
+    commercialStatus: commissionCommercialStatusEnum("commercial_status")
       .notNull()
-      .references(() => restaurants.id, { onDelete: "cascade" }),
-
-    // Montant de la commande au moment du calcul (centimes)
-    montantCommande: integer("montant_commande").notNull(),
-
-    // Taux appliqué (snapshot — même si le taux du resto change après)
-    tauxCommissionBps: integer("taux_commission_bps").notNull(),
-
-    // Montant de la commission (centimes)
-    montantCommission: integer("montant_commission").notNull(),
-
-    statut: statutCommissionEnum("statut").notNull().default("en_attente"),
-
-    payeeAt:   timestamp("payee_at", { withTimezone: true }),
-    payeeParUserId: varchar("payee_par_user_id", { length: 36 })
-      .references(() => users.id, { onDelete: "set null" }),
-
-    settlementId: varchar("settlement_id", { length: 36 })
-      .references(() => commissionSettlements.id, { onDelete: "set null" }),
+      .default("pending"),
+    collectionMode: commissionCollectionModeEnum("collection_mode").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
 
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
   },
   (table) => ({
-    restaurantIdx: index("idx_commissions_restaurant").on(table.restaurantId),
-    statutIdx:     index("idx_commissions_statut").on(table.statut),
-    restaurantStatutIdx: index("idx_commissions_restaurant_statut").on(
-      table.restaurantId,
-      table.statut
+    partnerIdx: index("commissions_partner_idx").on(table.partnerAccountId),
+    statusIdx: index("commissions_commercial_status_idx").on(table.commercialStatus),
+    commandeUnique: uniqueIndex("commissions_commande_id_unique")
+      .on(table.commandeId)
+      .where(sql`${table.commandeId} IS NOT NULL`),
+    residenceReservationUnique: uniqueIndex(
+      "commissions_residence_reservation_unique",
+    )
+      .on(table.residenceReservationId)
+      .where(sql`${table.residenceReservationId} IS NOT NULL`),
+    partnerCashDueIdx: index("commissions_partner_cash_due_idx").on(
+      table.partnerAccountId,
+      table.dueAt,
+      table.createdAt,
+      table.id,
+    ).where(sql`${table.commercialStatus} = 'due' AND ${table.collectionMode} = 'cash_receivable'`),
+    amountsValid: check(
+      "commissions_amounts_valid",
+      sql`${table.baseAmountFcfa} >= 0 AND ${table.amountFcfa} >= 0 AND ${table.amountFcfa} <= ${table.baseAmountFcfa}`,
+    ),
+    rateValid: check(
+      "commissions_rate_valid",
+      sql`${table.rateBpsSnapshot} BETWEEN 0 AND 10000`,
+    ),
+    lifecycleValid: check(
+      "commissions_lifecycle_valid",
+      sql`(${table.commercialStatus} = 'pending' AND ${table.dueAt} IS NULL AND ${table.voidedAt} IS NULL) OR (${table.commercialStatus} = 'due' AND ${table.dueAt} IS NOT NULL AND ${table.voidedAt} IS NULL) OR (${table.commercialStatus} = 'void' AND ${table.dueAt} IS NULL AND ${table.voidedAt} IS NOT NULL)`,
+    ),
+    sourceValid: check(
+      "commissions_source_valid",
+      sql`(${table.commandeId} IS NOT NULL AND ${table.residenceReservationId} IS NULL) OR (${table.commandeId} IS NULL AND ${table.residenceReservationId} IS NOT NULL)`,
     ),
   })
+);
+
+export const commissionSettlementAllocations = pgTable(
+  "commission_settlement_allocations",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+    settlementId: varchar("settlement_id", { length: 36 })
+      .notNull()
+      .references(() => commissionSettlements.id, { onDelete: "restrict" }),
+    commissionId: varchar("commission_id", { length: 36 })
+      .notNull()
+      .references(() => commissions.id, { onDelete: "restrict" }),
+    amountFcfa: integer("amount_fcfa").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    settlementCommissionUnique: uniqueIndex("commission_allocations_settlement_commission_unique").on(
+      table.settlementId,
+      table.commissionId,
+    ),
+    commissionIdx: index("commission_allocations_commission_idx").on(table.commissionId),
+    settlementIdx: index("commission_allocations_settlement_idx").on(table.settlementId),
+    amountPositive: check("commission_allocations_amount_positive", sql`${table.amountFcfa} > 0`),
+  }),
 );
 
 export const commissionsRelations = relations(commissions, ({ one }) => ({
@@ -1091,42 +2336,173 @@ export const commissionsRelations = relations(commissions, ({ one }) => ({
     fields:     [commissions.commandeId],
     references: [commandes.id],
   }),
-  restaurant: one(restaurants, {
-    fields:     [commissions.restaurantId],
-    references: [restaurants.id],
+  partnerAccount: one(partnerAccounts, {
+    fields: [commissions.partnerAccountId],
+    references: [partnerAccounts.id],
   }),
-  settlement: one(commissionSettlements, {
-    fields:     [commissions.settlementId],
-    references: [commissionSettlements.id],
+  residenceReservation: one(residenceReservations, {
+    fields: [commissions.residenceReservationId],
+    references: [residenceReservations.id],
   }),
 }));
+
+export const commissionSettlementAllocationsRelations = relations(
+  commissionSettlementAllocations,
+  ({ one }) => ({
+    settlement: one(commissionSettlements, {
+      fields: [commissionSettlementAllocations.settlementId],
+      references: [commissionSettlements.id],
+    }),
+    commission: one(commissions, {
+      fields: [commissionSettlementAllocations.commissionId],
+      references: [commissions.id],
+    }),
+  }),
+);
 
 // ============================================================================
 // RELATIONS
 // ============================================================================
 
 export const usersRelations = relations(users, ({ one, many }) => ({
-  restaurant:    one(restaurants, {
+  partnerAccount: one(partnerAccounts, {
     fields: [users.id],
-    references: [restaurants.userId],
+    references: [partnerAccounts.userId],
   }),
   notifications: many(notifications),
   adminSubscriptionPlanUpdates: many(subscriptionPlans),
 }));
 
-export const restaurantsRelations = relations(restaurants, ({ one, many }) => ({
-  user:        one(users, {
-    fields: [restaurants.userId],
+export const partnerAccountsRelations = relations(partnerAccounts, ({ one, many }) => ({
+  user: one(users, {
+    fields: [partnerAccounts.userId],
     references: [users.id],
   }),
-  // Legacy
-  abonnement:  one(abonnements, {
-    fields: [restaurants.id],
-    references: [abonnements.restaurantId],
+  restaurant: one(restaurants, {
+    fields: [partnerAccounts.id],
+    references: [restaurants.partnerAccountId],
   }),
-  // Nouveau système
+  residences: many(residences),
   subscriptionPeriods: many(subscriptionPeriods),
   subscriptionRequests: many(subscriptionRequests),
+  commissions: many(commissions),
+  commissionSettlements: many(commissionSettlements),
+  commissionDebtCycles: many(commissionDebtCycles),
+  paymentProviderAccounts: many(paymentProviderAccounts),
+  identityVerification: one(partnerIdentityVerifications, {
+    fields: [partnerAccounts.id],
+    references: [partnerIdentityVerifications.partnerAccountId],
+  }),
+}));
+
+export const partnerIdentityVerificationsRelations = relations(
+  partnerIdentityVerifications,
+  ({ one, many }) => ({
+    partnerAccount: one(partnerAccounts, {
+      fields: [partnerIdentityVerifications.partnerAccountId],
+      references: [partnerAccounts.id],
+    }),
+    reviewedByAdmin: one(users, {
+      fields: [partnerIdentityVerifications.reviewedByAdminId],
+      references: [users.id],
+    }),
+    documents: many(partnerIdentityDocuments),
+  }),
+);
+
+export const partnerIdentityDocumentsRelations = relations(
+  partnerIdentityDocuments,
+  ({ one }) => ({
+    verification: one(partnerIdentityVerifications, {
+      fields: [partnerIdentityDocuments.verificationId],
+      references: [partnerIdentityVerifications.id],
+    }),
+  }),
+);
+
+export const paymentProviderAccountsRelations = relations(paymentProviderAccounts, ({ one }) => ({
+  partnerAccount: one(partnerAccounts, {
+    fields: [paymentProviderAccounts.partnerAccountId],
+    references: [partnerAccounts.id],
+  }),
+  linkedByAdmin: one(users, {
+    fields: [paymentProviderAccounts.linkedByAdminId],
+    references: [users.id],
+  }),
+}));
+
+export const serviceMarketsRelations = relations(
+  serviceMarkets,
+  ({ one, many }) => ({
+    activeVersion: one(serviceMarketVersions, {
+      fields: [serviceMarkets.activeVersionId],
+      references: [serviceMarketVersions.id],
+    }),
+    versions: many(serviceMarketVersions),
+    capabilities: many(serviceMarketCapabilities),
+    restaurants: many(restaurants),
+    commandes: many(commandes),
+  }),
+);
+
+export const serviceMarketVersionsRelations = relations(
+  serviceMarketVersions,
+  ({ one, many }) => ({
+    market: one(serviceMarkets, {
+      fields: [serviceMarketVersions.serviceMarketId],
+      references: [serviceMarkets.id],
+    }),
+    createdBy: one(users, {
+      fields: [serviceMarketVersions.createdByUserId],
+      references: [users.id],
+    }),
+    areas: many(serviceMarketVersionAreas),
+    assignedRestaurants: many(restaurants),
+    commandes: many(commandes),
+  }),
+);
+
+export const serviceMarketCapabilitiesRelations = relations(
+  serviceMarketCapabilities,
+  ({ one }) => ({
+    market: one(serviceMarkets, {
+      fields: [serviceMarketCapabilities.serviceMarketId],
+      references: [serviceMarkets.id],
+    }),
+  }),
+);
+
+export const geoSourceAreasRelations = relations(geoSourceAreas, ({ many }) => ({
+  versionAreas: many(serviceMarketVersionAreas),
+}));
+
+export const serviceMarketVersionAreasRelations = relations(
+  serviceMarketVersionAreas,
+  ({ one }) => ({
+    version: one(serviceMarketVersions, {
+      fields: [serviceMarketVersionAreas.serviceMarketVersionId],
+      references: [serviceMarketVersions.id],
+    }),
+    sourceArea: one(geoSourceAreas, {
+      fields: [serviceMarketVersionAreas.geoSourceAreaId],
+      references: [geoSourceAreas.id],
+    }),
+  }),
+);
+
+export const restaurantsRelations = relations(restaurants, ({ one, many }) => ({
+  partnerAccount: one(partnerAccounts, {
+    fields: [restaurants.partnerAccountId],
+    references: [partnerAccounts.id],
+  }),
+  serviceMarket: one(serviceMarkets, {
+    fields: [restaurants.serviceMarketId],
+    references: [serviceMarkets.id],
+  }),
+  serviceMarketVersion: one(serviceMarketVersions, {
+    fields: [restaurants.serviceMarketVersionId],
+    references: [serviceMarketVersions.id],
+  }),
   creneaux:    many(creneauxHoraires),
   categories:  many(categories),
   plats:       many(plats),
@@ -1134,20 +2510,66 @@ export const restaurantsRelations = relations(restaurants, ({ one, many }) => ({
   promotions:  many(promotions),
   avis:        many(avis),
   livreurs:    many(livreurs),
-  commissionSettlements: many(commissionSettlements),
 }));
 
-export const subscriptionPlansRelations = relations(subscriptionPlans, ({ one }) => ({
+export const residencesRelations = relations(residences, ({ one, many }) => ({
+  partnerAccount: one(partnerAccounts, {
+    fields: [residences.partnerAccountId],
+    references: [partnerAccounts.id],
+  }),
+  images: many(residenceImages),
+  reservations: many(residenceReservations),
+  unavailablePeriods: many(residenceUnavailablePeriods),
+}));
+
+export const residenceImagesRelations = relations(residenceImages, ({ one }) => ({
+  residence: one(residences, {
+    fields: [residenceImages.residenceId],
+    references: [residences.id],
+  }),
+}));
+
+export const subscriptionPlansRelations = relations(subscriptionPlans, ({ one, many }) => ({
   updatedBy: one(users, {
     fields: [subscriptionPlans.updatedByAdminId],
     references: [users.id],
   }),
+  limits: many(subscriptionPlanLimits),
+  exposureBenefits: many(subscriptionPlanExposureBenefits),
+  featureItems: many(subscriptionPlanFeatureItems),
 }));
 
+export const subscriptionPlanLimitsRelations = relations(subscriptionPlanLimits, ({ one }) => ({
+  plan: one(subscriptionPlans, {
+    fields: [subscriptionPlanLimits.planId],
+    references: [subscriptionPlans.id],
+  }),
+}));
+
+export const subscriptionPlanExposureBenefitsRelations = relations(
+  subscriptionPlanExposureBenefits,
+  ({ one }) => ({
+    plan: one(subscriptionPlans, {
+      fields: [subscriptionPlanExposureBenefits.planId],
+      references: [subscriptionPlans.id],
+    }),
+  }),
+);
+
+export const subscriptionPlanFeatureItemsRelations = relations(
+  subscriptionPlanFeatureItems,
+  ({ one }) => ({
+    plan: one(subscriptionPlans, {
+      fields: [subscriptionPlanFeatureItems.planId],
+      references: [subscriptionPlans.id],
+    }),
+  }),
+);
+
 export const subscriptionRequestsRelations = relations(subscriptionRequests, ({ one, many }) => ({
-  restaurant: one(restaurants, {
-    fields: [subscriptionRequests.restaurantId],
-    references: [restaurants.id],
+  partnerAccount: one(partnerAccounts, {
+    fields: [subscriptionRequests.partnerAccountId],
+    references: [partnerAccounts.id],
   }),
   traiteeParAdmin: one(users, {
     fields: [subscriptionRequests.traiteeParAdminId],
@@ -1156,10 +2578,10 @@ export const subscriptionRequestsRelations = relations(subscriptionRequests, ({ 
   periods: many(subscriptionPeriods),
 }));
 
-export const subscriptionPeriodsRelations = relations(subscriptionPeriods, ({ one }) => ({
-  restaurant: one(restaurants, {
-    fields: [subscriptionPeriods.restaurantId],
-    references: [restaurants.id],
+export const subscriptionPeriodsRelations = relations(subscriptionPeriods, ({ one, many }) => ({
+  partnerAccount: one(partnerAccounts, {
+    fields: [subscriptionPeriods.partnerAccountId],
+    references: [partnerAccounts.id],
   }),
   request: one(subscriptionRequests, {
     fields: [subscriptionPeriods.requestId],
@@ -1173,24 +2595,32 @@ export const subscriptionPeriodsRelations = relations(subscriptionPeriods, ({ on
     fields: [subscriptionPeriods.suspenduParAdminId],
     references: [users.id],
   }),
+  limits: many(subscriptionPeriodLimits),
+}));
+
+export const subscriptionPeriodLimitsRelations = relations(subscriptionPeriodLimits, ({ one }) => ({
+  period: one(subscriptionPeriods, {
+    fields: [subscriptionPeriodLimits.subscriptionPeriodId],
+    references: [subscriptionPeriods.id],
+  }),
 }));
 
 export const commissionSettlementsRelations = relations(commissionSettlements, ({ one, many }) => ({
-  restaurant: one(restaurants, {
-    fields: [commissionSettlements.restaurantId],
-    references: [restaurants.id],
+  partnerAccount: one(partnerAccounts, {
+    fields: [commissionSettlements.partnerAccountId],
+    references: [partnerAccounts.id],
   }),
   admin: one(users, {
     fields: [commissionSettlements.adminId],
     references: [users.id],
   }),
-  commissions: many(commissions),
+  allocations: many(commissionSettlementAllocations),
 }));
 
-export const abonnementsRelations = relations(abonnements, ({ one }) => ({
-  restaurant: one(restaurants, {
-    fields: [abonnements.restaurantId],
-    references: [restaurants.id],
+export const commissionDebtCyclesRelations = relations(commissionDebtCycles, ({ one }) => ({
+  partnerAccount: one(partnerAccounts, {
+    fields: [commissionDebtCycles.partnerAccountId],
+    references: [partnerAccounts.id],
   }),
 }));
 
@@ -1236,6 +2666,8 @@ export const clientsRelations = relations(clients, ({ many }) => ({
   commandes:     many(commandes),
   avis:          many(avis),
   notifications: many(notifications),
+  pushSubscriptions: many(pushSubscriptions),
+  residenceReservations: many(residenceReservations),
 }));
 
 export const commandesRelations = relations(commandes, ({ one }) => ({
@@ -1247,9 +2679,17 @@ export const commandesRelations = relations(commandes, ({ one }) => ({
     fields: [commandes.clientId],
     references: [clients.id],
   }),
-  paiement:  one(paiements, {
+  serviceMarket: one(serviceMarkets, {
+    fields: [commandes.serviceMarketId],
+    references: [serviceMarkets.id],
+  }),
+  serviceMarketVersion: one(serviceMarketVersions, {
+    fields: [commandes.serviceMarketVersionId],
+    references: [serviceMarketVersions.id],
+  }),
+  financialTransaction: one(financialTransactions, {
     fields: [commandes.id],
-    references: [paiements.commandeId],
+    references: [financialTransactions.restaurantOrderId],
   }),
   livraison: one(livraisons, {
     fields: [commandes.id],
@@ -1259,12 +2699,91 @@ export const commandesRelations = relations(commandes, ({ one }) => ({
     fields: [commandes.id],
     references: [avis.commandeId],
   }),
+  commission: one(commissions, {
+    fields: [commandes.id],
+    references: [commissions.commandeId],
+  }),
 }));
 
-export const paiementsRelations = relations(paiements, ({ one }) => ({
-  commande: one(commandes, {
-    fields: [paiements.commandeId],
-    references: [commandes.id],
+export const financialTransactionsRelations = relations(
+  financialTransactions,
+  ({ one, many }) => ({
+    partnerAccount: one(partnerAccounts, {
+      fields: [financialTransactions.partnerAccountId],
+      references: [partnerAccounts.id],
+    }),
+    client: one(clients, {
+      fields: [financialTransactions.clientId],
+      references: [clients.id],
+    }),
+    restaurantOrder: one(commandes, {
+      fields: [financialTransactions.restaurantOrderId],
+      references: [commandes.id],
+    }),
+    subscriptionRequest: one(subscriptionRequests, {
+      fields: [financialTransactions.subscriptionRequestId],
+      references: [subscriptionRequests.id],
+    }),
+    commissionSettlement: one(commissionSettlements, {
+      fields: [financialTransactions.commissionSettlementId],
+      references: [commissionSettlements.id],
+    }),
+    residenceReservation: one(residenceReservations, {
+      fields: [financialTransactions.residenceReservationId],
+      references: [residenceReservations.id],
+    }),
+    payments: many(payments),
+  }),
+);
+
+export const residenceReservationsRelations = relations(
+  residenceReservations,
+  ({ one }) => ({
+    residence: one(residences, {
+      fields: [residenceReservations.residenceId],
+      references: [residences.id],
+    }),
+    partnerAccount: one(partnerAccounts, {
+      fields: [residenceReservations.partnerAccountId],
+      references: [partnerAccounts.id],
+    }),
+    client: one(clients, {
+      fields: [residenceReservations.clientId],
+      references: [clients.id],
+    }),
+    financialTransaction: one(financialTransactions, {
+      fields: [residenceReservations.id],
+      references: [financialTransactions.residenceReservationId],
+    }),
+    commission: one(commissions, {
+      fields: [residenceReservations.id],
+      references: [commissions.residenceReservationId],
+    }),
+  }),
+);
+
+export const residenceUnavailablePeriodsRelations = relations(
+  residenceUnavailablePeriods,
+  ({ one }) => ({
+    residence: one(residences, {
+      fields: [residenceUnavailablePeriods.residenceId],
+      references: [residences.id],
+    }),
+  }),
+);
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  transaction: one(financialTransactions, {
+    fields: [payments.transactionId],
+    references: [financialTransactions.id],
+  }),
+  confirmedByAdmin: one(users, {
+    fields: [payments.confirmedByAdminId],
+    references: [users.id],
+  }),
+  recoverySettlement: one(commissionSettlements, {
+    fields: [payments.recoverySettlementId],
+    references: [commissionSettlements.id],
   }),
 }));
 
@@ -1339,9 +2858,13 @@ export const pushSubscriptions = pgTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
 
-    userId: varchar("user_id", { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    userId: varchar("user_id", { length: 36 }).references(() => users.id, {
+      onDelete: "cascade",
+    }),
+
+    clientId: varchar("client_id", { length: 36 }).references(() => clients.id, {
+      onDelete: "cascade",
+    }),
 
     type: varchar("type", { length: 20 })
       .notNull()
@@ -1360,8 +2883,16 @@ export const pushSubscriptions = pgTable(
   },
   (table) => ({
     userIdx:     index("idx_push_subscriptions_user").on(table.userId),
+    clientIdx:   index("idx_push_subscriptions_client").on(table.clientId),
     typeIdx:     index("idx_push_subscriptions_type").on(table.type),
     endpointIdx: index("idx_push_subscriptions_endpoint").on(table.endpoint),
+    expoTokenUnique: uniqueIndex("push_subscriptions_expo_token_unique")
+      .on(table.expoToken)
+      .where(sql`${table.expoToken} IS NOT NULL`),
+    singleOwner: check(
+      "push_subscriptions_single_owner",
+      sql`num_nonnulls(${table.userId}, ${table.clientId}) = 1`,
+    ),
   })
 );
 
@@ -1369,5 +2900,9 @@ export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one })
   user: one(users, {
     fields:     [pushSubscriptions.userId],
     references: [users.id],
+  }),
+  client: one(clients, {
+    fields: [pushSubscriptions.clientId],
+    references: [clients.id],
   }),
 }));

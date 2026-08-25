@@ -14,6 +14,10 @@ import { revalidatePath } from "next/cache";
 import { invalidateRestaurantCache } from "@/lib/cache";
 import { geocoder } from "@/lib/geo";
 import { z } from "zod";
+import {
+  changeRestaurantLocation,
+} from "@/modules/restaurants/server";
+import { RestaurantMarketError } from "@/modules/restaurants/model";
 
 const log = createLogger("actions-restaurant");
 
@@ -115,14 +119,55 @@ export async function updateRestaurantAction(
   }
 
   try {
-    await updateRestaurant(restaurant.id, parsed.data);
+    const {
+      adresse,
+      latitude,
+      longitude,
+      ville,
+      pays,
+      ...profileData
+    } = parsed.data;
+    void ville;
+    const locationChanged =
+      (adresse !== undefined && adresse !== restaurant.adresse) ||
+      (latitude !== undefined && latitude !== restaurant.latitude) ||
+      (longitude !== undefined && longitude !== restaurant.longitude);
+    if (locationChanged) {
+      if (
+        adresse === undefined ||
+        latitude === undefined ||
+        longitude === undefined
+      ) {
+        return {
+          error: {
+            _: ["L'adresse et ses coordonnées doivent être modifiées ensemble."],
+          },
+        };
+      }
+      await changeRestaurantLocation({
+        restaurantId: restaurant.id,
+        adresse,
+        latitude,
+        longitude,
+        pays: pays || undefined,
+      });
+    }
+    await updateRestaurant(restaurant.id, profileData);
     await invalidateRestaurantCache(restaurant.id, restaurant.slug);
   } catch (error) {
     log.error(
       { error, restaurantId: restaurant.id },
       "[updateRestaurant] error",
     );
-    return { error: { _: ["Impossible de mettre à jour le profil"] } };
+    return {
+      error: {
+        _: [
+          error instanceof RestaurantMarketError
+            ? error.message
+            : "Impossible de mettre à jour le profil",
+        ],
+      },
+    };
   }
 
   revalidatePath("/restaurateur/profil");

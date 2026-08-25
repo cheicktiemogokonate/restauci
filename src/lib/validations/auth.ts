@@ -8,7 +8,6 @@ export const registerSchema = z.object({
   password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
   nom: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
   telephone: z.string().min(10, "Le téléphone doit être valide"),
-  planCode: z.enum(["decouverte", "croissance", "partenaire_fier"]).optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

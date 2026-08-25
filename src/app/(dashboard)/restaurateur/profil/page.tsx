@@ -1,27 +1,13 @@
 import FormulaireProfil from "@/components/dashboard/profil/formulaire-profil";
 import OpeningHoursManager from "@/components/dashboard/profil/opening-hours-manager";
-import { getCurrentUser } from "@/lib/auth";
+import { getRestaurateurSession } from "@/lib/auth/get-restaurateur-session";
 import { db } from "@/lib/db";
-import { creneauxHoraires, restaurants } from "@/lib/db/schema";
+import { creneauxHoraires } from "@/lib/db/schema";
 import type { Restaurant } from "@/types";
 import { asc, eq } from "drizzle-orm";
-import { redirect } from "next/navigation";
 
 export default async function RestaurateurProfilPage() {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    redirect("/login");
-  }
-
-  const [restaurant] = await db
-    .select()
-    .from(restaurants)
-    .where(eq(restaurants.userId, currentUser.userId))
-    .limit(1);
-
-  if (!restaurant) {
-    return <div>Restaurant introuvable.</div>;
-  }
+  const { restaurant } = await getRestaurateurSession();
 
   const creneaux = await db
     .select()

@@ -9,7 +9,8 @@ import { clients }                  from "@/lib/db/schema";
 import { eq, or }                   from "drizzle-orm";
 import { signToken }                from "@/lib/auth";
 import { createLogger }             from "@/lib/logger";
-import { setClientRefreshCookie } from "@/lib/api/client-session-cookie";
+import { applyClientRefreshTransport } from "@/lib/api/client-session-cookie";
+import { clientTokenTransportSchema } from "@/lib/api/client-token-transport";
 
 const log = createLogger("v1-client-register");
 
@@ -21,6 +22,7 @@ const registerSchema = z.object({
   password: z.string()
     .min(8, "Le mot de passe doit contenir au moins 8 caractères")
     .max(100),
+  tokenTransport: clientTokenTransportSchema,
 });
 
 export async function POST(req: NextRequest) {
@@ -69,7 +71,14 @@ export async function POST(req: NextRequest) {
 
     const [accessToken, refreshToken] = await Promise.all([
       signToken({ clientId: client.id, type: "client" }, "15m"),
-      signToken({ clientId: client.id, type: "client-refresh" }, "7d"),
+      signToken(
+        {
+          clientId: client.id,
+          type: "client-refresh",
+          sessionDuration: "standard",
+        },
+        "7d",
+      ),
     ]);
 
     log.info({ clientId: client.id }, "Nouveau client inscrit");
@@ -78,10 +87,15 @@ export async function POST(req: NextRequest) {
       client,
       tokens: {
         accessToken,
+        ...(data.tokenTransport === "json" ? { refreshToken } : {}),
         expiresIn: 15 * 60,
       },
     });
-    setClientRefreshCookie(response, refreshToken, 7 * 24 * 3600);
+    applyClientRefreshTransport(response, {
+      transport: data.tokenTransport,
+      token: refreshToken,
+      maxAge: 7 * 24 * 3600,
+    });
     return response;
   } catch (err) {
     log.error({ err }, "Erreur inscription client");

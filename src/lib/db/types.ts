@@ -7,17 +7,21 @@ import {
   commandes,
   creneauxHoraires,
   clients,
-  paiements,
+  financialTransactions,
+  payments,
   livraisons,
   livreurs,
   promotions,
   avis,
   notifications,
-  abonnements,
+  partnerAccounts,
   subscriptionPlans,
   subscriptionRequests,
   subscriptionPeriods,
+  subscriptionPlanLimits,
+  subscriptionPeriodLimits,
   commissionSettlements,
+  typeNotificationEnum,
 } from "./schema";
 
 // ============================================================================
@@ -26,13 +30,14 @@ import {
 
 export type User           = InferSelectModel<typeof users>;
 export type Restaurant     = InferSelectModel<typeof restaurants>;
-export type Abonnement     = InferSelectModel<typeof abonnements>;
+export type PartnerAccount = InferSelectModel<typeof partnerAccounts>;
 export type CreneauHoraire = InferSelectModel<typeof creneauxHoraires>;
 export type Categorie      = InferSelectModel<typeof categories>;
 export type Plat           = InferSelectModel<typeof plats>;
 export type Client         = InferSelectModel<typeof clients>;
 export type Commande       = InferSelectModel<typeof commandes>;
-export type Paiement       = InferSelectModel<typeof paiements>;
+export type FinancialTransaction = InferSelectModel<typeof financialTransactions>;
+export type Payment         = InferSelectModel<typeof payments>;
 export type Livraison      = InferSelectModel<typeof livraisons>;
 export type Livreur        = InferSelectModel<typeof livreurs>;
 export type Promotion      = InferSelectModel<typeof promotions>;
@@ -41,6 +46,8 @@ export type Notification   = InferSelectModel<typeof notifications>;
 export type SubscriptionPlan = InferSelectModel<typeof subscriptionPlans>;
 export type SubscriptionRequest = InferSelectModel<typeof subscriptionRequests>;
 export type SubscriptionPeriod = InferSelectModel<typeof subscriptionPeriods>;
+export type SubscriptionPlanLimit = InferSelectModel<typeof subscriptionPlanLimits>;
+export type SubscriptionPeriodLimit = InferSelectModel<typeof subscriptionPeriodLimits>;
 export type CommissionSettlement = InferSelectModel<typeof commissionSettlements>;
 
 // ============================================================================
@@ -49,13 +56,14 @@ export type CommissionSettlement = InferSelectModel<typeof commissionSettlements
 
 export type NewUser           = InferInsertModel<typeof users>;
 export type NewRestaurant     = InferInsertModel<typeof restaurants>;
-export type NewAbonnement     = InferInsertModel<typeof abonnements>;
+export type NewPartnerAccount = InferInsertModel<typeof partnerAccounts>;
 export type NewCreneauHoraire = InferInsertModel<typeof creneauxHoraires>;
 export type NewCategorie      = InferInsertModel<typeof categories>;
 export type NewPlat           = InferInsertModel<typeof plats>;
 export type NewClient         = InferInsertModel<typeof clients>;
 export type NewCommande       = InferInsertModel<typeof commandes>;
-export type NewPaiement       = InferInsertModel<typeof paiements>;
+export type NewFinancialTransaction = InferInsertModel<typeof financialTransactions>;
+export type NewPayment       = InferInsertModel<typeof payments>;
 export type NewLivraison      = InferInsertModel<typeof livraisons>;
 export type NewLivreur        = InferInsertModel<typeof livreurs>;
 export type NewPromotion      = InferInsertModel<typeof promotions>;
@@ -64,6 +72,8 @@ export type NewNotification   = InferInsertModel<typeof notifications>;
 export type NewSubscriptionPlan = InferInsertModel<typeof subscriptionPlans>;
 export type NewSubscriptionRequest = InferInsertModel<typeof subscriptionRequests>;
 export type NewSubscriptionPeriod = InferInsertModel<typeof subscriptionPeriods>;
+export type NewSubscriptionPlanLimit = InferInsertModel<typeof subscriptionPlanLimits>;
+export type NewSubscriptionPeriodLimit = InferInsertModel<typeof subscriptionPeriodLimits>;
 export type NewCommissionSettlement = InferInsertModel<typeof commissionSettlements>;
 
 // ============================================================================
@@ -71,9 +81,7 @@ export type NewCommissionSettlement = InferInsertModel<typeof commissionSettleme
 // ============================================================================
 
 export type RestaurantAvecRelations = Restaurant & {
-  abonnement?: Abonnement | null;
-  subscriptionPeriods?: SubscriptionPeriod[];
-  subscriptionRequests?: SubscriptionRequest[];
+  partnerAccount?: PartnerAccount | null;
   creneaux?: CreneauHoraire[];
   categories?: CategorieAvecPlats[];
   livreurs?: Livreur[];
@@ -92,7 +100,7 @@ export type PlatAvecCategorie = Plat & {
 
 export type CommandeAvecRelations = Commande & {
   client?: Client | null;
-  paiement?: Paiement | null;
+  financialTransaction?: (FinancialTransaction & { payments?: Payment[] }) | null;
   livraison?: LivraisonAvecLivreur | null;
   avis?: Avis | null;
 };
@@ -111,18 +119,21 @@ export type AvisAvecClient = Avis & {
 // ============================================================================
 
 /** Enum helpers */
-export type Role             = "restaurateur" | "admin";
+export type Role             = "partner" | "admin";
+export type ActivityType     = "restaurant" | "residence";
 export type ModeCommande     = "sur_place" | "livraison" | "emporter";
-export type StatutCommande   = "recue" | "en_preparation" | "prete" | "servie" | "annulee";
-export type StatutPaiement   = "en_attente" | "paye" | "rembourse" | "echoue";
-export type MethodePaiement  = "especes" | "carte" | "mobile_money" | "en_ligne";
+export type StatutCommande   = "en_attente_paiement" | "recue" | "en_preparation" | "prete" | "servie" | "annulee";
+export type TransactionStatus = "pending" | "paid" | "cancelled";
+export type PaymentStatus = "pending" | "confirmed" | "failed" | "cancelled";
+export type PaymentMethod = "cash" | "mobile_money" | "card" | "bank_transfer" | "cheque" | "manual";
 export type StatutLivraison  = "en_attente" | "assignee" | "en_route" | "livree" | "echouee";
 export type TypePromotion    = "pourcentage" | "montant_fixe" | "offre_1_1" | "livraison_gratuite";
-export type TypeNotification = "nouvelle_commande" | "commande_prete" | "commande_annulee" | "nouveau_avis" | "promotion" | "systeme" | "abonnement_valide" | "abonnement_refuse" | "echeance_proche" | "abonnement_regrade" | "abonnement_suspendu" | "abonnement_expire";
+export type TypeNotification = (typeof typeNotificationEnum.enumValues)[number];
 export type PlanCode         = "decouverte" | "croissance" | "partenaire_fier";
 export type StatutDemandeAbonnement = "en_attente" | "validee" | "refusee" | "annulee";
-export type StatutPeriodeAbonnement = "active" | "expiree" | "suspendue" | "annulee";
-export type MoyenReglement   = "mobile_money" | "virement" | "especes" | "cheque";
+export type StatutPeriodeAbonnement = "active" | "expiree" | "terminee" | "suspendue" | "annulee";
+export type MoyenReglement   = "mobile_money" | "carte" | "virement" | "especes" | "cheque";
+export type QuotaResourceType = "category" | "dish" | "residence";
 
 /** Nutrition d'un plat */
 export type Nutrition = {
@@ -166,6 +177,7 @@ export type CommandesParJour = {
 };
 
 export const STATUT_COMMANDE_COLORS: Record<StatutCommande, string> = {
+  en_attente_paiement: "bg-amber-100 text-amber-700",
   recue:          "bg-blue-100 text-blue-700",
   en_preparation: "bg-amber-100 text-amber-700",
   prete:          "bg-green-100 text-green-700",

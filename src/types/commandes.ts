@@ -45,6 +45,7 @@ export type SseEvent =
 
 // Labels affichés dans l'UI
 export const STATUT_LABELS: Record<StatutCommande, string> = {
+  en_attente_paiement: "En attente de paiement",
   recue:           "Reçue",
   en_preparation:  "En préparation",
   prete:           "Prête",
@@ -54,6 +55,7 @@ export const STATUT_LABELS: Record<StatutCommande, string> = {
 
 // Classes CSS Tailwind par statut
 export const STATUT_COLORS: Record<StatutCommande, string> = {
+  en_attente_paiement: "bg-amber-100 text-amber-700",
   recue:           "bg-blue-100 text-blue-700",
   en_preparation:  "bg-amber-100 text-amber-700",
   prete:           "bg-green-100 text-green-700",
@@ -71,6 +73,7 @@ export const MODE_LABELS: Record<ModeCommande, string> = {
 // `prete` peut aller vers `annulee` : une commande prête mais non réclamée
 // peut légitimement être annulée (erreur client, doublon, etc.).
 export const STATUT_TRANSITIONS: Record<StatutCommande, StatutCommande[]> = {
+  en_attente_paiement: ["annulee"],
   recue: ["en_preparation", "annulee"],
   en_preparation: ["prete", "annulee"],
   prete: ["servie", "annulee"],
@@ -81,11 +84,12 @@ export const STATUT_TRANSITIONS: Record<StatutCommande, StatutCommande[]> = {
 // Forme inverse utilisée par la mutation atomique côté serveur. Garder les
 // deux tables ici évite que l'UI et l'API divergent sur le workflow métier.
 export const STATUT_PREVIOUS_STATUSES: Record<StatutCommande, StatutCommande[]> = {
-  recue: [],
+  en_attente_paiement: [],
+  recue: ["en_attente_paiement"],
   en_preparation: ["recue"],
   prete: ["en_preparation"],
   servie: ["prete"],
-  annulee: ["recue", "en_preparation", "prete"],
+  annulee: ["en_attente_paiement", "recue", "en_preparation", "prete"],
 };
 
 export function canRestaurateurSetCommandeStatus(

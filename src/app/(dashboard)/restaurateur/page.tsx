@@ -1,6 +1,4 @@
-import { getCurrentUser } from "@/lib/auth";
-import { getMyRestaurant } from "@/lib/db/queries";
-import { redirect } from "next/navigation";
+import { getRestaurateurSession } from "@/lib/auth/get-restaurateur-session";
 import { Suspense } from "react";
 
 // Composants async (chaque section se charge indépendamment)
@@ -25,12 +23,7 @@ import {
 } from "@/components/dashboard/stats/skeletons";
 
 export default async function RestaurateurDashboardPage() {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) redirect("/login");
-  if (currentUser.role !== "restaurateur") redirect("/login");
-
-  const restaurant = await getMyRestaurant(currentUser.userId);
-  if (!restaurant) redirect("/onboarding");
+  const { restaurant } = await getRestaurateurSession();
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

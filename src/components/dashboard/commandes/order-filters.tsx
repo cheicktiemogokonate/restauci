@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export type OrderStatus =
+  | "en_attente_paiement"
   | "recue"
   | "en_preparation"
   | "prete"
@@ -96,6 +97,8 @@ export function OrderFilters({
 
 export function getStatusConfig(status: OrderStatus) {
   switch (status) {
+    case "en_attente_paiement":
+      return { label: "Paiement requis", color: "bg-amber-50 text-amber-700" };
     case "recue":
       return {
         label: "Reçue",

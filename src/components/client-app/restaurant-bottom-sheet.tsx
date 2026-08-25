@@ -36,7 +36,16 @@ export function RestaurantBottomSheet({
   const cuisines = restaurant?.cuisines ?? previewRestaurant?.cuisines;
   const distance = restaurant?.geo?.distanceKm ?? previewRestaurant?.distanceKm;
   const itineraire = restaurant?.geo?.itineraire;
-  const accepteCommandes = restaurant?.accepteCommandes ?? previewRestaurant?.accepteCommandes;
+  const enLigne = restaurant?.enLigne ?? previewRestaurant?.enLigne ?? false;
+  const accepteCommandes = restaurant?.accepteCommandes ?? previewRestaurant?.accepteCommandes ?? false;
+  const commandesOuvertes = restaurant
+    ? restaurant.orderable
+    : enLigne && accepteCommandes;
+  const promoted = previewRestaurant?.placement === "promoted";
+  const partnerBadgeEnabled = previewRestaurant?.partnerBadgeEnabled ?? false;
+  const discoveryHref = previewRestaurant?.discoveryToken
+    ? `/api/v1/public/discovery/open?token=${encodeURIComponent(previewRestaurant.discoveryToken)}`
+    : `/client/restaurant/${restaurant?.slug ?? previewRestaurant?.slug ?? slug ?? ""}`;
 
   return (
     <Drawer.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -53,15 +62,15 @@ export function RestaurantBottomSheet({
                 <div className="relative size-16 shrink-0 overflow-hidden rounded-2xl bg-muted ring-1 ring-border">
                   {logoUrl ? <Image src={logoUrl} alt={nom ?? "Restaurant"} fill sizes="64px" className="object-cover" /> : <span className="flex size-full items-center justify-center text-xl font-semibold text-muted-foreground">{nom?.charAt(0).toUpperCase()}</span>}
                 </div>
-                <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><h2 className="text-lg leading-tight font-bold">{nom}</h2>{accepteCommandes ? <Badge className="shrink-0 bg-primary/10 text-primary hover:bg-primary/10">Ouvert</Badge> : <Badge variant="destructive" className="shrink-0">Indisponible</Badge>}</div>{cuisines?.length ? <p className="mt-1 truncate text-sm text-muted-foreground">{cuisines.join(" · ")}</p> : null}<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">{restaurant?.noteMoyenne ? <span className="font-semibold text-foreground">⭐ {restaurant.noteMoyenne}</span> : null}{distance !== undefined ? <span className="flex items-center gap-1"><MapPinned className="size-3.5 text-primary" />{distance} km</span> : null}{restaurant?.tempsAttente?.label ? <span className="flex items-center gap-1"><Clock3 className="size-3.5 text-primary" />{restaurant.tempsAttente.label}</span> : null}</div></div>
+                <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><h2 className="text-lg leading-tight font-bold">{nom}</h2><div className="mt-1.5 flex flex-wrap gap-1.5">{promoted ? <Badge variant="outline">Mis en avant</Badge> : null}{partnerBadgeEnabled ? <Badge>Partenaire Toutci</Badge> : null}</div></div>{commandesOuvertes ? <Badge className="shrink-0 bg-primary/10 text-primary hover:bg-primary/10">Ouvert</Badge> : <Badge variant="secondary" className="shrink-0">{enLigne ? "Commandes suspendues" : "Hors ligne"}</Badge>}</div>{cuisines?.length ? <p className="mt-1 truncate text-sm text-muted-foreground">{cuisines.join(" · ")}</p> : null}<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">{restaurant?.noteMoyenne ? <span className="font-semibold text-foreground">⭐ {restaurant.noteMoyenne}</span> : null}{distance !== undefined ? <span className="flex items-center gap-1"><MapPinned className="size-3.5 text-primary" />{distance} km</span> : null}{restaurant?.tempsAttente?.label ? <span className="flex items-center gap-1"><Clock3 className="size-3.5 text-primary" />{restaurant.tempsAttente.label}</span> : null}</div></div>
               </div>
 
               {restaurant?.adresse ? <div className="mt-4 flex gap-2 border-t pt-4 text-sm text-muted-foreground"><MapPinned className="mt-0.5 size-4 shrink-0 text-primary" /><span>{restaurant.adresse}</span></div> : null}
 
               {itineraire ? <div className="mt-4 flex items-center justify-between gap-3 border-t pt-4"><div className="min-w-0"><p className="flex items-center gap-1.5 text-sm font-semibold"><Navigation className="size-4 text-primary" />Itinéraire</p><p className="mt-0.5 text-xs text-muted-foreground">{itineraire.distanceKm} km · environ {itineraire.dureeMinutes} min</p></div><Button type="button" variant={showRoute ? "secondary" : "outline"} size="sm" onClick={onToggleRoute} className="shrink-0"><Route />{showRoute ? "Masquer" : "Voir"}</Button></div> : null}
 
-              {!accepteCommandes ? <p className="mt-4 text-sm text-destructive">Ce restaurant ne reçoit pas de commandes pour le moment.</p> : null}
-              <Button asChild size="lg" className="mt-5 h-11 w-full rounded-xl"><Link href={`/client/restaurant/${restaurant?.slug ?? previewRestaurant?.slug ?? slug ?? ""}`}>Voir le restaurant et le menu</Link></Button>
+              {!commandesOuvertes ? <p className="mt-4 text-sm text-muted-foreground">Ce restaurant reste consultable, mais ne reçoit pas de commandes pour le moment.</p> : null}
+              <Button asChild size="lg" className="mt-5 h-11 w-full rounded-xl"><Link href={discoveryHref}>Voir le restaurant et le menu</Link></Button>
             </div>
           )}
         </Drawer.Content>

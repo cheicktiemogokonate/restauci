@@ -8,18 +8,14 @@ import {
   SelectValue,
 } from "@/components/motion/select";
 import {
-  BedDouble,
-  CalendarDays,
   Check,
   ChevronRight,
   Image as ImageIcon,
   Trash2,
   Upload,
-  Utensils,
 } from "lucide-react";
 import React, { useState } from "react";
 import {
-  ESTABLISHMENT_TYPE_OPTIONS,
   RESTAURANT_TYPE_OPTIONS,
   SERVICE_TYPE_OPTIONS,
 } from "@/lib/onboarding/settings";
@@ -160,7 +156,7 @@ export default function StepGeneral({
           Enseigne & Identité visuelle
         </h1>
         <p className="text-sm text-gray-500 mt-2 font-sans">
-          Présentez votre établissement et choisissez son activité principale.
+          Présentez votre restaurant et ses principaux services.
         </p>
       </div>
 
@@ -172,111 +168,45 @@ export default function StepGeneral({
           </div>
         )}
 
-        <section
-          aria-labelledby="activity-heading"
-          className="rounded-2xl p-2"
-        >
-          <div className="flex items-start justify-between gap-4">
-
-            <h2
-              id="activity-heading"
-              className="text-sm font-bold text-gray-950"
+        <section aria-labelledby="restaurant-settings-heading" className="grid gap-4 rounded-xl bg-slate-50 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <div className="space-y-1.5">
+            <Label id="restaurant-settings-heading" className="text-[11px] font-bold tracking-wide text-gray-600 uppercase">
+              Type de restaurant
+            </Label>
+            <Select
+              value={settings.category}
+              onValueChange={(category) => {
+                updateSettings({ category });
+                setError(null);
+              }}
             >
-              Votre activité
-            </h2>
-
-
+              <SelectTrigger className="h-10 bg-white">
+                <SelectValue placeholder="Choisir un type" />
+              </SelectTrigger>
+              <SelectContent>
+                {RESTAURANT_TYPE_OPTIONS.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {ESTABLISHMENT_TYPE_OPTIONS.map((option) => {
-              const selected = settings.establishmentType === option.id;
-              return (
-                  <Button
-                    key={option.id}
-                    onClick={() =>
-                      option.available &&
-                      updateSettings({ establishmentType: option.id })
-                    }
-                    disabled={!option.available}
-                    variant={selected ? "secondary" : "outline"}
-                    aria-pressed={selected}
-                    className={selected ? "text-green-800" : ""}
-                  >
-                    {selected ? (
-                      <Check className="size-3.5" aria-hidden="true" />
-                    ) : null}
-                    {option.id === "restaurant" ? (
-                      <Utensils className="size-3.5" aria-hidden="true" />
-                    ) : option.id === "residence" ? (
-                      <BedDouble className="size-3.5" aria-hidden="true" />
-                    ) : (
-                      <CalendarDays className="size-3.5" aria-hidden="true" />
-                    )}
-
-                    <span className="truncate">{option.name}</span>
-                    {!option.available ? (
-                      <span className="absolute -top-1.5 right-1 rounded-full bg-gray-900 px-1 text-[8px] font-bold text-gray-400">
-                        Bientôt
-                      </span>
-                    ) : null}
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-bold tracking-wide text-gray-600 uppercase">Services</p>
+            <div className="flex flex-wrap gap-2">
+              {SERVICE_TYPE_OPTIONS.map((service) => {
+                const selected = settings.serviceTypes.includes(service.id);
+                return (
+                  <Button key={service.id} variant={selected ? "secondary" : "outline"} size="sm" onClick={() => toggleServiceType(service.id)} className={selected ? "text-green-800" : ""}>
+                    {selected ? <Check className="size-3.5" aria-hidden="true" /> : null}
+                    {service.name}
                   </Button>
-              );
-            })}
-          </div>
-
-          {settings.establishmentType === "restaurant" ? (
-            <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-              <div className="space-y-1.5">
-                <Label className="text-[11px] font-bold tracking-wide text-gray-600 uppercase">
-                  Type de restaurant
-                </Label>
-                <Select
-                  value={settings.category}
-                  onValueChange={(category) => {
-                    updateSettings({ category });
-                    setError(null);
-                  }}
-                >
-                  <SelectTrigger className="h-10 bg-white">
-                    <SelectValue placeholder="Choisir un type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {RESTAURANT_TYPE_OPTIONS.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-bold tracking-wide text-gray-600 uppercase">
-                  Services
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {SERVICE_TYPE_OPTIONS.map((service) => {
-                    const selected = settings.serviceTypes.includes(service.id);
-                    return (
-                      <Button
-                        key={service.id}
-                        variant={selected ? "secondary" : "outline"}
-                        size="sm"
-                        onClick={() => toggleServiceType(service.id)}
-                        className={selected ? "text-green-800" : ""}
-                      >
-                        {selected ? (
-                          <Check className="size-3.5" aria-hidden="true" />
-                        ) : null}
-                        {service.name}
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
+                );
+              })}
             </div>
-          ) : null}
+          </div>
         </section>
 
         {/* Input Fields */}

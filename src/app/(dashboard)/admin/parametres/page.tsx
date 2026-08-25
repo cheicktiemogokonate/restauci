@@ -4,14 +4,21 @@ import { PageHeader } from "@/components/admin/ui/page-header";
 import { getAdminSession } from "@/lib/auth/get-admin-session";
 import { db } from "@/lib/db";
 import { withDatabaseReadRetry } from "@/lib/db/read-retry";
-import { subscriptionPlans } from "@/lib/db/schema";
-import { asc } from "drizzle-orm";
+import { CommissionPolicyForm } from "@/components/admin/commission-policy-form";
+import { getAdminSubscriptionCatalogueWorkspace } from "@/modules/subscriptions/server";
+import { DiscoveryPerformance } from "@/components/admin/abonnements/discovery-performance";
+import { getDiscoveryPerformanceRows } from "@/modules/discovery/server";
 
 export default async function AdminSettingsPage() {
   await getAdminSession();
-  const plans = await withDatabaseReadRetry(() =>
-    db.select().from(subscriptionPlans).orderBy(asc(subscriptionPlans.ordre)),
-  );
+  const [catalogueWorkspace, commissionPolicy, discoveryPerformance] = await Promise.all([
+    getAdminSubscriptionCatalogueWorkspace(),
+    withDatabaseReadRetry(() => db.query.commissionPolicySettings.findFirst({
+      where: (row, { eq }) => eq(row.id, 1),
+    })),
+    getDiscoveryPerformanceRows(),
+  ]);
+  if (!commissionPolicy) throw new Error("Politique de commissions absente");
 
   return (
     <AdminPage>
@@ -19,6 +26,10 @@ export default async function AdminSettingsPage() {
         title="Paramètres"
         description="Configuration globale des offres et des règles commerciales de la plateforme."
       />
+
+      <CommissionPolicyForm initial={commissionPolicy} />
+
+      <DiscoveryPerformance rows={discoveryPerformance} />
 
       {/* <section className="grid gap-4 sm:grid-cols-2">
         <Card className="shadow-none">
@@ -58,7 +69,10 @@ export default async function AdminSettingsPage() {
             commissions générées après leur mise à jour.
           </p>
         </div> */}
-        <CatalogueEditor plans={plans} />
+        <CatalogueEditor
+          key={`${catalogueWorkspace.draftMeta?.updatedAt ?? "published"}:${catalogueWorkspace.revisions[0]?.id ?? "initial"}`}
+          workspace={catalogueWorkspace}
+        />
       </section>
     </AdminPage>
   );

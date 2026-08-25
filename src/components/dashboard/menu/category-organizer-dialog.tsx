@@ -12,7 +12,9 @@ import { Input } from "@/components/ui/input";
 import {
   createMenuCategoryAction,
   renameMenuCategoryAction,
+  setCategoryPublicationAction,
 } from "@/lib/actions/menu";
+import { Switch } from "@/components/ui/switch";
 import { Check, FolderCog, LoaderCircle, Pencil, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -22,6 +24,8 @@ export interface MenuCategory {
   id: string;
   nom: string;
   platCount: number;
+  publicationIntent: boolean;
+  quotaEligible: boolean;
 }
 
 interface CategoryOrganizerDialogProps {
@@ -55,7 +59,7 @@ export default function CategoryOrganizerDialog({
       setNewCategoryName("");
       setItems((current) => [
         ...current,
-        { ...result.category, platCount: 0 },
+        { ...result.category, platCount: 0, publicationIntent: true, quotaEligible: false },
       ]);
       toast.success("Catégorie ajoutée.");
       refreshAfterSuccess();
@@ -170,6 +174,9 @@ export default function CategoryOrganizerDialog({
                           <span className="shrink-0 text-xs text-muted-foreground">
                             {category.platCount} {category.platCount > 1 ? "plats" : "plat"}
                           </span>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {category.publicationIntent && category.quotaEligible ? "Visible" : !category.publicationIntent ? "Non publiée" : "Hors quota"}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -184,9 +191,26 @@ export default function CategoryOrganizerDialog({
                         </Button>
                       </>
                     ) : (
-                      <Button type="button" variant="ghost" size="icon-sm" onClick={() => { setEditingId(category.id); setEditingName(category.nom); }} disabled={isPending} aria-label={`Renommer ${category.nom}`}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      <>
+                        <Switch
+                          checked={category.publicationIntent}
+                          disabled={isPending}
+                          size="sm"
+                          aria-label={`Publication de ${category.nom}`}
+                          onCheckedChange={(checked) => startTransition(async () => {
+                            const result = await setCategoryPublicationAction(category.id, checked);
+                            if (result.error) {
+                              toast.error(result.error);
+                              return;
+                            }
+                            setItems((current) => current.map((item) => item.id === category.id ? { ...item, publicationIntent: checked } : item));
+                            refreshAfterSuccess();
+                          })}
+                        />
+                        <Button type="button" variant="ghost" size="icon-sm" onClick={() => { setEditingId(category.id); setEditingName(category.nom); }} disabled={isPending} aria-label={`Renommer ${category.nom}`}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 );

@@ -22,11 +22,14 @@ import { getAdminSession } from "@/lib/auth/get-admin-session";
 import { db } from "@/lib/db";
 import { withDatabaseReadRetry } from "@/lib/db/read-retry";
 import {
+  partnerAccounts,
   restaurants,
   subscriptionPeriods,
+  subscriptionPlans,
   subscriptionRequests,
+  users,
 } from "@/lib/db/schema";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { CalendarClock, ClipboardCheck, RefreshCcw, Users } from "lucide-react";
 import { redirect } from "next/navigation";
 
@@ -71,18 +74,26 @@ export default async function AdminAbonnementsPage({
       db
         .select({
           id: subscriptionRequests.id,
-          restaurantId: subscriptionRequests.restaurantId,
-          restaurantNom: restaurants.nom,
+          restaurantId: restaurants.id,
+          partnerNom: sql<string>`COALESCE(${restaurants.nom}, ${users.nom})`,
+          activityType: partnerAccounts.activityType,
           planCode: subscriptionRequests.planCode,
+          planNom: subscriptionPlans.nom,
           prixFigeFcfa: subscriptionRequests.prixFigeFcfa,
           statut: subscriptionRequests.statut,
           createdAt: subscriptionRequests.createdAt,
         })
         .from(subscriptionRequests)
         .innerJoin(
-          restaurants,
-          eq(subscriptionRequests.restaurantId, restaurants.id),
+          partnerAccounts,
+          eq(subscriptionRequests.partnerAccountId, partnerAccounts.id),
         )
+        .innerJoin(users, eq(partnerAccounts.userId, users.id))
+        .leftJoin(
+          restaurants,
+          eq(partnerAccounts.id, restaurants.partnerAccountId),
+        )
+        .innerJoin(subscriptionPlans, eq(subscriptionRequests.planCode, subscriptionPlans.code))
         .where(eq(subscriptionRequests.statut, "en_attente"))
         .orderBy(desc(subscriptionRequests.createdAt)),
       db
@@ -94,16 +105,19 @@ export default async function AdminAbonnementsPage({
           recentDiscoveryReturns: sql<number>`(
               SELECT COUNT(*) FROM ${subscriptionPeriods}
               WHERE ${subscriptionPeriods.statut} = ${"expiree"}
-                AND ${subscriptionPeriods.planCode} = ${"decouverte"}
-                AND ${subscriptionPeriods.createdAt} >= ${sevenDaysAgo}
+                AND ${subscriptionPeriods.planCode} <> ${"decouverte"}
+                AND ${subscriptionPeriods.endedAt} >= ${sevenDaysAgo}
             )`,
         })
         .from(sql`(SELECT 1) AS subscription_summary_source`),
       db
         .select({
-          restaurantId: subscriptionPeriods.restaurantId,
-          restaurantNom: restaurants.nom,
+          partnerAccountId: subscriptionPeriods.partnerAccountId,
+          restaurantId: restaurants.id,
+          partnerNom: sql<string>`COALESCE(${restaurants.nom}, ${users.nom})`,
+          activityType: partnerAccounts.activityType,
           planCode: subscriptionPeriods.planCode,
+          planNom: subscriptionPlans.nom,
           statut: subscriptionPeriods.statut,
           dateDebut: subscriptionPeriods.dateDebut,
           dateEcheance: subscriptionPeriods.dateEcheance,
@@ -111,26 +125,46 @@ export default async function AdminAbonnementsPage({
         })
         .from(subscriptionPeriods)
         .innerJoin(
-          restaurants,
-          eq(subscriptionPeriods.restaurantId, restaurants.id),
+          partnerAccounts,
+          eq(subscriptionPeriods.partnerAccountId, partnerAccounts.id),
         )
-        .where(inArray(subscriptionPeriods.statut, ["active", "suspendue"]))
+        .innerJoin(users, eq(partnerAccounts.userId, users.id))
+        .leftJoin(
+          restaurants,
+          eq(partnerAccounts.id, restaurants.partnerAccountId),
+        )
+        .innerJoin(subscriptionPlans, eq(subscriptionPeriods.planCode, subscriptionPlans.code))
+        .where(and(
+          inArray(subscriptionPeriods.statut, ["active", "suspendue"]),
+          ne(subscriptionPeriods.planCode, "decouverte"),
+          sql`${subscriptionPeriods.dateEcheance} > NOW()`,
+        ))
         .orderBy(desc(subscriptionPeriods.dateEcheance)),
       db
         .select({
           id: subscriptionPeriods.id,
-          restaurantNom: restaurants.nom,
+          partnerNom: sql<string>`COALESCE(${restaurants.nom}, ${users.nom})`,
+          activityType: partnerAccounts.activityType,
           planCode: subscriptionPeriods.planCode,
+          planNom: subscriptionPlans.nom,
           statut: subscriptionPeriods.statut,
           dateDebut: subscriptionPeriods.dateDebut,
           dateEcheance: subscriptionPeriods.dateEcheance,
           prixPayeFcfa: subscriptionPeriods.prixPayeFcfa,
+          endedAt: subscriptionPeriods.endedAt,
+          endReason: subscriptionPeriods.endReason,
         })
         .from(subscriptionPeriods)
         .innerJoin(
-          restaurants,
-          eq(subscriptionPeriods.restaurantId, restaurants.id),
+          partnerAccounts,
+          eq(subscriptionPeriods.partnerAccountId, partnerAccounts.id),
         )
+        .innerJoin(users, eq(partnerAccounts.userId, users.id))
+        .leftJoin(
+          restaurants,
+          eq(partnerAccounts.id, restaurants.partnerAccountId),
+        )
+        .innerJoin(subscriptionPlans, eq(subscriptionPeriods.planCode, subscriptionPlans.code))
         .orderBy(desc(subscriptionPeriods.dateDebut))
         .limit(20),
     ]),
@@ -186,7 +220,7 @@ export default async function AdminAbonnementsPage({
               className="h-11 px-3.5 text-sm"
               indicatorClassName="h-0.5 bg-emerald-600"
             >
-              Restaurants abonnés
+              Partenaires abonnés
             </TabsTrigger>
             <TabsTrigger
               value="historique"
@@ -217,8 +251,8 @@ export default async function AdminAbonnementsPage({
             <CardHeader>
               <CardTitle>Demandes en attente</CardTitle>
               <CardDescription>
-                Restaurants ayant demandé à souscrire ou renouveler une offre
-                payante.
+                Partenaires Restaurant ou Résidence ayant demandé à souscrire
+                ou renouveler une offre payante.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -260,7 +294,7 @@ export default async function AdminAbonnementsPage({
               variant="danger"
             />
             <StatCard
-              title="Retours Découverte (7 j)"
+              title="Expirés vers Découverte (7 j)"
               value={Number(summary?.recentDiscoveryReturns ?? 0)}
               icon={RefreshCcw}
               variant="info"

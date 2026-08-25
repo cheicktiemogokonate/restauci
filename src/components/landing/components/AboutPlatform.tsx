@@ -1,5 +1,5 @@
 "use client";
-import { formatEuro } from "@/lib/utils/format";
+import { formatPrix } from "@/lib/utils/format";
 import { Check, ShieldCheck, Smartphone, Tablet } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import BackgroundDecoration from "./BackgroundDecoration";
@@ -335,7 +335,7 @@ export default function AboutPlatform() {
                       Chiffre d'Affaires
                     </h6>
                     <h4 className="text-base font-mono font-extrabold text-emerald-600 mt-0.5">
-                      {formatEuro(1425.8)}
+                      {formatPrix(142_500)}
                     </h4>
                   </div>
 
@@ -350,7 +350,7 @@ export default function AboutPlatform() {
                     <div className="flex justify-between border-b border-gray-50 pb-1">
                       <span className="text-brand-dark/50">Panier moyen</span>
                       <span className="font-bold text-brand-dark font-mono">
-                        {formatEuro(26.4)}
+                        {formatPrix(5_500)}
                       </span>
                     </div>
                     <div className="flex justify-between">
