@@ -17,6 +17,7 @@
     "media:migrate-cloudinary": "node --env-file=.env.local --import tsx scripts/migrate-cloudinary-media.ts",
     "db:studio": "drizzle-kit studio",
     "security:check-admin": "node --env-file=.env.local --experimental-strip-types scripts/security/check-seeded-admin.ts",
+    "security:csp-check": "node scripts/security/csp-browser-check.mjs",
     "geo:backfill-restaurants": "node --experimental-strip-types scripts/geo/backfill-restaurant-markets.ts",
     "geo:fetch-relations": "node --experimental-strip-types scripts/geo/fetch-osm-relations.ts",
     "geo:validate": "node --experimental-strip-types scripts/geo/validate-boundaries.ts",

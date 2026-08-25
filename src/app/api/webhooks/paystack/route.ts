@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { env } from "@/lib/env";
+import { getClientIp } from "@/lib/api/client-ip";
+import { redis } from "@/lib/cache/redis";
+import { createLogger } from "@/lib/logger";
 import { verifyPaystackSignature } from "@/infrastructure/paystack/signature";
 import { confirmProviderPayment, ProviderPaymentError } from "@/modules/transactions/payment-service";
 import { fromPaystackSubunit, mapPaystackStatus, mapReliablePaystackNetwork } from "@/infrastructure/paystack/mapper";
@@ -11,6 +14,30 @@ import {
 } from "@/modules/residences/payment-lifecycle";
 
 export const runtime = "nodejs";
+
+const log = createLogger("paystack-webhook");
+
+/**
+ * Incrémente le compteur journalier de signatures invalides (alerting).
+ * Best-effort : une panne Redis ne doit jamais empêcher la réponse 401.
+ */
+async function trackInvalidSignature(ip: string): Promise<void> {
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const key = `restauci:alert:paystack-invalid-sig:${day}`;
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, 2 * 24 * 3600);
+    log.warn(
+      { ip, invalidSignaturesToday: count },
+      "Signature Paystack invalide",
+    );
+  } catch (err) {
+    log.warn(
+      { err: err instanceof Error ? err.message : "unknown" },
+      "Compteur signatures invalides indisponible",
+    );
+  }
+}
 
 const eventSchema = z.object({
   event: z.string(),
@@ -31,7 +58,7 @@ export async function POST(request: NextRequest) {
     request.headers.get("x-paystack-signature"),
     env.PAYSTACK_SECRET_KEY,
   )) {
-    console.warn("[paystack-webhook] Signature invalide");
+    await trackInvalidSignature(getClientIp(request));
     return NextResponse.json({ received: false }, { status: 401 });
   }
   let body: unknown;

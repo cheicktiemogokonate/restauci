@@ -9,6 +9,23 @@ const envSchema = z.object({
   // ── Authentification ─────────────────────────────────────────
   JWT_SECRET: z.string()
     .min(32, "JWT_SECRET doit contenir au moins 32 caracteres")
+    .refine(
+      (secret) => {
+        // Rejeter les secrets triviaux : répétition d'un même caractère,
+        // suites évidentes, mots de passe trop « plats » (une seule classe
+        // de caractères sur moins de 64 caractères).
+        if (/^(.)\1+$/.test(secret)) return false;
+        if (/^(?:0123|1234|abcd|aaaa|bbbb)/i.test(secret)) return false;
+        const classes = [
+          /[a-z]/.test(secret),
+          /[A-Z]/.test(secret),
+          /[0-9]/.test(secret),
+          /[^a-zA-Z0-9]/.test(secret),
+        ].filter(Boolean).length;
+        return classes >= 3 || secret.length >= 64;
+      },
+      "JWT_SECRET trop faible : utiliser au minimum 32 caracteres avec 3 classes de caracteres, ou 64+ caractères (ex: openssl rand -base64 48)",
+    )
     .describe("Secret pour signer les tokens JWT"),
 
   JWT_COOKIE_NAME: z.string()

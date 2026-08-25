@@ -67,11 +67,15 @@ export async function POST(request: NextRequest) {
     if (existingUser.length > 0) {
       authLogger.warn(
         { ip, email, reason: "email already exists" },
-        "Registration failed",
+        "Registration blocked (duplicate)",
       );
+      // Anti-énumération : réponse de même forme qu'une création réussie,
+      // SANS cookie de session ni détail sur l'existence du compte.
+      // Le frontend redirige vers /onboarding, d'où le proxy renvoie vers
+      // /login faute de session — parcours naturel pour un compte existant.
       return NextResponse.json(
-        { error: "Un utilisateur avec cet email existe déjà" },
-        { status: 409 },
+        { success: true, alreadyRegistered: true },
+        { status: 200 },
       );
     }
 

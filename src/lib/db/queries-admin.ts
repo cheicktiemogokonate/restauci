@@ -30,6 +30,7 @@ import {
   users,
 } from "./schema";
 import type { StatutCommande } from "./types";
+import { escapeLikePattern } from "./like";
 import { withDatabaseReadRetry } from "./read-retry";
 
 // ============================================================================
@@ -68,7 +69,7 @@ export async function getRestaurantsAdmin({
 
   const normalizedSearch = search?.trim().slice(0, 100);
   if (normalizedSearch) {
-    conditions.push(ilike(restaurants.nom, `%${normalizedSearch}%`));
+    conditions.push(ilike(restaurants.nom, `%${escapeLikePattern(normalizedSearch)}%`));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -545,8 +546,8 @@ export async function getUsersAdmin({
   if (normalizedSearch) {
     conditions.push(
       or(
-        ilike(users.nom, `%${normalizedSearch}%`),
-        ilike(users.email, `%${normalizedSearch}%`),
+        ilike(users.nom, `%${escapeLikePattern(normalizedSearch)}%`),
+        ilike(users.email, `%${escapeLikePattern(normalizedSearch)}%`),
       ),
     );
   }

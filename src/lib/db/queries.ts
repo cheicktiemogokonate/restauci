@@ -5,6 +5,7 @@ import { db } from "./index";
 import { withDatabaseReadRetry } from "./read-retry";
 import { avis, commandes, notifications, partnerAccounts, plats, restaurants } from "./schema";
 import type { ModeCommande, StatutCommande } from "./types";
+import { escapeLikePattern } from "./like";
 import { isRestaurantPubliclyVisible } from "@/lib/restaurants/policy";
 
 // ============================================================================
@@ -161,7 +162,7 @@ export async function getPlats({
   if (categorieId) conditions.push(eq(plats.categorieId, categorieId));
   if (disponible !== undefined)
     conditions.push(eq(plats.disponible, disponible));
-  if (search) conditions.push(like(plats.nom, `%${search}%`));
+  if (search) conditions.push(like(plats.nom, `%${escapeLikePattern(search)}%`));
 
   const [items, totalResult] = await Promise.all([
     withCache(
@@ -268,7 +269,7 @@ export async function getCommandes({
   if (dateDebut) conditions.push(gte(commandes.createdAt, dateDebut));
   if (dateFin) conditions.push(lte(commandes.createdAt, dateFin));
   if (search) {
-    const searchPattern = `%${search}%`;
+    const searchPattern = `%${escapeLikePattern(search)}%`;
     conditions.push(
       sql`${commandes.numero} LIKE ${searchPattern} OR ${commandes.nomClient} LIKE ${searchPattern}`,
     );
