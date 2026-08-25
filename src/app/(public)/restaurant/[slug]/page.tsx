@@ -1,6 +1,7 @@
 import { getCreneauxRestaurant, getRestaurantBySlug } from "@/lib/db/queries";
 import { getPublicRestaurantMenu } from "@/lib/quota-entitlements";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
@@ -155,8 +156,10 @@ export default async function RestaurantPage({ params }: RestaurantPageProps) {
   // Client component wrapper for interactive state
   return (
     <>
+      {/* Nonce requis par la CSP stricte (script inline JSON-LD) */}
       <script
         type="application/ld+json"
+        nonce={(await headers()).get("x-nonce") ?? undefined}
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
         }}

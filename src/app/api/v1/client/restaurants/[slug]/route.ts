@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { apiResponse } from "@/lib/api/response";
 import { validateSearchParams } from "@/lib/api/validate";
 import { db } from "@/lib/db";
@@ -41,8 +42,7 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
+  const ip = getClientIp(request);
   const rl = await checkRateLimit(clientApiLimiter, ip);
   if (rl) return rl;
 

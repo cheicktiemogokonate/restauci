@@ -1,17 +1,20 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import Navbar from "@/components/landing/components/Navbar";
 import Pricing from "@/components/landing/components/Pricing";
 import type { Metadata } from "next";
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 import { getPublishedSubscriptionCatalogue } from "@/modules/subscriptions/server";
 
-const Hero = dynamic(() => import("@/components/landing/components/Hero"), {
+const Hero = nextDynamic(() => import("@/components/landing/components/Hero"), {
   loading: () => <div />,
 });
-const AboutPlatform = dynamic(
+const AboutPlatform = nextDynamic(
   () => import("@/components/landing/components/AboutPlatform"),
   { loading: () => <div /> },
 );
-const HoverFooter = dynamic(() => import("@/components/landing/ui/demo"), {
+const HoverFooter = nextDynamic(() => import("@/components/landing/ui/demo"), {
   loading: () => <div />,
 });
 

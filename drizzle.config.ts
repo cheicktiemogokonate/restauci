@@ -57,7 +57,10 @@ if (isTestDatabase && developmentUrl && databaseUrl === developmentUrl) {
 }
 
 export default {
+  dialect: "postgresql",
   schema: "./src/lib/db/schema.ts",
   out: "./drizzle/migrations",
-  connectionString: databaseUrl,
+  dbCredentials: {
+    url: databaseUrl,
+  },
 } satisfies Config

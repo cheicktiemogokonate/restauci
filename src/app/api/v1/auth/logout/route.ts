@@ -1,10 +1,22 @@
 import { getMobileSession } from "@/lib/api/auth-mobile";
+import { blacklistToken } from "@/lib/api/token-blacklist";
 import { apiResponse } from "@/lib/api/response";
-import { redis } from "@/lib/cache/redis";
+import { verifyToken } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { NextRequest } from "next/server";
+import { z } from "zod";
 
 const log = createLogger("v1-auth-logout");
+
+const logoutBodySchema = z.object({
+  refreshToken: z.string().min(1).optional(),
+});
+
+function tokenExp(payload: Record<string, unknown> | null): number {
+  const exp = typeof payload?.exp === "number" ? payload.exp : 0;
+  const now = Math.floor(Date.now() / 1000);
+  return exp > now ? exp : now + 24 * 3600;
+}
 
 export async function POST(request: NextRequest) {
   const { error } = await getMobileSession(request);
@@ -16,10 +28,30 @@ export async function POST(request: NextRequest) {
       return apiResponse.unauthorized("Token manquant ou invalide");
     }
 
-    const token = authHeader.slice(7);
+    const accessToken = authHeader.slice(7);
 
-    // Stocker le token blacklisté pendant 24h (durée max d'un access token)
-    await redis.setex(`restauci:blacklist:${token}`, 24 * 3600, "1");
+    // Blacklister l'access token jusqu'à son exp réelle (et non un TTL fixe).
+    await blacklistToken(accessToken, tokenExp(await verifyToken(accessToken)));
+
+    // Révoquer aussi le refresh token si l'app le transmet : sans cela,
+    // la session peut être régénérée après le logout.
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      body = null; // corps vide toléré (rétrocompatibilité anciens clients)
+    }
+    const parsed = logoutBodySchema.safeParse(body);
+    if (parsed.success && parsed.data.refreshToken) {
+      const refreshPayload = await verifyToken(parsed.data.refreshToken);
+      if (refreshPayload && refreshPayload.type === "refresh") {
+        await blacklistToken(
+          parsed.data.refreshToken,
+          tokenExp(refreshPayload),
+        );
+        log.info("Refresh token révoqué lors du logout");
+      }
+    }
 
     return apiResponse.success({ message: "Déconnexion réussie" });
   } catch (err) {

@@ -77,11 +77,11 @@
   },
   {
     "file": "src/app/(dashboard)/restaurateur/commandes/[id]/page.tsx",
-    "target": "@/lib/db/schema"
+    "target": "@/lib/db/queries"
   },
   {
     "file": "src/app/(dashboard)/restaurateur/commandes/[id]/page.tsx",
-    "target": "@/lib/db/queries"
+    "target": "@/lib/db/schema"
   },
   {
     "file": "src/app/(dashboard)/restaurateur/commandes/page.tsx",
@@ -109,11 +109,11 @@
   },
   {
     "file": "src/app/(dashboard)/restaurateur/menu/[id]/page.tsx",
-    "target": "@/lib/db/queries"
+    "target": "@/lib/db"
   },
   {
     "file": "src/app/(dashboard)/restaurateur/menu/[id]/page.tsx",
-    "target": "@/lib/db"
+    "target": "@/lib/db/queries"
   },
   {
     "file": "src/app/(dashboard)/restaurateur/menu/[id]/page.tsx",
@@ -205,11 +205,11 @@
   },
   {
     "file": "src/app/api/cron/subscriptions/route.ts",
-    "target": "@/lib/db/transaction"
+    "target": "@/lib/db/schema"
   },
   {
     "file": "src/app/api/cron/subscriptions/route.ts",
-    "target": "@/lib/db/schema"
+    "target": "@/lib/db/transaction"
   },
   {
     "file": "src/app/api/health/route.ts",
@@ -257,11 +257,11 @@
   },
   {
     "file": "src/app/api/restaurateur/categories/route.ts",
-    "target": "@/lib/db/schema"
+    "target": "@/lib/db/queries"
   },
   {
     "file": "src/app/api/restaurateur/categories/route.ts",
-    "target": "@/lib/db/queries"
+    "target": "@/lib/db/schema"
   },
   {
     "file": "src/app/api/restaurateur/plats/route.ts",
@@ -288,6 +288,14 @@
     "target": "@/lib/db/schema"
   },
   {
+    "file": "src/app/api/v1/auth/refresh/route.ts",
+    "target": "@/lib/db"
+  },
+  {
+    "file": "src/app/api/v1/auth/refresh/route.ts",
+    "target": "@/lib/db/schema"
+  },
+  {
     "file": "src/app/api/v1/client/auth/login/route.ts",
     "target": "@/lib/db"
   },
@@ -322,14 +330,14 @@
   {
     "file": "src/app/api/v1/client/commandes/[id]/route.ts",
     "target": "@/lib/db"
-  },
-  {
-    "file": "src/app/api/v1/client/commandes/[id]/route.ts",
-    "target": "@/lib/db/schema"
   },
   {
     "file": "src/app/api/v1/client/commandes/[id]/route.ts",
     "target": "@/lib/db/commandes-mutations"
+  },
+  {
+    "file": "src/app/api/v1/client/commandes/[id]/route.ts",
+    "target": "@/lib/db/schema"
   },
   {
     "file": "src/app/api/v1/client/commandes/[id]/stream/route.ts",
@@ -349,11 +357,11 @@
   },
   {
     "file": "src/app/api/v1/client/restaurants/[slug]/route.ts",
-    "target": "@/lib/db/schema"
+    "target": "@/lib/db/queries"
   },
   {
     "file": "src/app/api/v1/client/restaurants/[slug]/route.ts",
-    "target": "@/lib/db/queries"
+    "target": "@/lib/db/schema"
   },
   {
     "file": "src/app/api/v1/client/restaurants/route.ts",
@@ -381,19 +389,19 @@
   },
   {
     "file": "src/app/api/v1/restaurateur/commandes/[id]/route.ts",
-    "target": "@/lib/db/queries"
+    "target": "@/lib/db/mutations"
   },
   {
     "file": "src/app/api/v1/restaurateur/commandes/[id]/route.ts",
-    "target": "@/lib/db/mutations"
-  },
-  {
-    "file": "src/app/api/v1/restaurateur/commandes/[id]/statut/route.ts",
     "target": "@/lib/db/queries"
   },
   {
     "file": "src/app/api/v1/restaurateur/commandes/[id]/statut/route.ts",
     "target": "@/lib/db/mutations"
+  },
+  {
+    "file": "src/app/api/v1/restaurateur/commandes/[id]/statut/route.ts",
+    "target": "@/lib/db/queries"
   },
   {
     "file": "src/app/api/v1/restaurateur/commandes/route.ts",
@@ -401,11 +409,11 @@
   },
   {
     "file": "src/app/api/v1/restaurateur/plats/route.ts",
-    "target": "@/lib/db/queries"
+    "target": "@/lib/db/mutations"
   },
   {
     "file": "src/app/api/v1/restaurateur/plats/route.ts",
-    "target": "@/lib/db/mutations"
+    "target": "@/lib/db/queries"
   },
   {
     "file": "src/app/api/v1/restaurateur/stats/route.ts",

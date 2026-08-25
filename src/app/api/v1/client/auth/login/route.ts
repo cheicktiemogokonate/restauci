@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { apiResponse } from "@/lib/api/response";
 import { validateBody } from "@/lib/api/validate";
 import { signToken } from "@/lib/auth";
@@ -22,7 +23,7 @@ const loginSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
+  const ip = getClientIp(req);
   const rl = await checkRateLimit(clientAuthLimiter, ip);
   if (rl) return rl;
 

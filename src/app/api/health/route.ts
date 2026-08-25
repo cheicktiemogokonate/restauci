@@ -6,7 +6,6 @@ import { sql } from "drizzle-orm";
 interface HealthStatus {
   status: "healthy" | "degraded" | "unhealthy";
   timestamp: string;
-  version: string;
   services: {
     database: { status: "up" | "down"; latency?: number };
     cache: { status: "up" | "down"; latency?: number };
@@ -17,7 +16,8 @@ export async function GET() {
   const status: HealthStatus = {
     status: "healthy",
     timestamp: new Date().toISOString(),
-    version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
+    // Pas d'information de version/commit ici : ce endpoint est public,
+    // exposer le SHA faciliterait le ciblage d'une vulnérabilité de version.
     services: {
       database: { status: "down" },
       cache: { status: "down" },

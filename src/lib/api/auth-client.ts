@@ -1,7 +1,6 @@
 import { NextRequest }  from "next/server";
 import { apiResponse }  from "./response";
 import { verifyToken }  from "@/lib/auth";  // adapte selon ton fichier auth
-import { redis }        from "@/lib/cache/redis";
 import { createLogger } from "@/lib/logger";
 import { db } from "@/lib/db";
 import { clients } from "@/lib/db/schema";
@@ -34,12 +33,9 @@ export async function getClientSession(req: NextRequest): Promise<
 
   const token = authHeader.slice(7);
 
-  // Vérifier le blacklist (logout)
+  // Vérifier le blacklist (logout / rotation)
   try {
-    const isBlacklisted =
-      (await isTokenBlacklisted(token)) ||
-      (await redis.get(`restauci:blacklist:${token}`));
-    if (isBlacklisted) {
+    if (await isTokenBlacklisted(token)) {
       return {
         session: null,
         error:   apiResponse.unauthorized("Session expirée. Reconnectez-vous."),

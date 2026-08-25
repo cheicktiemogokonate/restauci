@@ -22,7 +22,15 @@ async function seed() {
   console.log("🌱 Démarrage du seed...");
 
   // ── 1. Users (Admin + Restaurateur) ──────────────────────────────────────
-  const passwordHash = await hash("password123", 12);
+  // Aucun mot de passe en dur : il DOIT venir de l'environnement.
+  const seedPassword = process.env.SEED_PASSWORD;
+  if (!seedPassword || seedPassword.length < 12) {
+    throw new Error(
+      "SEED_PASSWORD manquant ou trop court (min 12 caractères). " +
+        "Exemple : SEED_PASSWORD=\"$(openssl rand -base64 24)\" npm run db:seed",
+    );
+  }
+  const passwordHash = await hash(seedPassword, 12);
 
   const [adminUser] = await db
     .insert(users)
@@ -302,7 +310,7 @@ async function seed() {
   console.log("\n🎉 Seed terminé avec succès !");
   console.log("─────────────────────────────");
   console.log("Email:    orlando@restauci.com");
-  console.log("Password: password123");
+  console.log("Password: (valeur SEED_PASSWORD utilisée — non affichée)");
   process.exit(0);
 }
 

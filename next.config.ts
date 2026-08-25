@@ -76,25 +76,31 @@ const nextConfig: NextConfig = {
             key: "Referrer-Policy",
             value: "strict-origin-when-cross-origin",
           },
-          {
-            key: "Content-Security-Policy",
-            value: [
-              "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https:",
-              "font-src 'self' https://fonts.gstatic.com",
-              // MapLibre GL needs blob: for its web worker
-              "worker-src 'self' blob:",
-              // Allow fetching CARTO basemap styles, tiles and glyphs, plus OSRM/Nominatim.
-              "connect-src 'self' https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://router.project-osrm.org https://nominatim.openstreetmap.org",
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-              "object-src 'none'",
-              ...(isProduction ? ["upgrade-insecure-requests"] : []),
-            ].join("; "),
-          },
+          // CSP statique en DÉVELOPPEMENT uniquement ('unsafe-eval' pour HMR).
+          // En production, la CSP stricte à nonce est posée par src/proxy.ts
+          // (nonce par requête + strict-dynamic) — voir buildCspHeader.
+          ...(!isProduction
+            ? [
+                {
+                  key: "Content-Security-Policy",
+                  value: [
+                    "default-src 'self'",
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+                    "style-src 'self' 'unsafe-inline'",
+                    "img-src 'self' data: blob: https:",
+                    "font-src 'self' https://fonts.gstatic.com",
+                    // MapLibre GL needs blob: for its web worker
+                    "worker-src 'self' blob:",
+                    // Allow fetching CARTO basemap styles, tiles and glyphs, plus OSRM/Nominatim.
+                    "connect-src 'self' https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://router.project-osrm.org https://nominatim.openstreetmap.org",
+                    "frame-ancestors 'none'",
+                    "base-uri 'self'",
+                    "form-action 'self'",
+                    "object-src 'none'",
+                  ].join("; "),
+                },
+              ]
+            : []),
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), payment=(), usb=()",

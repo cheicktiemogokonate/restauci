@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { apiResponse } from "@/lib/api/response";
@@ -44,7 +45,7 @@ const querySchema = z
  * de ne pas exposer la position dans l'URL.
  */
 export async function GET(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
+  const ip = getClientIp(request);
   const { searchParams } = new URL(request.url);
   const limiter = searchParams.has("lat") && searchParams.has("lng")
     ? geoSearchLimiter

@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createCategorie, createPlat } from "@/lib/db/mutations";
@@ -23,10 +24,7 @@ const createPlatSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0] ??
-    request.headers.get("x-real-ip") ??
-    "anonymous";
+  const ip = getClientIp(request);
   const rateLimitResponse = await checkRateLimit(apiLimiter, ip);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -104,10 +102,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0] ??
-    request.headers.get("x-real-ip") ??
-    "anonymous";
+  const ip = getClientIp(request);
 
   const rateLimitResponse = await checkRateLimit(apiLimiter, ip);
   if (rateLimitResponse) return rateLimitResponse;

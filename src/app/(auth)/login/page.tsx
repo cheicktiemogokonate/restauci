@@ -1,3 +1,5 @@
+export const revalidate = 0;
+
 import type { Metadata } from "next";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { LoginVisual } from "@/components/auth/login-visual-panel";

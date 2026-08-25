@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { categories } from "@/lib/db/schema";
@@ -8,9 +9,7 @@ import { checkRateLimit, apiLimiter } from "@/lib/rate-limit";
 import { menuLogger } from "@/lib/loggers";
 
 export async function GET(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ??
-    request.headers.get("x-real-ip") ??
-    "anonymous";
+  const ip = getClientIp(request);
   const rateLimitResponse = await checkRateLimit(apiLimiter, ip);
   if (rateLimitResponse) return rateLimitResponse;
 

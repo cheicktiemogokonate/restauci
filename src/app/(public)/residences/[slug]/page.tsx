@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ArrowLeft, MapPin, ShieldCheck, Users } from "lucide-react";
 import { notFound } from "next/navigation";
 import { cache } from "react";
@@ -95,8 +96,10 @@ export default async function PublicResidenceDetailPage({
   return (
     <div className="min-h-dvh bg-slate-50">
       <PublicResidenceHeader />
+      {/* Nonce requis par la CSP stricte (script inline JSON-LD) */}
       <script
         type="application/ld+json"
+        nonce={(await headers()).get("x-nonce") ?? undefined}
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
         }}

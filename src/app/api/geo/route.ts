@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { createLogger } from "@/lib/logger";
 import { checkRateLimit, geoSearchLimiter } from "@/lib/rate-limit";
 import { NextRequest, NextResponse } from "next/server";
@@ -5,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 const log = createLogger("api-geo");
 
 export async function GET(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
+  const ip = getClientIp(req);
 
   const rateLimitResponse = await checkRateLimit(geoSearchLimiter, ip);
   if (rateLimitResponse) return rateLimitResponse;

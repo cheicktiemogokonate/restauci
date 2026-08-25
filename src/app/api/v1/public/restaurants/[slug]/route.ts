@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { apiResponse } from "@/lib/api/response";
 import { getRestaurantBySlug } from "@/lib/db/queries";
 import { createLogger } from "@/lib/logger";
@@ -12,8 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
+  const ip = getClientIp(request);
   const rl = await checkRateLimit(apiLimiter, ip);
   if (rl) return rl;
 

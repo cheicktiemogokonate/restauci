@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clearAuthCookie } from "@/lib/auth";
+import { getClientIp } from "@/lib/api/client-ip";
 import { authLogger } from "@/lib/loggers";
 
 // ============================================================================
@@ -10,7 +11,7 @@ export async function POST(request: NextRequest) {
   try {
     await clearAuthCookie();
 
-    authLogger.info({ ip: request.headers.get("x-forwarded-for")?.split(",")[0] ?? "unknown" }, "Logout successful");
+    authLogger.info({ ip: getClientIp(request) }, "Logout successful");
     if (request.headers.get("accept")?.includes("text/html")) {
       return NextResponse.redirect(new URL("/login", request.url), 303);
     }

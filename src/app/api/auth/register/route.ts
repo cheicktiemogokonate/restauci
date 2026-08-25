@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { hashPassword, setAuthCookie, signToken } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
@@ -12,10 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 // ============================================================================
 
 export async function POST(request: NextRequest) {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0] ??
-    request.headers.get("x-real-ip") ??
-    "anonymous";
+  const ip = getClientIp(request);
   const rateLimitResponse = await checkRateLimit(authLimiter, ip);
   if (rateLimitResponse) return rateLimitResponse;
 

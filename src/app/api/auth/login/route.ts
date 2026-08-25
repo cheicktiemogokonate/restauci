@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { comparePassword, setAuthCookie, signToken } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { partnerAccounts, users } from "@/lib/db/schema";
@@ -12,11 +13,16 @@ import { NextRequest, NextResponse } from "next/server";
 // ============================================================================
 
 export async function POST(request: NextRequest) {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0] ??
-    request.headers.get("x-real-ip") ??
-    "anonymous";
-  if (process.env.E2E_TEST !== "true") {
+  const ip = getClientIp(request);
+  // Bypass réservé aux tests e2e : il est doublement conditionné (NODE_ENV
+  // ET E2E_TEST) pour qu'une fuite de E2E_TEST=true en production soit
+  // sans effet sur la surface d'attaque du login.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.E2E_TEST === "true"
+  ) {
+    // rate limiting désactivé en environnement de test e2e uniquement
+  } else {
     const rateLimitResponse = await checkRateLimit(authLimiter, ip);
     if (rateLimitResponse) return rateLimitResponse;
   }

@@ -1,4 +1,4 @@
-import { redis } from "@/lib/cache/redis";
+import { isTokenBlacklisted } from "@/lib/api/token-blacklist";
 import { db } from "@/lib/db";
 import { partnerAccounts, restaurants, users } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
@@ -45,21 +45,30 @@ export async function getMobileSession(
 
   const token = authHeader.slice(7); // Retire "Bearer "
 
-  // Vérifier si le token est blacklisté (pour le logout)
-  const isBlacklisted = await redis.get(`restauci:blacklist:${token}`);
-  if (isBlacklisted) {
-    return {
-      session: null,
-      error: apiResponse.unauthorized("Token révoqué. Reconnectez-vous."),
-    };
+  // Vérifier si le token est blacklisté (logout / rotation du refresh).
+  // Si Redis est indisponible on dégrade gracieusement (cohérent avec
+  // getClientSession) : la suspension reste vérifiée en base plus bas.
+  try {
+    if (await isTokenBlacklisted(token)) {
+      return {
+        session: null,
+        error: apiResponse.unauthorized("Token révoqué. Reconnectez-vous."),
+      };
+    }
+  } catch (err) {
+    log.warn(
+      { err: err instanceof Error ? err.message : "unknown" },
+      "Blacklist indisponible lors de la vérification de session mobile",
+    );
   }
 
   try {
     // Utilise la même fonction de vérification JWT que l'app web
-    // Adapte selon ce que tu trouves dans src/lib/auth/index.ts
     const payload = await verifyToken(token);
 
-    if (!payload?.userId) {
+    // Un access token explicite est exigé : un refresh token (longue durée)
+    // ne doit jamais être utilisable directement comme Bearer.
+    if (!payload?.userId || payload.type !== "access") {
       return {
         session: null,
         error: apiResponse.unauthorized("Token invalide"),

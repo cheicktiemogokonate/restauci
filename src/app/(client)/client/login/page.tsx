@@ -1,3 +1,5 @@
+export const revalidate = 0;
+
 import { ClientLoginForm } from "@/components/client-app/client-login-form";
 import { ClientAuthShell } from "@/components/client-app/client-auth-shell";
 import type { Metadata } from "next";

@@ -1,3 +1,5 @@
+export const revalidate = 0;
+
 import { LegalPage } from "@/components/legal/legal-page";
 import type { Metadata } from "next";
 

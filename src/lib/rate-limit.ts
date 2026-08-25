@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { Ratelimit } from "@upstash/ratelimit";
 import { redis } from "@/lib/cache/redis";
 import { NextResponse } from "next/server";
@@ -171,10 +172,7 @@ export async function limitRequest(request: NextRequest, key: keyof typeof event
     return null;
   }
 
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown";
+  const ip = getClientIp(request);
   const eventName = eventNames[key];
 
   try {

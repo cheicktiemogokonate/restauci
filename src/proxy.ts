@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { env } from "@/lib/env";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
@@ -37,6 +38,10 @@ const API_PUBLIQUES = [
   "/api/health",
   "/api/webhooks/paystack",
   "/api/payments/paystack/callback",
+  // Vercel Cron n'envoie qu'un Authorization Bearer (pas de cookie JWT).
+  // Ces routes sont protégées en propre par CRON_SECRET (timing-safe) :
+  // https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs
+  "/api/cron",
 ];
 
 // Configuration du rate limiter global (Redis via Upstash)
@@ -49,15 +54,56 @@ const globalLimiter = new Ratelimit({
   prefix: "restauci:rl:global",
 });
 
+const IS_PRODUCTION = env.NODE_ENV === "production";
+
+/**
+ * CSP stricte à nonce (production uniquement).
+ * Le nonce est généré par requête : seuls les <script> marqués par Next.js
+ * avec ce nonce (framework + JSON-LD des pages publiques) s'exécutent.
+ * 'strict-dynamic' autorise les chargements légitimes initiés par ces
+ * scripts de confiance. Le développement reste sur la CSP statique de
+ * next.config.ts ('unsafe-eval' nécessaire au HMR/React DevTools).
+ */
+function buildCspHeader(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    // 'unsafe-inline' requis : framer-motion/gsap injectent des <style> à l'exécution
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' https://fonts.gstatic.com",
+    "worker-src 'self' blob:", // worker MapLibre GL
+    "connect-src 'self' https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://router.project-osrm.org https://nominatim.openstreetmap.org",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+    "upgrade-insecure-requests",
+  ].join("; ");
+}
+
+/** Réponse « next » pour les pages HTML : CSP à nonce en production. */
+function nextPageResponse(req: NextRequest): NextResponse {
+  if (!IS_PRODUCTION) return NextResponse.next();
+
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const csp = buildCspHeader(nonce);
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
+  res.headers.set("Content-Security-Policy", csp);
+  return res;
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // --- Rate limiting global sur les routes API ---
   if (pathname.startsWith("/api/")) {
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0] ??
-      req.headers.get("x-real-ip") ??
-      "anonymous";
+    const ip = getClientIp(req);
 
     try {
       const { success } = await globalLimiter.limit(ip);
@@ -97,7 +143,7 @@ export async function proxy(req: NextRequest) {
     }
     return pathname === r;
   })) {
-    return NextResponse.next();
+    return nextPageResponse(req);
   }
 
   // --- Verification du token JWT ---
@@ -129,7 +175,7 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL("/partenaire", req.url));
     }
 
-    return NextResponse.next();
+    return nextPageResponse(req);
   } catch {
     if (pathname.startsWith("/api/")) {
       const res = NextResponse.json({ error: "Non autorise" }, { status: 401 });

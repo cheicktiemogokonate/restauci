@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { updateStatutCommande } from "@/lib/db/mutations";
@@ -13,10 +14,7 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0] ??
-    request.headers.get("x-real-ip") ??
-    "anonymous";
+  const ip = getClientIp(request);
 
   try {
     const session = await getCurrentUser();

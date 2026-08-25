@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { checkRateLimit, uploadLimiter } from "@/lib/rate-limit";
@@ -12,9 +13,7 @@ import { isR2Configured, uploadImageToR2 } from "@/lib/r2";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ??
-    request.headers.get("x-real-ip") ??
-    "anonymous";
+  const ip = getClientIp(request);
   
   const session = await getCurrentUser();
   if (session) {

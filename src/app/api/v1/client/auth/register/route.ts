@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { NextRequest }              from "next/server";
 import { z }                        from "zod";
 import { hash }                     from "bcryptjs";
@@ -11,6 +12,7 @@ import { signToken }                from "@/lib/auth";
 import { createLogger }             from "@/lib/logger";
 import { applyClientRefreshTransport } from "@/lib/api/client-session-cookie";
 import { clientTokenTransportSchema } from "@/lib/api/client-token-transport";
+import { emailSchema } from "@/lib/validations/auth";
 
 const log = createLogger("v1-client-register");
 
@@ -18,7 +20,7 @@ const registerSchema = z.object({
   nom:       z.string().min(2, "Nom trop court").max(255),
   telephone: z.string()
     .regex(/^\+?[0-9\s]{8,20}$/, "Numéro de téléphone invalide"),
-  email:    z.string().email("Email invalide").optional(),
+  email:    emailSchema.optional(),
   password: z.string()
     .min(8, "Le mot de passe doit contenir au moins 8 caractères")
     .max(100),
@@ -26,7 +28,7 @@ const registerSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
+  const ip = getClientIp(req);
   const rl  = await checkRateLimit(clientAuthLimiter, ip);
   if (rl) return rl;
 

@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { NextRequest } from "next/server";
 import { apiResponse } from "@/lib/api/response";
 import { validateBody } from "@/lib/api/validate";
@@ -14,7 +15,7 @@ const log = createLogger("v1-public-residences-search");
  * La destination est explicite : aucune position GPS courante n'est requise.
  */
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
+  const ip = getClientIp(request);
   const limited = await checkRateLimit(geoSearchLimiter, ip);
   if (limited) return limited;
 

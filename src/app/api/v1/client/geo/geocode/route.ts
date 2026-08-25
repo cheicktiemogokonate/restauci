@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/api/client-ip";
 import { apiResponse } from "@/lib/api/response";
 import { validateSearchParams } from "@/lib/api/validate";
 import { geocoder } from "@/lib/geo";
@@ -13,7 +14,7 @@ const querySchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
+  const ip = getClientIp(req);
   const rl = await checkRateLimit(geoSearchLimiter, ip);
   if (rl) return rl;
 
