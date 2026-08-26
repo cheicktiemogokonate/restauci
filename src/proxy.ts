@@ -67,7 +67,8 @@ const IS_PRODUCTION = env.NODE_ENV === "production";
 function buildCspHeader(nonce: string): string {
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    // va.vercel-scripts.com : scripts Vercel Analytics / Speed Insights
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://va.vercel-scripts.com`,
     // 'unsafe-inline' requis : framer-motion/gsap injectent des <style> à l'exécution
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
