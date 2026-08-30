@@ -9,6 +9,8 @@ import { hash } from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { strongPasswordSchema } from "@/lib/validations/auth";
+import { revokeOwnerSessions } from "@/lib/api/token-blacklist";
 
 const log = createLogger("v1-client-auth-me");
 
@@ -56,7 +58,7 @@ const updateSchema = z
     longitudeDefaut: z.number().optional().nullable(),
     // Changement de mot de passe
     ancienPassword: z.string().optional(),
-    nouveauPassword: z.string().min(6).max(100).optional(),
+    nouveauPassword: strongPasswordSchema.optional(),
   })
   .refine((d) => !(d.nouveauPassword && !d.ancienPassword), {
     message: "L'ancien mot de passe est requis",
@@ -106,6 +108,7 @@ export async function PATCH(req: NextRequest) {
       }
 
       updateData.password = await hash(data.nouveauPassword, 12);
+      await revokeOwnerSessions("client", session.clientId);
     }
 
     if (Object.keys(updateData).length === 0) {

@@ -1,4 +1,4 @@
-type HttpMethod = "get" | "post" | "patch" | "delete";
+type HttpMethod = "get" | "post" | "put" | "patch" | "delete";
 type JsonObject = Record<string, unknown>;
 
 interface OperationDefinition {
@@ -34,6 +34,23 @@ const paymentRetryBody = {
   },
 };
 
+const restaurantDriverProperties = {
+  nom: { type: "string", minLength: 2, maxLength: 120 },
+  telephone: { type: "string", minLength: 8, maxLength: 20 },
+  photoUrl: { type: "string", format: "uri", maxLength: 2000 },
+  vehicule: {
+    type: "string",
+    enum: ["moto", "velo", "voiture", "tricycle", "autre"],
+  },
+  numeroVehicule: { type: "string", minLength: 2, maxLength: 30 },
+  fixedDeliveryCompensationFcfa: {
+    type: ["integer", "null"],
+    minimum: 1,
+    maximum: 1_000_000,
+    description: "Montant fixe facultatif convenu avec le livreur. Jamais ajouté automatiquement au prix client.",
+  },
+};
+
 export const openApiV1Operations: readonly OperationDefinition[] = [
   { method: "post", path: "/auth/login", operationId: "partnerLogin", tag: "Auth partenaire", summary: "Connecter un partenaire ou administrateur", public: true, body: "PartnerLoginRequest" },
   { method: "post", path: "/auth/logout", operationId: "partnerLogout", tag: "Auth partenaire", summary: "Déconnecter le compte partenaire" },
@@ -61,6 +78,8 @@ export const openApiV1Operations: readonly OperationDefinition[] = [
   { method: "patch", path: "/client/commandes/{id}", operationId: "cancelClientOrder", tag: "Commandes consommateur", summary: "Annuler une commande encore annulable" },
   { method: "post", path: "/client/commandes/{id}/paiement", operationId: "retryClientOrderPayment", tag: "Commandes consommateur", summary: "Relancer le paiement Paystack d'une commande", body: paymentRetryBody },
   { method: "get", path: "/client/commandes/{id}/stream", operationId: "streamClientOrder", tag: "Commandes consommateur", summary: "Suivre une commande en SSE", stream: true },
+  { method: "get", path: "/client/commandes/{id}/livraison", operationId: "getClientDelivery", tag: "Livraison consommateur", summary: "Lire le suivi, le livreur et la preuve de remise" },
+  { method: "post", path: "/client/commandes/{id}/livraison/confirmation", operationId: "confirmClientDelivery", tag: "Livraison consommateur", summary: "Confirmer la remise depuis l'espace client" },
 
   { method: "get", path: "/client/reservations", operationId: "listClientReservations", tag: "Résidences consommateur", summary: "Lister les réservations de résidences" },
   { method: "post", path: "/client/reservations", operationId: "createClientReservation", tag: "Résidences consommateur", summary: "Réserver une résidence et initialiser son paiement", body: "ResidenceReservationRequest", created: true },
@@ -73,10 +92,29 @@ export const openApiV1Operations: readonly OperationDefinition[] = [
   { method: "post", path: "/client/push/expo", operationId: "registerClientExpoToken", tag: "Notifications consommateur", summary: "Associer une installation Expo au consommateur", body: expoTokenBody },
   { method: "delete", path: "/client/push/expo", operationId: "unregisterClientExpoToken", tag: "Notifications consommateur", summary: "Dissocier une installation Expo", body: expoTokenBody },
 
+  { method: "post", path: "/livreur/auth/login", operationId: "driverLogin", tag: "Auth livreur", summary: "Connecter un livreur ou demander son activation", public: true, body: "DriverLoginRequest" },
+  { method: "post", path: "/livreur/auth/activation", operationId: "activateDriver", tag: "Auth livreur", summary: "Choisir le mot de passe définitif", public: true, body: "DriverActivationRequest" },
+  { method: "post", path: "/livreur/auth/refresh", operationId: "refreshDriver", tag: "Auth livreur", summary: "Renouveler une session livreur", public: true, body: "DriverRefreshRequest" },
+  { method: "post", path: "/livreur/auth/logout", operationId: "logoutDriver", tag: "Auth livreur", summary: "Révoquer une session livreur", public: true, body: "DriverRefreshRequest" },
+  { method: "get", path: "/livreur/me", operationId: "getDriverProfile", tag: "Espace livreur", summary: "Lire profil, disponibilité, espèces et rémunérations dues" },
+  { method: "patch", path: "/livreur/disponibilite", operationId: "setDriverAvailability", tag: "Espace livreur", summary: "Se déclarer disponible ou indisponible", body: "DriverAvailabilityRequest" },
+  { method: "get", path: "/livreur/offres/courante", operationId: "getCurrentDriverOffer", tag: "Missions livreur", summary: "Lire la proposition active" },
+  { method: "post", path: "/livreur/offres/{id}/reponse", operationId: "respondDriverOffer", tag: "Missions livreur", summary: "Accepter ou refuser une proposition", body: "DriverOfferResponseRequest" },
+  { method: "get", path: "/livreur/livraisons", operationId: "listDriverDeliveries", tag: "Missions livreur", summary: "Lister mission active et historique" },
+  { method: "get", path: "/livreur/livraisons/{id}", operationId: "getDriverDelivery", tag: "Missions livreur", summary: "Lire une mission appartenant au livreur" },
+  { method: "post", path: "/livreur/livraisons/{id}/depart", operationId: "startDriverDelivery", tag: "Missions livreur", summary: "Confirmer la récupération d'une commande prête" },
+  { method: "post", path: "/livreur/livraisons/{id}/remise", operationId: "completeDriverDelivery", tag: "Missions livreur", summary: "Confirmer preuve de remise et espèces", body: "CompleteDriverDeliveryRequest" },
+  { method: "post", path: "/livreur/livraisons/{id}/echec", operationId: "failDriverDelivery", tag: "Missions livreur", summary: "Signaler un échec motivé", body: "FailDriverDeliveryRequest" },
+  { method: "get", path: "/livreur/notifications", operationId: "listDriverNotifications", tag: "Notifications livreur", summary: "Lister les notifications livreur" },
+  { method: "patch", path: "/livreur/notifications", operationId: "markDriverNotificationsRead", tag: "Notifications livreur", summary: "Marquer les notifications livreur comme lues", body: "MarkNotificationsReadRequest" },
+  { method: "post", path: "/livreur/push/expo", operationId: "registerDriverExpoToken", tag: "Notifications livreur", summary: "Associer une installation Expo au livreur", body: expoTokenBody },
+  { method: "delete", path: "/livreur/push/expo", operationId: "unregisterDriverExpoToken", tag: "Notifications livreur", summary: "Dissocier une installation Expo du livreur", body: expoTokenBody },
+
   { method: "post", path: "/public/residences/search", operationId: "searchPublicResidences", tag: "Résidences publiques", summary: "Rechercher les résidences publiées", public: true, body: "ResidenceSearchRequest" },
   { method: "get", path: "/public/residences/{id}", operationId: "getPublicResidence", tag: "Résidences publiques", summary: "Lire une résidence par slug", public: true },
   { method: "get", path: "/public/residences/{id}/availability", operationId: "getPublicResidenceAvailability", tag: "Résidences publiques", summary: "Lire les indisponibilités d'une résidence", public: true },
   { method: "post", path: "/public/residences/{id}/quote", operationId: "quotePublicResidence", tag: "Résidences publiques", summary: "Calculer et vérifier un séjour", public: true, body: "ResidenceQuoteRequest" },
+  { method: "post", path: "/public/restaurants/search", operationId: "searchPublicRestaurants", tag: "Restaurants publics", summary: "Rechercher les restaurants publiés", public: true, body: "RestaurantSearchRequest" },
   { method: "get", path: "/public/restaurants/{slug}", operationId: "getPublicRestaurant", tag: "Restaurants publics", summary: "Lire le détail public d'un restaurant", public: true },
   { method: "get", path: "/public/restaurants/{slug}/menu", operationId: "getPublicRestaurantMenu", tag: "Restaurants publics", summary: "Lire le menu public d'un restaurant", public: true },
   { method: "post", path: "/public/discovery/events", operationId: "recordDiscoveryEvent", tag: "Découverte", summary: "Attribuer l'ouverture d'un résultat", public: true, body: "DiscoveryEventRequest" },
@@ -88,6 +126,17 @@ export const openApiV1Operations: readonly OperationDefinition[] = [
   { method: "get", path: "/restaurateur/commandes/{id}", operationId: "getRestaurantOrder", tag: "Restaurant partenaire", summary: "Lire une commande du restaurant" },
   { method: "patch", path: "/restaurateur/commandes/{id}", operationId: "updateRestaurantOrder", tag: "Restaurant partenaire", summary: "Faire évoluer le statut d'une commande", body: "OrderStatusRequest" },
   { method: "patch", path: "/restaurateur/commandes/{id}/statut", operationId: "updateRestaurantOrderStatus", tag: "Restaurant partenaire", summary: "Faire évoluer le statut (route historique)", body: "OrderStatusRequest" },
+  { method: "get", path: "/restaurateur/commandes/{id}/livraison/assignation", operationId: "getRestaurantDelivery", tag: "Livraisons restaurant", summary: "Lire la livraison et son journal" },
+  { method: "put", path: "/restaurateur/commandes/{id}/livraison/assignation", operationId: "proposeRestaurantDelivery", tag: "Livraisons restaurant", summary: "Proposer la livraison à un livreur disponible", body: "ProposeDeliveryRequest", created: true },
+  { method: "delete", path: "/restaurateur/commandes/{id}/livraison/assignation", operationId: "unassignRestaurantDelivery", tag: "Livraisons restaurant", summary: "Désassigner avant récupération" },
+  { method: "get", path: "/restaurateur/livreurs", operationId: "listRestaurantDrivers", tag: "Flotte restaurant", summary: "Lister la flotte et sa disponibilité réelle" },
+  { method: "post", path: "/restaurateur/livreurs", operationId: "createRestaurantDriver", tag: "Flotte restaurant", summary: "Créer un livreur et ses accès temporaires", body: "RestaurantDriverRequest", created: true },
+  { method: "get", path: "/restaurateur/livreurs/{id}", operationId: "getRestaurantDriver", tag: "Flotte restaurant", summary: "Lire un livreur du restaurant" },
+  { method: "patch", path: "/restaurateur/livreurs/{id}", operationId: "updateRestaurantDriver", tag: "Flotte restaurant", summary: "Modifier un livreur du restaurant", body: "RestaurantDriverUpdateRequest" },
+  { method: "post", path: "/restaurateur/livreurs/{id}/acces", operationId: "resetDriverAccess", tag: "Flotte restaurant", summary: "Régénérer les accès et révoquer les sessions" },
+  { method: "post", path: "/restaurateur/livreurs/{id}/desactivation", operationId: "deactivateRestaurantDriver", tag: "Flotte restaurant", summary: "Désactiver le compte et traiter sa mission" },
+  { method: "post", path: "/restaurateur/livreurs/{id}/remises-especes", operationId: "confirmDriverCashRemittance", tag: "Espèces livreur", summary: "Confirmer la remise exacte d'un lot d'encaissements", body: "CashRemittanceRequest", created: true },
+  { method: "post", path: "/restaurateur/livreurs/{id}/remunerations", operationId: "confirmDriverCompensationPayment", tag: "Rémunérations livreur", summary: "Déclarer réglées les rémunérations dues du livreur", body: "DriverCompensationPaymentRequest" },
   { method: "get", path: "/restaurateur/plats", operationId: "listRestaurantDishes", tag: "Restaurant partenaire", summary: "Lister les plats du restaurant" },
   { method: "post", path: "/restaurateur/plats", operationId: "createRestaurantDish", tag: "Restaurant partenaire", summary: "Créer un plat", body: { type: "object", additionalProperties: true }, created: true },
 ];
@@ -98,6 +147,8 @@ const queryParameters: Record<string, JsonObject[]> = {
   getClientRestaurant: ["lat", "lng", "discoveryToken"].map((name) => ({ name, in: "query", schema: { type: "string" } })),
   listClientOrders: ["search", "page", "limit"].map((name) => ({ name, in: "query", schema: { type: "string" } })),
   listClientNotifications: ["page", "limit", "unreadOnly"].map((name) => ({ name, in: "query", schema: { type: "string" } })),
+  listDriverDeliveries: ["page", "limit"].map((name) => ({ name, in: "query", schema: { type: "string" } })),
+  listDriverNotifications: ["page", "limit", "unreadOnly"].map((name) => ({ name, in: "query", schema: { type: "string" } })),
   openDiscoveryDestination: [{ name: "token", in: "query", required: true, schema: { type: "string" } }],
   listRestaurantOrders: ["statut", "page", "limit"].map((name) => ({ name, in: "query", schema: { type: "string" } })),
   listRestaurantDishes: ["search", "categorieId", "disponible", "page", "limit"].map((name) => ({ name, in: "query", schema: { type: "string" } })),
@@ -178,12 +229,24 @@ export function buildOpenApiV1Spec(appUrl: string) {
         PaginationMeta: { type: "object", required: ["total", "page", "limit", "totalPages", "hasNext", "hasPrev"], properties: { total: { type: "integer", minimum: 0 }, page: { type: "integer", minimum: 1 }, limit: { type: "integer", minimum: 1 }, totalPages: { type: "integer", minimum: 0 }, hasNext: { type: "boolean" }, hasPrev: { type: "boolean" } } },
         PaymentReturnChannel: { type: "string", enum: ["web", "mobile"], default: "web" },
         TokenTransport: { type: "string", enum: ["cookie", "json"], default: "cookie" },
-        PartnerLoginRequest: { type: "object", required: ["email", "password"], properties: { email: { type: "string", format: "email" }, password: { type: "string" }, rememberMe: { type: "boolean" } } },
+        PartnerLoginRequest: { type: "object", required: ["email", "password"], properties: { email: { type: "string", format: "email" }, password: { type: "string" }, rememberMe: { type: "boolean" }, otp: { type: "string", pattern: "^[0-9]{6}$", description: "Obligatoire pour les administrateurs." } } },
         BearerRefreshRequest: { type: "object", required: ["refreshToken"], properties: { refreshToken: { type: "string" } } },
-        ClientRegisterRequest: { type: "object", additionalProperties: false, required: ["nom", "telephone", "password"], properties: { nom: { type: "string", minLength: 2, maxLength: 255 }, telephone: { type: "string", pattern: "^\\+?[0-9\\s]{8,20}$" }, email: { type: "string", format: "email" }, password: { type: "string", minLength: 8, maxLength: 100 }, tokenTransport: ref("TokenTransport") } },
+        ClientRegisterRequest: { type: "object", additionalProperties: false, required: ["nom", "telephone", "password"], properties: { nom: { type: "string", minLength: 2, maxLength: 255 }, telephone: { type: "string", pattern: "^\\+?[0-9\\s]{8,20}$" }, email: { type: "string", format: "email" }, password: { type: "string", minLength: 12, maxLength: 128 }, tokenTransport: ref("TokenTransport") } },
         ClientLoginRequest: { type: "object", additionalProperties: false, required: ["telephone", "password"], properties: { telephone: { type: "string", minLength: 8 }, password: { type: "string" }, rememberMe: { type: "boolean", default: false }, tokenTransport: ref("TokenTransport") } },
         ClientRefreshRequest: { type: "object", additionalProperties: false, properties: { tokenTransport: ref("TokenTransport"), refreshToken: { type: "string", description: "Requis en transport json." } } },
-        ClientProfileUpdateRequest: { type: "object", properties: { nom: { type: "string", minLength: 2, maxLength: 255 }, email: { type: ["string", "null"], format: "email" }, adresseDefaut: { type: ["string", "null"], maxLength: 500 }, latitudeDefaut: { type: ["number", "null"] }, longitudeDefaut: { type: ["number", "null"] }, ancienPassword: { type: "string" }, nouveauPassword: { type: "string", minLength: 6, maxLength: 100 } } },
+        DriverLoginRequest: { type: "object", additionalProperties: false, required: ["loginId", "password"], properties: { loginId: { type: "string", minLength: 8, maxLength: 32 }, password: { type: "string", maxLength: 128 }, tokenTransport: ref("TokenTransport") } },
+        DriverActivationRequest: { type: "object", additionalProperties: false, required: ["activationToken", "password"], properties: { activationToken: { type: "string", minLength: 20, maxLength: 4000 }, password: { type: "string", minLength: 12, maxLength: 128 }, tokenTransport: ref("TokenTransport") } },
+        DriverRefreshRequest: { type: "object", additionalProperties: false, properties: { tokenTransport: ref("TokenTransport"), refreshToken: { type: "string", description: "Requis en transport json." } } },
+        DriverAvailabilityRequest: { type: "object", additionalProperties: false, required: ["available"], properties: { available: { type: "boolean" } } },
+        DriverOfferResponseRequest: { type: "object", additionalProperties: false, required: ["accept"], properties: { accept: { type: "boolean" }, declineReason: { type: "string", enum: ["unavailable", "distance", "vehicle_problem", "other"] }, note: { type: "string", minLength: 3, maxLength: 300 }, becomeUnavailable: { type: "boolean", default: false } } },
+        CompleteDriverDeliveryRequest: { type: "object", additionalProperties: false, properties: { proofCode: { type: "string", pattern: "^[0-9]{6}$" }, cashCollected: { type: "boolean", default: false } } },
+        FailDriverDeliveryRequest: { type: "object", additionalProperties: false, required: ["reason"], properties: { reason: { type: "string", enum: ["client_absent", "client_unreachable", "address_inaccessible", "vehicle_problem", "order_damaged", "payment_refused", "other"] }, note: { type: "string", minLength: 3, maxLength: 500 } } },
+        RestaurantDriverRequest: { type: "object", additionalProperties: false, required: ["nom", "telephone", "vehicule"], properties: restaurantDriverProperties },
+        RestaurantDriverUpdateRequest: { type: "object", additionalProperties: false, minProperties: 1, properties: restaurantDriverProperties },
+        ProposeDeliveryRequest: { type: "object", additionalProperties: false, required: ["driverId"], properties: { driverId: { type: "string", format: "uuid" } } },
+        CashRemittanceRequest: { type: "object", additionalProperties: false, required: ["deliveryIds"], properties: { deliveryIds: { type: "array", minItems: 1, maxItems: 200, uniqueItems: true, items: { type: "string", format: "uuid" } }, note: { type: "string", maxLength: 500 } } },
+        DriverCompensationPaymentRequest: { type: "object", additionalProperties: false, properties: { note: { type: "string", maxLength: 500 } }, description: "Déclare réglées toutes les rémunérations actuellement dues. RestauCI ne transfère aucun fonds." },
+        ClientProfileUpdateRequest: { type: "object", properties: { nom: { type: "string", minLength: 2, maxLength: 255 }, email: { type: ["string", "null"], format: "email" }, adresseDefaut: { type: ["string", "null"], maxLength: 500 }, latitudeDefaut: { type: ["number", "null"] }, longitudeDefaut: { type: ["number", "null"] }, ancienPassword: { type: "string" }, nouveauPassword: { type: "string", minLength: 12, maxLength: 128 } } },
         LocationSample: { type: "object", additionalProperties: false, required: ["lat", "lng", "accuracyMeters", "capturedAt"], properties: { lat: { type: "number", minimum: -90, maximum: 90 }, lng: { type: "number", minimum: -180, maximum: 180 }, accuracyMeters: { type: "number", minimum: 0, maximum: 100000 }, capturedAt: { type: "string", format: "date-time" }, context: { type: "string", default: "currentLocation" }, use: { type: "string", default: "discovery" } } },
         RestaurantSearchRequest: { type: "object", additionalProperties: false, properties: { query: { type: "string" }, cuisine: { type: "string" }, page: { type: "integer", minimum: 1 }, limit: { type: "integer", minimum: 1, maximum: 100 }, currentLocation: ref("LocationSample") } },
         OrderPrevalidationRequest: { type: "object", required: ["restaurantSlug", "modeCommande"], properties: { restaurantSlug: { type: "string" }, modeCommande: { type: "string", enum: ["sur_place", "livraison", "emporter"] }, currentLocation: ref("LocationSample"), adresseLivraison: { type: "string" }, latitudeLivraison: { type: "number" }, longitudeLivraison: { type: "number" }, numeroTable: { type: "string" } } },

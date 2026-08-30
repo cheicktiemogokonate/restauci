@@ -64,6 +64,28 @@ export function isR2Configured() {
   return getR2Config() !== null;
 }
 
+export function isManagedPublicMediaUrl(value: string): boolean {
+  const config = getR2Config();
+  if (!config) return false;
+
+  try {
+    const candidate = new URL(value);
+    const publicBase = new URL(config.publicUrl);
+    const basePath = publicBase.pathname.replace(/\/+$/, "");
+
+    return (
+      candidate.origin === publicBase.origin &&
+      candidate.username === "" &&
+      candidate.password === "" &&
+      candidate.search === "" &&
+      candidate.hash === "" &&
+      candidate.pathname.startsWith(`${basePath}/restaurants/`)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function getR2Client(config: R2Config) {
   client ??= new S3Client({
     region: "auto",

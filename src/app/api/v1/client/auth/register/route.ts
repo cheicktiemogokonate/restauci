@@ -8,11 +8,15 @@ import { checkRateLimit, clientAuthLimiter } from "@/lib/rate-limit";
 import { db }                       from "@/lib/db";
 import { clients }                  from "@/lib/db/schema";
 import { eq, or }                   from "drizzle-orm";
-import { signToken }                from "@/lib/auth";
+import {
+  createSessionId,
+  signClientAccessToken,
+  signClientRefreshToken,
+} from "@/lib/auth";
 import { createLogger }             from "@/lib/logger";
 import { applyClientRefreshTransport } from "@/lib/api/client-session-cookie";
 import { clientTokenTransportSchema } from "@/lib/api/client-token-transport";
-import { emailSchema } from "@/lib/validations/auth";
+import { emailSchema, strongPasswordSchema } from "@/lib/validations/auth";
 
 const log = createLogger("v1-client-register");
 
@@ -21,9 +25,7 @@ const registerSchema = z.object({
   telephone: z.string()
     .regex(/^\+?[0-9\s]{8,20}$/, "Numéro de téléphone invalide"),
   email:    emailSchema.optional(),
-  password: z.string()
-    .min(8, "Le mot de passe doit contenir au moins 8 caractères")
-    .max(100),
+  password: strongPasswordSchema,
   tokenTransport: clientTokenTransportSchema,
 });
 
@@ -71,15 +73,18 @@ export async function POST(req: NextRequest) {
         email:     clients.email,
       });
 
+    const sessionId = createSessionId();
+    const sessionExpiresAt = Math.floor(Date.now() / 1_000) + 7 * 24 * 3600;
     const [accessToken, refreshToken] = await Promise.all([
-      signToken({ clientId: client.id, type: "client" }, "15m"),
-      signToken(
+      signClientAccessToken({ clientId: client.id, sessionId }),
+      signClientRefreshToken(
         {
           clientId: client.id,
-          type: "client-refresh",
+          sessionId,
           sessionDuration: "standard",
+          sessionExpiresAt,
         },
-        "7d",
+        sessionExpiresAt,
       ),
     ]);
 

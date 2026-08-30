@@ -34,3 +34,12 @@ export type ListClientNotificationsInput = z.infer<
 export type MarkClientNotificationsReadInput = z.infer<
   typeof markClientNotificationsReadSchema
 >;
+
+export const listDriverNotificationsSchema = listClientNotificationsSchema;
+export const markDriverNotificationsReadSchema =
+  markClientNotificationsReadSchema;
+export const driverExpoSubscriptionSchema = clientExpoSubscriptionSchema;
+
+export type ListDriverNotificationsInput = ListClientNotificationsInput;
+export type MarkDriverNotificationsReadInput =
+  MarkClientNotificationsReadInput;

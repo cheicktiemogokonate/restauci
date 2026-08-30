@@ -7,7 +7,7 @@ import {
 import { restaurantSearchSchema } from "./contracts";
 
 describe("restaurant visibility and orderability", () => {
-  it("keeps an offline restaurant publicly visible", () => {
+  it("keeps an offline restaurant publicly visible while blocking orders", () => {
     const restaurant = {
       actif: true,
       suspendu: false,

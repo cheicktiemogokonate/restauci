@@ -84,6 +84,19 @@ export const createResidenceReservationSchema = residenceStaySchema.extend({
   discoveryToken: z.string().min(20).max(2_000).optional(),
 });
 
+export const updatePartnerResidenceReservationSchema = residenceStaySchema
+  .omit({ residenceId: true })
+  .extend({ reservationId: residenceIdSchema });
+
+export const cancelPartnerResidenceReservationSchema = z.object({
+  reservationId: residenceIdSchema,
+  reason: z
+    .string()
+    .trim()
+    .min(10, "Précisez le motif de l’annulation (10 caractères minimum).")
+    .max(500),
+});
+
 export const residenceUnavailablePeriodSchema = z.object({
   residenceId: residenceIdSchema,
   checkIn: residenceDateSchema,
@@ -96,6 +109,12 @@ export const residenceUnavailablePeriodIdSchema = z.string().uuid();
 export type ResidenceStayInput = z.infer<typeof residenceStaySchema>;
 export type CreateResidenceReservationInput = z.infer<
   typeof createResidenceReservationSchema
+>;
+export type UpdatePartnerResidenceReservationInput = z.infer<
+  typeof updatePartnerResidenceReservationSchema
+>;
+export type CancelPartnerResidenceReservationInput = z.infer<
+  typeof cancelPartnerResidenceReservationSchema
 >;
 export type ResidenceUnavailablePeriodInput = z.infer<
   typeof residenceUnavailablePeriodSchema
@@ -254,6 +273,7 @@ export interface ResidenceReservationDTO {
   residenceTitle: string;
   residenceCity: string;
   residenceCoverUrl: string | null;
+  residenceMaxGuests: number;
   partnerAccountId: string;
   clientId: string;
   clientName: string;
@@ -274,6 +294,8 @@ export interface ResidenceReservationDTO {
   checkoutUrl: string | null;
   confirmedAt: string | null;
   cancelledAt: string | null;
+  cancellationSource: string | null;
+  cancellationReason: string | null;
   createdAt: string;
 }
 

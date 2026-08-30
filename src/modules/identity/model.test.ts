@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canEditIdentityVerification,
+  areIdentityDocumentsClean,
   isIdentityDocumentExpired,
   isIdentityDocumentSetComplete,
   requiredIdentityDocumentSides,
@@ -28,5 +29,12 @@ describe("identity verification model", () => {
   it("treats a document expiring today as unusable", () => {
     expect(isIdentityDocumentExpired("2026-08-23", "2026-08-23")).toBe(true);
     expect(isIdentityDocumentExpired("2026-08-24", "2026-08-23")).toBe(false);
+  });
+
+  it("requires every uploaded document to be clean", () => {
+    expect(areIdentityDocumentsClean(["clean", "clean"])).toBe(true);
+    expect(areIdentityDocumentsClean([])).toBe(false);
+    expect(areIdentityDocumentsClean(["clean", "pending"])).toBe(false);
+    expect(areIdentityDocumentsClean(["rejected"])).toBe(false);
   });
 });

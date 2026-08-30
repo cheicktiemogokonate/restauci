@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { CustomAvatar } from "@/components/shared/avatar-fallback";
-import { assignCommandeDriver, updateDeliveryStatus } from "@/lib/actions/commandes";
+import { assignCommandeDriver } from "@/lib/actions/commandes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle2, MessageSquare, MoreHorizontal, Phone, Truck } from "lucide-react";
+import { CheckCircle2, Phone, ShieldCheck, Truck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -42,7 +42,14 @@ interface DriverInfoProps {
   vehicleNumber: string | null;
   avatar?: string | null;
   availableDrivers: AvailableDriver[];
-  deliveryStatus: "en_attente" | "assignee" | "en_route" | "livree" | "echouee" | null;
+  deliveryStatus:
+    | "en_attente"
+    | "assignee"
+    | "en_route"
+    | "livree"
+    | "echouee"
+    | "annulee"
+    | null;
   commandeStatus: "en_attente_paiement" | "recue" | "en_preparation" | "prete" | "servie" | "annulee";
 }
 
@@ -86,49 +93,23 @@ export function DriverInfo({
     startTransition(async () => {
       try {
         await assignCommandeDriver(commandeId, selectedDriverId);
-        toast.success("Livreur assigné à la commande.");
+        toast.success("Proposition envoyée au livreur.");
         setIsDialogOpen(false);
         router.refresh();
       } catch (error) {
         toast.error(
           error instanceof Error
             ? error.message
-            : "Le livreur n'a pas pu être assigné.",
+            : "La proposition n’a pas pu être envoyée.",
         );
       }
     });
   };
-  const handleDeliveryStatus = (nextStatus: "en_route" | "livree") => {
-    startTransition(async () => {
-      try {
-        await updateDeliveryStatus(commandeId, nextStatus);
-        toast.success(
-          nextStatus === "en_route"
-            ? "Le livreur est en route."
-            : "La commande est marquée comme livrée.",
-        );
-        router.refresh();
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "La livraison n’a pas pu être mise à jour.",
-        );
-      }
-    });
-  };
-
   return (
     <Card className="border border-border/60 shadow-sm rounded-2xl">
       <CardHeader className="flex flex-row items-center justify-between pb-4 pt-6">
         <CardTitle className="text-[16px] font-bold">Livreur</CardTitle>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
+        <Badge variant="outline">Suivi sécurisé</Badge>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="flex items-center justify-between">
@@ -164,15 +145,6 @@ export function DriverInfo({
             </div>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 rounded-xl border-border/80 text-muted-foreground hover:text-foreground"
-              disabled
-              title="La messagerie livreur sera disponible prochainement."
-            >
-              <MessageSquare className="h-4.5 w-4.5" />
-            </Button>
             <Button
               asChild={canCall}
               variant="outline"
@@ -211,17 +183,23 @@ export function DriverInfo({
             <p className="text-[14px] font-semibold">{vehicleNumber ?? "—"}</p>
           </div>
         </div>
-        {commandeStatus === "prete" && deliveryStatus === "assignee" ? (
-          <Button className="w-full" size="lg" disabled={isPending} onClick={() => handleDeliveryStatus("en_route")}>
-            <Truck className="h-4 w-4" />
-            {isPending ? "Mise à jour…" : "Démarrer la livraison"}
-          </Button>
+        {deliveryStatus === "assignee" ? (
+          <div className="flex gap-3 rounded-xl border bg-muted/30 p-3 text-sm">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+            <p>
+              Proposition acceptée. Le départ sera confirmé par le livreur après
+              récupération de la commande{commandeStatus !== "prete" ? ", dès qu’elle sera prête" : ""}.
+            </p>
+          </div>
         ) : null}
-        {commandeStatus === "prete" && deliveryStatus === "en_route" ? (
-          <Button className="w-full" size="lg" disabled={isPending} onClick={() => handleDeliveryStatus("livree")}>
-            <CheckCircle2 className="h-4 w-4" />
-            {isPending ? "Mise à jour…" : "Confirmer la livraison"}
-          </Button>
+        {deliveryStatus === "en_route" ? (
+          <div className="flex gap-3 rounded-xl border bg-muted/30 p-3 text-sm">
+            <Truck className="mt-0.5 size-4 shrink-0 text-primary" />
+            <p>
+              Livraison en route. Seul le livreur peut enregistrer la remise avec
+              la preuve fournie par le client.
+            </p>
+          </div>
         ) : null}
         </>
         ) : (
@@ -237,7 +215,7 @@ export function DriverInfo({
             >
               <Truck className="h-4 w-4" />
               {availableDrivers.length > 0
-                ? "Assigner un livreur"
+                ? "Proposer à un livreur"
                 : "Aucun livreur actif"}
             </Button>
           </div>
@@ -246,9 +224,10 @@ export function DriverInfo({
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assigner un livreur</DialogTitle>
+            <DialogTitle>Proposer la livraison</DialogTitle>
             <DialogDescription>
-              Sélectionnez le livreur qui prendra en charge cette livraison.
+              Le livreur dispose de cinq minutes pour accepter ou refuser. La
+              commande ne lui sera assignée qu’après son acceptation.
             </DialogDescription>
           </DialogHeader>
           <Select value={selectedDriverId} onValueChange={setSelectedDriverId}>
@@ -275,7 +254,7 @@ export function DriverInfo({
               disabled={!selectedDriverId || isPending}
             >
               <CheckCircle2 className="h-4 w-4" />
-              {isPending ? "Assignation…" : "Assigner"}
+              {isPending ? "Envoi…" : "Envoyer la proposition"}
             </Button>
           </DialogFooter>
         </DialogContent>

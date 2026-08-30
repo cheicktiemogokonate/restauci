@@ -1,0 +1,41 @@
+[Unit]
+Description=Toutci KYC antivirus and CDR worker
+Documentation=https://github.com/freedomofpress/dangerzone
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=toutci-kyc
+Group=toutci-kyc
+WorkingDirectory=/opt/toutci/current
+EnvironmentFile=/etc/toutci/toutci.env
+Environment=HOME=/var/lib/toutci-kyc
+ExecStart=/usr/bin/node scripts/security/kyc-scan-worker.mjs
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+UMask=0077
+
+# Le worker ne reçoit jamais le socket Docker. Dangerzone utilise Podman
+# rootless et crée, pour chaque document, une sandbox sans réseau. Les helpers
+# newuidmap/newgidmap de Podman nécessitent que systemd n'impose pas
+# NoNewPrivileges ni une CapabilityBoundingSet vide au processus parent.
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+StateDirectory=toutci-kyc
+StateDirectoryMode=0700
+ReadOnlyPaths=/opt/toutci
+
+[Install]
+WantedBy=multi-user.target

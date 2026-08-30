@@ -1,6 +1,10 @@
 import { apiResponse } from "@/lib/api/response";
 import { validateBody } from "@/lib/api/validate";
-import { signToken, verifyToken } from "@/lib/auth";
+import {
+  signClientAccessToken,
+  signClientRefreshToken,
+  verifyClientRefreshToken,
+} from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
@@ -12,8 +16,10 @@ import {
   clearClientRefreshCookie,
 } from "@/lib/api/client-session-cookie";
 import {
-  blacklistToken,
-  isTokenBlacklisted,
+  consumeTokenOnce,
+  isOwnerSessionRevoked,
+  isSessionRevoked,
+  revokeSession,
 } from "@/lib/api/token-blacklist";
 import {
   clientRefreshRequestSchema,
@@ -38,22 +44,65 @@ export async function POST(request: NextRequest) {
       cookieToken: request.cookies.get(CLIENT_REFRESH_COOKIE)?.value,
     });
     if (!refreshToken) return apiResponse.unauthorized("Session expirée");
-    if (await isTokenBlacklisted(refreshToken)) {
+    const payload = await verifyClientRefreshToken(refreshToken);
+    if (!payload) {
+      return apiResponse.unauthorized("Refresh token client invalide");
+    }
+
+    const now = Math.floor(Date.now() / 1_000);
+    if (payload.sessionExpiresAt <= now) {
       const response = apiResponse.unauthorized("Session expirée");
       clearClientRefreshCookie(response);
       return response;
     }
 
-    const payload = await verifyToken(refreshToken);
-
-    if (!payload?.clientId || payload.type !== "client-refresh") {
-      return apiResponse.unauthorized("Refresh token client invalide");
+    let consumed: boolean;
+    try {
+      if (
+        (await isSessionRevoked(payload.sessionId)) ||
+        (await isOwnerSessionRevoked(
+          "client",
+          payload.clientId,
+          payload.issuedAtMs,
+        ))
+      ) {
+        const response = apiResponse.unauthorized("Session révoquée");
+        clearClientRefreshCookie(response);
+        return response;
+      }
+      consumed = await consumeTokenOnce(refreshToken, payload.exp);
+    } catch (redisError) {
+      log.error({ err: redisError }, "Registre de révocation indisponible");
+      return apiResponse.error(
+        "Renouvellement temporairement indisponible",
+        "SERVICE_UNAVAILABLE",
+        { status: 503 },
+      );
+    }
+    if (!consumed) {
+      try {
+        await revokeSession(payload.sessionId, payload.sessionExpiresAt);
+      } catch (redisError) {
+        log.error({ err: redisError }, "Révocation de famille incomplète");
+        const response = apiResponse.error(
+          "Vérification de session temporairement indisponible",
+          "SERVICE_UNAVAILABLE",
+          { status: 503 },
+        );
+        clearClientRefreshCookie(response);
+        return response;
+      }
+      const response = apiResponse.unauthorized(
+        "Réutilisation de session détectée. La session a été révoquée.",
+      );
+      clearClientRefreshCookie(response);
+      return response;
     }
 
     const [client] = await db
       .select({ id: clients.id, actif: clients.actif })
       .from(clients)
-      .where(eq(clients.id, payload.clientId as string))
+      .where(eq(clients.id, payload.clientId))
       .limit(1);
     if (!client?.actif) {
       const response = apiResponse.forbidden("Compte client désactivé");
@@ -64,11 +113,29 @@ export async function POST(request: NextRequest) {
     const refreshLifetime = getClientRefreshLifetime(payload.sessionDuration);
     const sessionDuration =
       payload.sessionDuration === "extended" ? "extended" : "standard";
+    const newRefreshExp = Math.min(
+      now + refreshLifetime.maxAge,
+      payload.sessionExpiresAt,
+    );
+    if (newRefreshExp <= now) {
+      const response = apiResponse.unauthorized("Session expirée");
+      clearClientRefreshCookie(response);
+      return response;
+    }
+
     const [newAccessToken, newRefreshToken] = await Promise.all([
-      signToken({ clientId: client.id, type: "client" }, "15m"),
-      signToken(
-        { clientId: client.id, type: "client-refresh", sessionDuration },
-        refreshLifetime.expiresIn,
+      signClientAccessToken({
+        clientId: client.id,
+        sessionId: payload.sessionId,
+      }),
+      signClientRefreshToken(
+        {
+          clientId: client.id,
+          sessionId: payload.sessionId,
+          sessionDuration,
+          sessionExpiresAt: payload.sessionExpiresAt,
+        },
+        newRefreshExp,
       ),
     ]);
 
@@ -81,14 +148,10 @@ export async function POST(request: NextRequest) {
         : {}),
       expiresIn: 15 * 60,
     });
-    await blacklistToken(
-      refreshToken,
-      typeof payload.exp === "number" ? payload.exp : undefined,
-    );
     applyClientRefreshTransport(response, {
       transport: data.tokenTransport,
       token: newRefreshToken,
-      maxAge: refreshLifetime.maxAge,
+      maxAge: newRefreshExp - now,
     });
     return response;
   } catch (err) {

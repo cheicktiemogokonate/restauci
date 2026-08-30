@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { clearAuthCookie } from "@/lib/auth";
+import {
+  AUTH_COOKIE_NAME,
+  clearAuthCookie,
+  verifyWebSessionToken,
+} from "@/lib/auth";
+import { blacklistToken } from "@/lib/api/token-blacklist";
 import { getClientIp } from "@/lib/api/client-ip";
 import { authLogger } from "@/lib/loggers";
+import { cookies } from "next/headers";
 
 // ============================================================================
 // HANDLER
@@ -9,6 +15,11 @@ import { authLogger } from "@/lib/loggers";
 
 export async function POST(request: NextRequest) {
   try {
+    const token = (await cookies()).get(AUTH_COOKIE_NAME)?.value;
+    if (token) {
+      const payload = await verifyWebSessionToken(token);
+      if (payload) await blacklistToken(token, payload.exp);
+    }
     await clearAuthCookie();
 
     authLogger.info({ ip: getClientIp(request) }, "Logout successful");
@@ -18,6 +29,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
+    await clearAuthCookie();
     authLogger.error(
       { 
         error: error instanceof Error ? error.message : "Unknown error", 
@@ -26,8 +38,8 @@ export async function POST(request: NextRequest) {
       "Logout error"
     );
     return NextResponse.json(
-      { error: "Une erreur interne est survenue" },
-      { status: 500 }
+      { error: "Déconnexion sécurisée temporairement indisponible" },
+      { status: 503 },
     );
   }
 }

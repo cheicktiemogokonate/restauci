@@ -16,7 +16,7 @@ export function PublicResidenceCard({
     : `/residences/${residence.slug}`;
   return (
     <article className="overflow-hidden rounded-xl border bg-white">
-      <Link href={href} className="group block">
+      <Link href={href} prefetch={false} className="group block">
         <div className="relative aspect-[4/3] bg-slate-100">
           {residence.placement === "promoted" ? (
             <Badge className="absolute left-3 top-3 z-10 bg-slate-950 text-white hover:bg-slate-950">

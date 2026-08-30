@@ -10,7 +10,7 @@ import type {
   DeliveryTrackingDetails,
   DriverDetails,
 } from "@/components/dashboard/commandes/map-commande-to-details";
-import { getLivreurs } from "@/lib/db/queries";
+import { listRestaurantDrivers } from "@/modules/deliveries/server";
 
 export default async function CommandeDetailsPage({
   params,
@@ -49,7 +49,7 @@ export default async function CommandeDetailsPage({
         })
       : Promise.resolve(undefined),
     commande.modeCommande === "livraison"
-      ? getLivreurs(restaurant.id)
+      ? listRestaurantDrivers(restaurant.id)
       : Promise.resolve([]),
   ]);
   const photoByPlatId = new Map(
@@ -94,11 +94,13 @@ export default async function CommandeDetailsPage({
           ? { longitude: commande.longitudeLivraison, latitude: commande.latitudeLivraison }
           : undefined
       }
-      availableDrivers={availableDrivers.map((livreur) => ({
+      availableDrivers={availableDrivers
+        .filter((livreur) => livreur.availability === "available")
+        .map((livreur) => ({
         id: livreur.id,
         name: livreur.nom,
         vehicle: livreur.vehicule,
-        isOnline: livreur.enLigne,
+        isOnline: livreur.declaredAvailable,
       }))}
     />
   );

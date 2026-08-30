@@ -1,7 +1,7 @@
 import { cacheKey, TTL, withCache } from "@/lib/cache";
 import { getOffset, PAGINATION } from "@/lib/config/pagination";
 import { and, asc, count, desc, eq, gte, like, lte, ne, sql } from "drizzle-orm";
-import { db } from "./index";
+import { batchRead, db } from "./index";
 import { withDatabaseReadRetry } from "./read-retry";
 import { avis, commandes, notifications, partnerAccounts, plats, restaurants } from "./schema";
 import type { ModeCommande, StatutCommande } from "./types";
@@ -506,7 +506,7 @@ export async function getStatsDashboard(restaurantId: string) {
       chiffreAffairesMois,
       commandesEnCours,
     ] = await withDatabaseReadRetry(() =>
-      db.batch([
+      batchRead([
         // Commandes aujourd'hui
         db
           .select({ count: count() })

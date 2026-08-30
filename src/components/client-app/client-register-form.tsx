@@ -47,7 +47,7 @@ export function ClientRegisterForm() {
       <p className="mt-2 text-sm text-muted-foreground">
         Créez votre compte pour passer et suivre vos commandes.
       </p>
-      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+      <form method="post" action="" onSubmit={handleSubmit} className="mt-8 space-y-5">
         <div>
           <Label htmlFor="register-name">Nom complet</Label>
           <div className="relative mt-2">
@@ -88,11 +88,12 @@ export function ClientRegisterForm() {
               name="password"
               autoComplete="new-password"
               required
-              minLength={8}
+              minLength={12}
+              maxLength={128}
               className="h-11 pl-9"
             />
           </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">8 caractères minimum.</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">12 caractères minimum.</p>
         </div>
         {error ? (
           <Alert variant="destructive" role="alert">

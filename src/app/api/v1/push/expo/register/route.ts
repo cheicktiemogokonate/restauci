@@ -6,7 +6,7 @@ import { apiResponse }             from "@/lib/api/response";
 import { validateBody }            from "@/lib/api/validate";
 import { db }                      from "@/lib/db";
 import { pushSubscriptions }       from "@/lib/db/schema";
-import { eq, and }                 from "drizzle-orm";
+import { eq }                      from "drizzle-orm";
 import { createLogger }            from "@/lib/logger";
 
 const log = createLogger("expo-register");
@@ -31,16 +31,19 @@ export async function POST(req: NextRequest) {
     const existing = await db
       .select({ id: pushSubscriptions.id })
       .from(pushSubscriptions)
-      .where(and(
-        eq(pushSubscriptions.userId, session.userId),
-        eq(pushSubscriptions.expoToken, expoToken),
-      ))
+      .where(eq(pushSubscriptions.expoToken, expoToken))
       .limit(1);
 
     if (existing.length > 0) {
       await db
         .update(pushSubscriptions)
-        .set({ lastUsedAt: new Date() })
+        .set({
+          userId: session.userId,
+          clientId: null,
+          driverId: null,
+          type: "expo",
+          lastUsedAt: new Date(),
+        })
         .where(eq(pushSubscriptions.id, existing[0].id));
     } else {
       await db.insert(pushSubscriptions).values({

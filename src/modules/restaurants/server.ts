@@ -27,6 +27,11 @@ import {
   issueDiscoveryAttributions,
 } from "@/modules/discovery/server";
 import { rankDiscoveryPage } from "@/modules/discovery/ranking";
+import { getRestaurantAccessRecordByPartnerAccountId } from "./_internal/access";
+
+export function getRestaurantAccessByPartnerAccountId(partnerAccountId: string) {
+  return getRestaurantAccessRecordByPartnerAccountId(partnerAccountId);
+}
 
 async function rankRestaurantRecords(
   records: RestaurantDiscoveryRecord[],

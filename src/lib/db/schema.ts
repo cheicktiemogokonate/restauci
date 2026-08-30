@@ -38,6 +38,7 @@ import {
 } from "@/modules/service-markets/model";
 import {
   IDENTITY_DOCUMENT_SIDES,
+  IDENTITY_DOCUMENT_SCAN_STATUSES,
   IDENTITY_DOCUMENT_TYPES,
   IDENTITY_VERIFICATION_STATUSES,
   type IdentityDocumentContentType,
@@ -47,6 +48,14 @@ import {
   RESIDENCE_RESERVATION_STATUSES,
 } from "@/modules/residences/model";
 import type { SubscriptionCataloguePayload } from "@/modules/subscriptions/contracts";
+import {
+  DELIVERY_ACTOR_TYPES,
+  DELIVERY_EVENT_TYPES,
+  DELIVERY_OFFER_STATUSES,
+  DELIVERY_PROOF_METHODS,
+  DELIVERY_STATUSES,
+  DRIVER_CASH_COLLECTION_STATUSES,
+} from "@/modules/deliveries/model";
 
 // ============================================================================
 // ENUMS
@@ -128,18 +137,39 @@ export const identityDocumentSideEnum = pgEnum(
   "identity_document_side",
   IDENTITY_DOCUMENT_SIDES,
 );
+export const identityDocumentScanStatusEnum = pgEnum(
+  "identity_document_scan_status",
+  IDENTITY_DOCUMENT_SCAN_STATUSES,
+);
 export const residenceReservationStatusEnum = pgEnum(
   "residence_reservation_status",
   RESIDENCE_RESERVATION_STATUSES,
 );
 
-export const statutLivraisonEnum = pgEnum("statut_livraison", [
-  "en_attente",
-  "assignee",
-  "en_route",
-  "livree",
-  "echouee",
-]);
+export const statutLivraisonEnum = pgEnum(
+  "statut_livraison",
+  DELIVERY_STATUSES,
+);
+export const deliveryOfferStatusEnum = pgEnum(
+  "delivery_offer_status",
+  DELIVERY_OFFER_STATUSES,
+);
+export const deliveryActorTypeEnum = pgEnum(
+  "delivery_actor_type",
+  DELIVERY_ACTOR_TYPES,
+);
+export const deliveryEventTypeEnum = pgEnum(
+  "delivery_event_type",
+  DELIVERY_EVENT_TYPES,
+);
+export const deliveryProofMethodEnum = pgEnum(
+  "delivery_proof_method",
+  DELIVERY_PROOF_METHODS,
+);
+export const driverCashCollectionStatusEnum = pgEnum(
+  "driver_cash_collection_status",
+  DRIVER_CASH_COLLECTION_STATUSES,
+);
 
 export const typePromotionEnum = pgEnum("type_promotion", [
   "pourcentage",    // -10%
@@ -164,6 +194,12 @@ export const typeNotificationEnum = pgEnum("type_notification", [
   "restaurant_valide",
   "restaurant_rejete",
   "commission_cash_threshold",
+  "delivery_offer_received",
+  "delivery_offer_declined",
+  "delivery_started",
+  "delivery_completed",
+  "delivery_failed",
+  "cash_remittance_confirmed",
 ]);
 
 // ── Nouveau : code d'offre du catalogue (3 offres fixes)
@@ -380,6 +416,20 @@ export const partnerIdentityDocuments = pgTable(
       .$type<IdentityDocumentContentType>(),
     sizeBytes: integer("size_bytes").notNull(),
     sha256: varchar("sha256", { length: 64 }).notNull(),
+    scanStatus: identityDocumentScanStatusEnum("scan_status")
+      .notNull()
+      .default("pending"),
+    cleanStorageKey: text("clean_storage_key"),
+    cleanContentType: varchar("clean_content_type", { length: 50 })
+      .$type<IdentityDocumentContentType>(),
+    cleanSizeBytes: integer("clean_size_bytes"),
+    cleanSha256: varchar("clean_sha256", { length: 64 }),
+    scanAttempts: integer("scan_attempts").notNull().default(0),
+    scanStartedAt: timestamp("scan_started_at", { withTimezone: true }),
+    scanCompletedAt: timestamp("scan_completed_at", { withTimezone: true }),
+    scanEngine: varchar("scan_engine", { length: 100 }),
+    scanResult: varchar("scan_result", { length: 255 }),
+    lastScanError: text("last_scan_error"),
     uploadedAt: timestamp("uploaded_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -391,6 +441,14 @@ export const partnerIdentityDocuments = pgTable(
     storageKeyUnique: uniqueIndex(
       "partner_identity_documents_storage_key_unique",
     ).on(table.storageKey),
+    cleanStorageKeyUnique: uniqueIndex(
+      "partner_identity_documents_clean_storage_key_unique",
+    )
+      .on(table.cleanStorageKey)
+      .where(sql`${table.cleanStorageKey} IS NOT NULL`),
+    scanQueueIdx: index("partner_identity_documents_scan_queue_idx")
+      .on(table.scanStatus, table.scanStartedAt, table.uploadedAt)
+      .where(sql`${table.scanStatus} IN ('pending', 'processing', 'error')`),
     contentTypeValid: check(
       "partner_identity_documents_content_type_valid",
       sql`${table.contentType} IN ('image/jpeg', 'image/png', 'application/pdf')`,
@@ -402,6 +460,15 @@ export const partnerIdentityDocuments = pgTable(
     sha256Valid: check(
       "partner_identity_documents_sha256_valid",
       sql`${table.sha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    scanAttemptsValid: check(
+      "partner_identity_documents_scan_attempts_valid",
+      sql`${table.scanAttempts} >= 0 AND ${table.scanAttempts} <= 10`,
+    ),
+    cleanPayloadCoherent: check(
+      "partner_identity_documents_clean_payload_coherent",
+      sql`(${table.scanStatus} = 'clean' AND ${table.cleanStorageKey} IS NOT NULL AND ${table.cleanContentType} IS NOT NULL AND ${table.cleanSizeBytes} > 0 AND ${table.cleanSha256} ~ '^[0-9a-f]{64}$' AND ${table.scanCompletedAt} IS NOT NULL)
+        OR (${table.scanStatus} <> 'clean' AND ${table.cleanStorageKey} IS NULL AND ${table.cleanContentType} IS NULL AND ${table.cleanSizeBytes} IS NULL AND ${table.cleanSha256} IS NULL)`,
     ),
   }),
 );
@@ -845,6 +912,8 @@ export const residenceReservations = pgTable(
     totalFcfa: integer("total_fcfa").notNull(),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancellationSource: varchar("cancellation_source", { length: 20 }),
+    cancellationReason: varchar("cancellation_reason", { length: 500 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -1926,8 +1995,32 @@ export const livreurs = pgTable(
       .references(() => restaurants.id, { onDelete: "cascade" }),
     nom: varchar("nom", { length: 255 }).notNull(),
     telephone: varchar("telephone", { length: 20 }).notNull(),
+    photoUrl: text("photo_url"),
     vehicule: varchar("vehicule", { length: 50 }),    // "Moto", "Vélo", "Voiture"
     numeroVehicule: varchar("numero_vehicule", { length: 20 }),
+    fixedDeliveryCompensationFcfa: integer(
+      "fixed_delivery_compensation_fcfa",
+    ),
+    loginId: varchar("login_id", { length: 32 })
+      .notNull()
+      .$defaultFn(
+        () => `LIV-${crypto.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`,
+      ),
+    passwordHash: text("password_hash"),
+    mustChangePassword: boolean("must_change_password").notNull().default(true),
+    credentialsVersion: integer("credentials_version").notNull().default(0),
+    credentialsIssuedAt: timestamp("credentials_issued_at", { withTimezone: true }),
+    temporaryPasswordExpiresAt: timestamp("temporary_password_expires_at", {
+      withTimezone: true,
+    }),
+    passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+    deactivatedByUserId: varchar("deactivated_by_user_id", { length: 36 }).references(
+      () => users.id,
+      { onDelete: "restrict" },
+    ),
     enLigne: boolean("en_ligne").notNull().default(false),
     actif: boolean("actif").notNull().default(true),
     // Position temps réel (optionnel)
@@ -1946,6 +2039,24 @@ export const livreurs = pgTable(
   },
   (table) => ({
     restaurantIdx: index("idx_livreurs_restaurant").on(table.restaurantId),
+    loginIdUnique: uniqueIndex("livreurs_login_id_unique").on(table.loginId),
+    restaurantAvailabilityIdx: index("livreurs_restaurant_availability_idx").on(
+      table.restaurantId,
+      table.actif,
+      table.enLigne,
+    ),
+    credentialsVersionValid: check(
+      "livreurs_credentials_version_valid",
+      sql`${table.credentialsVersion} >= 0`,
+    ),
+    deactivationCoherent: check(
+      "livreurs_deactivation_coherent",
+      sql`(${table.actif} AND ${table.deactivatedAt} IS NULL) OR (NOT ${table.actif} AND ${table.deactivatedAt} IS NOT NULL)`,
+    ),
+    fixedDeliveryCompensationValid: check(
+      "livreurs_fixed_delivery_compensation_valid",
+      sql`${table.fixedDeliveryCompensationFcfa} IS NULL OR (${table.fixedDeliveryCompensationFcfa} > 0 AND ${table.fixedDeliveryCompensationFcfa} <= 1000000)`,
+    ),
   })
 );
 
@@ -1972,6 +2083,33 @@ export const livraisons = pgTable(
     heureAssignee: timestamp("heure_assignee", { withTimezone: true }),
     heureDepart: timestamp("heure_depart", { withTimezone: true }),
     heureLivree: timestamp("heure_livree", { withTimezone: true }),
+    failureReason: varchar("failure_reason", { length: 50 }),
+    failureNote: text("failure_note"),
+    failedAt: timestamp("failed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    proofCodeDigest: varchar("proof_code_digest", { length: 64 }),
+    proofCodeNonce: varchar("proof_code_nonce", { length: 32 }),
+    proofCodeIssuedAt: timestamp("proof_code_issued_at", { withTimezone: true }),
+    proofVerifiedAt: timestamp("proof_verified_at", { withTimezone: true }),
+    proofMethod: deliveryProofMethodEnum("proof_method"),
+    proofVerifiedByClientId: varchar("proof_verified_by_client_id", { length: 36 }).references(
+      () => clients.id,
+      { onDelete: "restrict" },
+    ),
+    proofAttempts: integer("proof_attempts").notNull().default(0),
+    cashCollectedAt: timestamp("cash_collected_at", { withTimezone: true }),
+    cashCollectedAmountFcfa: integer("cash_collected_amount_fcfa"),
+    driverCompensationAmountFcfa: integer(
+      "driver_compensation_amount_fcfa",
+    ),
+    driverCompensationPaidAt: timestamp("driver_compensation_paid_at", {
+      withTimezone: true,
+    }),
+    driverCompensationPaidByUserId: varchar(
+      "driver_compensation_paid_by_user_id",
+      { length: 36 },
+    ).references(() => users.id, { onDelete: "restrict" }),
+    driverCompensationPaymentNote: text("driver_compensation_payment_note"),
     noteClient: integer("note_client"),           // 1-5
     commentaireClient: text("commentaire_client"),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -1985,7 +2123,247 @@ export const livraisons = pgTable(
     commandeIdx: index("idx_livraisons_commande").on(table.commandeId),
     livreurIdx:  index("idx_livraisons_livreur").on(table.livreurId),
     statutIdx:   index("idx_livraisons_statut").on(table.statut),
+    activeDriverUnique: uniqueIndex("livraisons_active_driver_unique")
+      .on(table.livreurId)
+      .where(
+        sql`${table.livreurId} IS NOT NULL AND ${table.statut} IN ('assignee', 'en_route')`,
+      ),
+    proofAttemptsValid: check(
+      "livraisons_proof_attempts_valid",
+      sql`${table.proofAttempts} >= 0 AND ${table.proofAttempts} <= 10`,
+    ),
+    cashAmountValid: check(
+      "livraisons_cash_amount_valid",
+      sql`${table.cashCollectedAmountFcfa} IS NULL OR ${table.cashCollectedAmountFcfa} > 0`,
+    ),
+    driverCompensationAmountValid: check(
+      "livraisons_driver_compensation_amount_valid",
+      sql`${table.driverCompensationAmountFcfa} IS NULL OR (${table.driverCompensationAmountFcfa} > 0 AND ${table.driverCompensationAmountFcfa} <= 1000000)`,
+    ),
+    driverCompensationPaymentCoherent: check(
+      "livraisons_driver_compensation_payment_coherent",
+      sql`(${table.driverCompensationPaidAt} IS NULL AND ${table.driverCompensationPaidByUserId} IS NULL AND ${table.driverCompensationPaymentNote} IS NULL)
+        OR (${table.statut} = 'livree' AND ${table.driverCompensationAmountFcfa} IS NOT NULL AND ${table.driverCompensationPaidAt} IS NOT NULL AND ${table.driverCompensationPaidByUserId} IS NOT NULL)`,
+    ),
+    pendingDriverCompensationIdx: index(
+      "livraisons_pending_driver_compensation_idx",
+    )
+      .on(table.livreurId, table.heureLivree)
+      .where(
+        sql`${table.statut} = 'livree' AND ${table.driverCompensationAmountFcfa} IS NOT NULL AND ${table.driverCompensationPaidAt} IS NULL`,
+      ),
+    proofIssueCoherent: check(
+      "livraisons_proof_issue_coherent",
+      sql`num_nonnulls(${table.proofCodeDigest}, ${table.proofCodeNonce}, ${table.proofCodeIssuedAt}) IN (0, 3)`,
+    ),
   })
+);
+
+export const deliveryOffers = pgTable(
+  "delivery_offers",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    deliveryId: varchar("delivery_id", { length: 36 })
+      .notNull()
+      .references(() => livraisons.id, { onDelete: "restrict" }),
+    orderId: varchar("order_id", { length: 36 })
+      .notNull()
+      .references(() => commandes.id, { onDelete: "restrict" }),
+    restaurantId: varchar("restaurant_id", { length: 36 })
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "restrict" }),
+    driverId: varchar("driver_id", { length: 36 })
+      .notNull()
+      .references(() => livreurs.id, { onDelete: "restrict" }),
+    status: deliveryOfferStatusEnum("status").notNull().default("pending"),
+    declineReason: varchar("decline_reason", { length: 50 }),
+    declineNote: text("decline_note"),
+    becomeUnavailable: boolean("become_unavailable").notNull().default(false),
+    driverCompensationAmountFcfa: integer(
+      "driver_compensation_amount_fcfa",
+    ),
+    createdByUserId: varchar("created_by_user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    pendingDeliveryUnique: uniqueIndex("delivery_offers_pending_delivery_unique")
+      .on(table.deliveryId)
+      .where(sql`${table.status} = 'pending'`),
+    pendingDriverUnique: uniqueIndex("delivery_offers_pending_driver_unique")
+      .on(table.driverId)
+      .where(sql`${table.status} = 'pending'`),
+    driverStatusIdx: index("delivery_offers_driver_status_idx").on(
+      table.driverId,
+      table.status,
+      table.expiresAt,
+    ),
+    restaurantCreatedIdx: index("delivery_offers_restaurant_created_idx").on(
+      table.restaurantId,
+      table.createdAt,
+    ),
+    expiryValid: check(
+      "delivery_offers_expiry_valid",
+      sql`${table.expiresAt} > ${table.createdAt}`,
+    ),
+    responseCoherent: check(
+      "delivery_offers_response_coherent",
+      sql`(${table.status} = 'pending' AND ${table.respondedAt} IS NULL) OR (${table.status} <> 'pending' AND ${table.respondedAt} IS NOT NULL)`,
+    ),
+    driverCompensationAmountValid: check(
+      "delivery_offers_driver_compensation_amount_valid",
+      sql`${table.driverCompensationAmountFcfa} IS NULL OR (${table.driverCompensationAmountFcfa} > 0 AND ${table.driverCompensationAmountFcfa} <= 1000000)`,
+    ),
+  }),
+);
+
+export const deliveryEvents = pgTable(
+  "delivery_events",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    deliveryId: varchar("delivery_id", { length: 36 }).references(
+      () => livraisons.id,
+      { onDelete: "restrict" },
+    ),
+    orderId: varchar("order_id", { length: 36 }).references(() => commandes.id, {
+      onDelete: "restrict",
+    }),
+    restaurantId: varchar("restaurant_id", { length: 36 })
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "restrict" }),
+    driverId: varchar("driver_id", { length: 36 }).references(() => livreurs.id, {
+      onDelete: "restrict",
+    }),
+    offerId: varchar("offer_id", { length: 36 }).references(
+      () => deliveryOffers.id,
+      { onDelete: "restrict" },
+    ),
+    eventType: deliveryEventTypeEnum("event_type").notNull(),
+    actorType: deliveryActorTypeEnum("actor_type").notNull(),
+    actorId: varchar("actor_id", { length: 36 }).notNull(),
+    fromStatus: statutLivraisonEnum("from_status"),
+    toStatus: statutLivraisonEnum("to_status"),
+    metadata: jsonb("metadata")
+      .notNull()
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    deliveryCreatedIdx: index("delivery_events_delivery_created_idx").on(
+      table.deliveryId,
+      table.createdAt,
+    ),
+    restaurantCreatedIdx: index("delivery_events_restaurant_created_idx").on(
+      table.restaurantId,
+      table.createdAt,
+    ),
+    driverCreatedIdx: index("delivery_events_driver_created_idx").on(
+      table.driverId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export const driverCashRemittances = pgTable(
+  "driver_cash_remittances",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    restaurantId: varchar("restaurant_id", { length: 36 })
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "restrict" }),
+    driverId: varchar("driver_id", { length: 36 })
+      .notNull()
+      .references(() => livreurs.id, { onDelete: "restrict" }),
+    expectedAmountFcfa: integer("expected_amount_fcfa").notNull(),
+    receivedAmountFcfa: integer("received_amount_fcfa").notNull(),
+    confirmedByUserId: varchar("confirmed_by_user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    note: text("note"),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    driverConfirmedIdx: index("driver_cash_remittances_driver_confirmed_idx").on(
+      table.driverId,
+      table.confirmedAt,
+    ),
+    exactAmount: check(
+      "driver_cash_remittances_exact_amount",
+      sql`${table.expectedAmountFcfa} > 0 AND ${table.receivedAmountFcfa} = ${table.expectedAmountFcfa}`,
+    ),
+  }),
+);
+
+export const driverCashCollections = pgTable(
+  "driver_cash_collections",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    deliveryId: varchar("delivery_id", { length: 36 })
+      .notNull()
+      .references(() => livraisons.id, { onDelete: "restrict" }),
+    orderId: varchar("order_id", { length: 36 })
+      .notNull()
+      .references(() => commandes.id, { onDelete: "restrict" }),
+    restaurantId: varchar("restaurant_id", { length: 36 })
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "restrict" }),
+    driverId: varchar("driver_id", { length: 36 })
+      .notNull()
+      .references(() => livreurs.id, { onDelete: "restrict" }),
+    expectedAmountFcfa: integer("expected_amount_fcfa").notNull(),
+    collectedAmountFcfa: integer("collected_amount_fcfa").notNull(),
+    status: driverCashCollectionStatusEnum("status").notNull().default("held"),
+    remittanceId: varchar("remittance_id", { length: 36 }).references(
+      () => driverCashRemittances.id,
+      { onDelete: "restrict" },
+    ),
+    collectedAt: timestamp("collected_at", { withTimezone: true }).notNull(),
+    remittedAt: timestamp("remitted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    deliveryUnique: uniqueIndex("driver_cash_collections_delivery_unique").on(
+      table.deliveryId,
+    ),
+    orderUnique: uniqueIndex("driver_cash_collections_order_unique").on(table.orderId),
+    driverStatusIdx: index("driver_cash_collections_driver_status_idx").on(
+      table.driverId,
+      table.status,
+      table.collectedAt,
+    ),
+    amountExact: check(
+      "driver_cash_collections_amount_exact",
+      sql`${table.expectedAmountFcfa} > 0 AND ${table.collectedAmountFcfa} = ${table.expectedAmountFcfa}`,
+    ),
+    lifecycleCoherent: check(
+      "driver_cash_collections_lifecycle_coherent",
+      sql`(${table.status} = 'held' AND ${table.remittanceId} IS NULL AND ${table.remittedAt} IS NULL) OR (${table.status} = 'remitted' AND ${table.remittanceId} IS NOT NULL AND ${table.remittedAt} IS NOT NULL)`,
+    ),
+  }),
 );
 
 // ============================================================================
@@ -2117,6 +2495,10 @@ export const notifications = pgTable(
       () => clients.id,
       { onDelete: "cascade" }
     ),
+    driverId: varchar("driver_id", { length: 36 }).references(
+      () => livreurs.id,
+      { onDelete: "cascade" },
+    ),
     type: typeNotificationEnum("type").notNull(),
     titre: varchar("titre", { length: 255 }).notNull(),
     message: text("message").notNull(),
@@ -2132,12 +2514,17 @@ export const notifications = pgTable(
   (table) => ({
     userIdx:    index("idx_notifications_user").on(table.userId),
     clientIdx:  index("idx_notifications_client").on(table.clientId),
+    driverIdx: index("idx_notifications_driver").on(table.driverId),
     lueIdx:     index("idx_notifications_lue").on(table.lue),
     userLueIdx: index("idx_notifications_user_lue").on(
       table.userId,
       table.lue
     ),
     createdAtIdx: index("idx_notifications_created_at").on(table.createdAt),
+    singleOwner: check(
+      "notifications_single_owner",
+      sql`num_nonnulls(${table.userId}, ${table.clientId}, ${table.driverId}) = 1`,
+    ),
   })
 );
 
@@ -2792,10 +3179,20 @@ export const livreursRelations = relations(livreurs, ({ one, many }) => ({
     fields: [livreurs.restaurantId],
     references: [restaurants.id],
   }),
+  deactivatedByUser: one(users, {
+    fields: [livreurs.deactivatedByUserId],
+    references: [users.id],
+  }),
   livraisons: many(livraisons),
+  offers: many(deliveryOffers),
+  events: many(deliveryEvents),
+  cashCollections: many(driverCashCollections),
+  cashRemittances: many(driverCashRemittances),
+  notifications: many(notifications),
+  pushSubscriptions: many(pushSubscriptions),
 }));
 
-export const livraisonsRelations = relations(livraisons, ({ one }) => ({
+export const livraisonsRelations = relations(livraisons, ({ one, many }) => ({
   commande: one(commandes, {
     fields: [livraisons.commandeId],
     references: [commandes.id],
@@ -2804,7 +3201,114 @@ export const livraisonsRelations = relations(livraisons, ({ one }) => ({
     fields: [livraisons.livreurId],
     references: [livreurs.id],
   }),
+  proofVerifiedByClient: one(clients, {
+    fields: [livraisons.proofVerifiedByClientId],
+    references: [clients.id],
+  }),
+  driverCompensationPaidByUser: one(users, {
+    fields: [livraisons.driverCompensationPaidByUserId],
+    references: [users.id],
+    relationName: "deliveryCompensationPaidBy",
+  }),
+  offers: many(deliveryOffers),
+  events: many(deliveryEvents),
+  cashCollection: one(driverCashCollections, {
+    fields: [livraisons.id],
+    references: [driverCashCollections.deliveryId],
+  }),
 }));
+
+export const deliveryOffersRelations = relations(deliveryOffers, ({ one, many }) => ({
+  delivery: one(livraisons, {
+    fields: [deliveryOffers.deliveryId],
+    references: [livraisons.id],
+  }),
+  order: one(commandes, {
+    fields: [deliveryOffers.orderId],
+    references: [commandes.id],
+  }),
+  restaurant: one(restaurants, {
+    fields: [deliveryOffers.restaurantId],
+    references: [restaurants.id],
+  }),
+  driver: one(livreurs, {
+    fields: [deliveryOffers.driverId],
+    references: [livreurs.id],
+  }),
+  createdByUser: one(users, {
+    fields: [deliveryOffers.createdByUserId],
+    references: [users.id],
+  }),
+  events: many(deliveryEvents),
+}));
+
+export const deliveryEventsRelations = relations(deliveryEvents, ({ one }) => ({
+  delivery: one(livraisons, {
+    fields: [deliveryEvents.deliveryId],
+    references: [livraisons.id],
+  }),
+  order: one(commandes, {
+    fields: [deliveryEvents.orderId],
+    references: [commandes.id],
+  }),
+  restaurant: one(restaurants, {
+    fields: [deliveryEvents.restaurantId],
+    references: [restaurants.id],
+  }),
+  driver: one(livreurs, {
+    fields: [deliveryEvents.driverId],
+    references: [livreurs.id],
+  }),
+  offer: one(deliveryOffers, {
+    fields: [deliveryEvents.offerId],
+    references: [deliveryOffers.id],
+  }),
+}));
+
+export const driverCashRemittancesRelations = relations(
+  driverCashRemittances,
+  ({ one, many }) => ({
+    restaurant: one(restaurants, {
+      fields: [driverCashRemittances.restaurantId],
+      references: [restaurants.id],
+    }),
+    driver: one(livreurs, {
+      fields: [driverCashRemittances.driverId],
+      references: [livreurs.id],
+    }),
+    confirmedByUser: one(users, {
+      fields: [driverCashRemittances.confirmedByUserId],
+      references: [users.id],
+    }),
+    collections: many(driverCashCollections),
+  }),
+);
+
+export const driverCashCollectionsRelations = relations(
+  driverCashCollections,
+  ({ one }) => ({
+    delivery: one(livraisons, {
+      fields: [driverCashCollections.deliveryId],
+      references: [livraisons.id],
+    }),
+    order: one(commandes, {
+      fields: [driverCashCollections.orderId],
+      references: [commandes.id],
+    }),
+    restaurant: one(restaurants, {
+      fields: [driverCashCollections.restaurantId],
+      references: [restaurants.id],
+    }),
+    driver: one(livreurs, {
+      fields: [driverCashCollections.driverId],
+      references: [livreurs.id],
+    }),
+    remittance: one(driverCashRemittances, {
+      fields: [driverCashCollections.remittanceId],
+      references: [driverCashRemittances.id],
+    }),
+  }),
+);
 
 export const promotionsRelations = relations(promotions, ({ one }) => ({
   restaurant: one(restaurants, {
@@ -2845,6 +3349,10 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
     fields: [notifications.clientId],
     references: [clients.id],
   }),
+  driver: one(livreurs, {
+    fields: [notifications.driverId],
+    references: [livreurs.id],
+  }),
 }));
 
 // ============================================================================
@@ -2866,6 +3374,10 @@ export const pushSubscriptions = pgTable(
       onDelete: "cascade",
     }),
 
+    driverId: varchar("driver_id", { length: 36 }).references(() => livreurs.id, {
+      onDelete: "cascade",
+    }),
+
     type: varchar("type", { length: 20 })
       .notNull()
       .$type<"web" | "expo">(),
@@ -2884,6 +3396,7 @@ export const pushSubscriptions = pgTable(
   (table) => ({
     userIdx:     index("idx_push_subscriptions_user").on(table.userId),
     clientIdx:   index("idx_push_subscriptions_client").on(table.clientId),
+    driverIdx: index("idx_push_subscriptions_driver").on(table.driverId),
     typeIdx:     index("idx_push_subscriptions_type").on(table.type),
     endpointIdx: index("idx_push_subscriptions_endpoint").on(table.endpoint),
     expoTokenUnique: uniqueIndex("push_subscriptions_expo_token_unique")
@@ -2891,7 +3404,7 @@ export const pushSubscriptions = pgTable(
       .where(sql`${table.expoToken} IS NOT NULL`),
     singleOwner: check(
       "push_subscriptions_single_owner",
-      sql`num_nonnulls(${table.userId}, ${table.clientId}) = 1`,
+      sql`num_nonnulls(${table.userId}, ${table.clientId}, ${table.driverId}) = 1`,
     ),
   })
 );
@@ -2904,5 +3417,9 @@ export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one })
   client: one(clients, {
     fields: [pushSubscriptions.clientId],
     references: [clients.id],
+  }),
+  driver: one(livreurs, {
+    fields: [pushSubscriptions.driverId],
+    references: [livreurs.id],
   }),
 }));

@@ -11,18 +11,11 @@ async function connectAdmin(page: Page) {
     },
   });
   expect(response.ok()).toBeTruthy();
-  const token = response.headers()["set-cookie"]?.match(/token=([^;]+)/)?.[1];
-  expect(token).toBeTruthy();
-  await page.context().addCookies([
-    {
-      name: "token",
-      value: token!,
-      domain: "127.0.0.1",
-      path: "/",
-      httpOnly: true,
-      sameSite: "Lax",
-    },
-  ]);
+  expect(
+    (await page.context().cookies()).some((cookie) =>
+      cookie.name.endsWith("restauci_session")
+    )
+  ).toBeTruthy();
 }
 
 test("l’administration refuse une session anonyme", async ({ page }) => {

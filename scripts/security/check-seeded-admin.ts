@@ -1,14 +1,17 @@
 /**
- * Vérifie si les comptes seedés utilisent toujours le mot de passe
- * historique "password123" (fuité via git). Lecture seule : aucune écriture.
+ * Vérifie si des comptes ciblés utilisent encore un mot de passe compromis.
+ * Le secret et les identifiants sont injectés par le gestionnaire de secrets.
  *
  * Usage : node --env-file=.env.local --experimental-strip-types scripts/security/check-seeded-admin.ts
  */
 import { compare } from "bcryptjs";
 import { Pool } from "pg";
 
-const SEEDED_EMAILS = ["admin@restauci.com", "orlando@restauci.com"];
-const LEAKED_PASSWORD = "password123";
+const seededEmails = (process.env.SECURITY_CHECK_EMAILS ?? "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+const compromisedPassword = process.env.COMPROMISED_PASSWORD;
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;
@@ -16,12 +19,18 @@ async function main() {
     console.error("❌ DATABASE_URL manquant");
     process.exit(1);
   }
+  if (seededEmails.length === 0 || !compromisedPassword) {
+    console.error(
+      "❌ SECURITY_CHECK_EMAILS et COMPROMISED_PASSWORD sont requis",
+    );
+    process.exit(1);
+  }
 
   const pool = new Pool({ connectionString, max: 1 });
   let compromised = false;
 
   try {
-    for (const email of SEEDED_EMAILS) {
+    for (const email of seededEmails) {
       const { rows } = await pool.query(
         "SELECT id, email, role, suspendu, password FROM users WHERE email = $1 LIMIT 1",
         [email],
@@ -34,7 +43,7 @@ async function main() {
 
       const user = rows[0];
       const usesLeakedPassword = await compare(
-        LEAKED_PASSWORD,
+        compromisedPassword,
         user.password,
       );
 
@@ -42,7 +51,7 @@ async function main() {
         compromised = true;
         console.log(
           `🔴 ${email} (role=${user.role}, suspendu=${user.suspendu}) : ` +
-            "utilise ENCORE le mot de passe fuité password123 !",
+            "utilise ENCORE le mot de passe compromis !",
         );
         console.log(
           `   → Action immédiate : changer le mot de passe ou désactiver ce compte.`,

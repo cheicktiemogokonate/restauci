@@ -13,13 +13,27 @@ import {
   buildMobilePaymentReturnUrl,
   buildWebPaymentReturnUrl,
 } from "@/modules/transactions/payment-return";
+import { checkRateLimit, paymentCallbackLimiter } from "@/lib/rate-limit";
+import { securityIdentifier } from "@/lib/security/identifier";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   const reference = request.nextUrl.searchParams.get("reference") ?? request.nextUrl.searchParams.get("trxref");
-  if (!reference) return NextResponse.redirect(new URL("/?payment=invalid", request.url));
+  if (!reference || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(reference)) {
+    return NextResponse.redirect(new URL("/?payment=invalid", request.url));
+  }
+
+  const rateLimitResponse = await checkRateLimit(
+    paymentCallbackLimiter,
+    securityIdentifier("payment-reference", reference),
+  );
+  if (rateLimitResponse) return rateLimitResponse;
+
   const callbackContext = await getPaymentCallbackContext(reference);
+  if (!callbackContext) {
+    return NextResponse.redirect(new URL("/?payment=invalid", request.url));
+  }
   let result = "pending";
   try {
     const finalized = await verifyAndFinalizePaystackPayment(reference, undefined, {
@@ -38,7 +52,7 @@ export async function GET(request: NextRequest) {
     result = "error";
   }
   if (
-    callbackContext?.returnChannel === "mobile" &&
+    callbackContext.returnChannel === "mobile" &&
     env.MOBILE_APP_PAYMENT_RETURN_URL
   ) {
     return NextResponse.redirect(
@@ -52,8 +66,8 @@ export async function GET(request: NextRequest) {
   }
   return NextResponse.redirect(
     buildWebPaymentReturnUrl(
-      request.url,
-      callbackContext?.webDestination ?? "/",
+      env.NEXT_PUBLIC_APP_URL,
+      callbackContext.webDestination,
       result,
     ),
   );

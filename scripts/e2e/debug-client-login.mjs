@@ -1,0 +1,15 @@
+import { chromium } from "@playwright/test";
+const BASE = "http://127.0.0.1:3100";
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ baseURL: BASE });
+const page = await ctx.newPage();
+page.on("request", r => { if (r.url().includes("/api/")) console.log("REQ", r.method(), new URL(r.url()).pathname); });
+page.on("response", r => { if (r.url().includes("/api/")) console.log("RES", r.status(), new URL(r.url()).pathname); });
+await page.goto("/client/login", { waitUntil: "networkidle" });
+await page.waitForTimeout(3000);
+await page.getByLabel("Téléphone").fill("+2250700009999");
+await page.getByLabel("Mot de passe").fill("Client-e2e-2026");
+await page.getByRole("button", { name: "Se connecter" }).click();
+await page.waitForTimeout(5000);
+console.log("URL:", page.url());
+await browser.close();

@@ -1,54 +1,28 @@
 import { env } from "@/lib/env";
+import {
+  isOwnerSessionRevoked,
+  isTokenBlacklisted,
+} from "@/lib/api/token-blacklist";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import type { JWTPayload } from "@/types";
 import bcryptjs from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { jwtVerify, SignJWT } from "jose";
 import { cookies } from "next/headers";
+import {
+  AUTH_COOKIE_NAME,
+  LEGACY_AUTH_COOKIE_NAME,
+  signWebSessionToken,
+  verifyWebSessionToken,
+} from "./tokens";
+
+export * from "./tokens";
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET);
-const JWT_EXPIRATION = "7d";
 const BCRYPT_SALT_ROUNDS = 12;
-
-// ============================================================================
-// JWT HELPERS
-// ============================================================================
-
-/**
- * Créer et signer un JWT token avec un payload arbitraire.
- * @param payload - Les données à inclure dans le token
- * @param expiresIn - Durée de validité (ex: "24h", "7d", "30d"). Défaut: "7d"
- */
-export async function signToken(
-  payload: Record<string, unknown>,
-  expiresIn = JWT_EXPIRATION,
-): Promise<string> {
-  return new SignJWT(payload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime(expiresIn)
-    .sign(JWT_SECRET);
-}
-
-/**
- * Vérifier et décoder un JWT token.
- * Retourne le payload sous forme de Record ou null en cas d'erreur.
- * Compatible avec les tokens utilisateur ET client.
- */
-export async function verifyToken(
-  token: string,
-): Promise<Record<string, unknown> | null> {
-  try {
-    const verified = await jwtVerify(token, JWT_SECRET);
-    return verified.payload as unknown as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
 
 // ============================================================================
 // PASSWORD HELPERS
@@ -81,14 +55,23 @@ export async function comparePassword(
 export async function getCurrentUser(): Promise<JWTPayload | null> {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
+    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
     if (!token) {
       return null;
     }
 
-    const payload = await verifyToken(token);
-    if (!payload || typeof payload.userId !== "string") return null;
+    const payload = await verifyWebSessionToken(token);
+    if (!payload) return null;
+
+    // La révocation est un contrôle de sécurité, pas un cache facultatif.
+    // Une panne Redis invalide donc temporairement la session web.
+    if (
+      (await isTokenBlacklisted(token)) ||
+      (await isOwnerSessionRevoked("user", payload.userId, payload.issuedAtMs))
+    ) {
+      return null;
+    }
 
     // Le JWT ne fait qu'identifier la session : le rôle et l'état du compte
     // doivent toujours provenir de la base pour qu'une suspension ou une
@@ -111,7 +94,13 @@ export async function getCurrentUser(): Promise<JWTPayload | null> {
       email: user.email,
       role: user.role,
     };
-  } catch {
+  } catch (error) {
+    if (env.NODE_ENV !== "production") {
+      console.warn(
+        "[auth] Restauration de session web impossible:",
+        error instanceof Error ? error.message : "Erreur inconnue",
+      );
+    }
     return null;
   }
 }
@@ -121,13 +110,23 @@ export async function getCurrentUser(): Promise<JWTPayload | null> {
  */
 export async function setAuthCookie(token: string): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set("token", token, {
+  cookieStore.set(AUTH_COOKIE_NAME, token, {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
+    maxAge: 8 * 60 * 60,
     path: "/",
+    priority: "high",
   });
+  if (AUTH_COOKIE_NAME !== LEGACY_AUTH_COOKIE_NAME) {
+    cookieStore.set(LEGACY_AUTH_COOKIE_NAME, "", {
+      httpOnly: true,
+      secure: env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 0,
+      path: "/",
+    });
+  }
 }
 
 /**
@@ -135,11 +134,16 @@ export async function setAuthCookie(token: string): Promise<void> {
  */
 export async function clearAuthCookie(): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set("token", "", {
-    httpOnly: true,
-    secure: env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  });
+  for (const name of new Set([AUTH_COOKIE_NAME, LEGACY_AUTH_COOKIE_NAME])) {
+    cookieStore.set(name, "", {
+      httpOnly: true,
+      secure: env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 0,
+      path: "/",
+      priority: "high",
+    });
+  }
 }
+
+export { signWebSessionToken };

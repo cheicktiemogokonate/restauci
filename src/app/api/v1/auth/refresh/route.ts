@@ -1,21 +1,28 @@
 import { getClientIp } from "@/lib/api/client-ip";
-import { blacklistToken, isTokenBlacklisted } from "@/lib/api/token-blacklist";
+import {
+  consumeTokenOnce,
+  isOwnerSessionRevoked,
+  isSessionRevoked,
+  revokeSession,
+} from "@/lib/api/token-blacklist";
 import { apiResponse } from "@/lib/api/response";
 import { validateBody } from "@/lib/api/validate";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { apiLimiter, checkRateLimit } from "@/lib/rate-limit";
-import { verifyToken } from "@/lib/auth";
+import {
+  signPartnerAccessToken,
+  signPartnerRefreshToken,
+  verifyPartnerRefreshToken,
+} from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
-import { SignJWT } from "jose";
 import { eq } from "drizzle-orm";
-import { env } from "@/lib/env";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
 const log = createLogger("v1-auth-refresh");
 
-const ACCESS_TTL_S = 24 * 3600;
+const ACCESS_TTL_S = 15 * 60;
 const REFRESH_SLIDING_S = 7 * 24 * 3600;
 
 const refreshSchema = z.object({
@@ -34,26 +41,55 @@ export async function POST(request: NextRequest) {
     // 1. Vérifier la signature et le TYPE du token : seul un refresh token
     //    (émis par /login ou par une rotation précédente) est accepté.
     //    Un access token — même valide — est refusé ici.
-    const payload = await verifyToken(data.refreshToken);
-    if (!payload?.userId || payload.type !== "refresh") {
+    const payload = await verifyPartnerRefreshToken(data.refreshToken);
+    if (!payload) {
       return apiResponse.unauthorized("Refresh token invalide");
     }
 
-    // 2. Vérifier que le token n'a pas été révoqué (logout / rotation).
-    //    Si Redis est indisponible on continue : l'étape 3 reste bloquante
-    //    pour les comptes suspendus.
-    let revoked = false;
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.sessionExpiresAt <= now) {
+      return apiResponse.unauthorized("Session expirée");
+    }
+
+    // 2. Consommer le refresh de façon atomique. Une rotation concurrente ou
+    //    un logout a déjà créé la même clé et rend cette requête invalide.
+    let consumed: boolean;
     try {
-      revoked = await isTokenBlacklisted(data.refreshToken);
+      if (
+        (await isSessionRevoked(payload.sessionId)) ||
+        (await isOwnerSessionRevoked(
+          "user",
+          payload.userId,
+          payload.issuedAtMs,
+        ))
+      ) {
+        return apiResponse.unauthorized("Session révoquée. Reconnectez-vous.");
+      }
+      consumed = await consumeTokenOnce(data.refreshToken, payload.exp);
     } catch (redisErr) {
-      log.warn(
+      log.error(
         { err: redisErr instanceof Error ? redisErr.message : "unknown" },
-        "Blacklist indisponible lors du refresh",
+        "Registre de révocation indisponible lors du refresh",
+      );
+      return apiResponse.error(
+        "Renouvellement temporairement indisponible",
+        "SERVICE_UNAVAILABLE",
+        { status: 503 },
       );
     }
-    if (revoked) {
+    if (!consumed) {
+      try {
+        await revokeSession(payload.sessionId, payload.sessionExpiresAt);
+      } catch (redisErr) {
+        log.error({ err: redisErr }, "Révocation de famille incomplète");
+        return apiResponse.error(
+          "Vérification de session temporairement indisponible",
+          "SERVICE_UNAVAILABLE",
+          { status: 503 },
+        );
+      }
       return apiResponse.unauthorized(
-        "Refresh token révoqué. Reconnectez-vous.",
+        "Réutilisation de session détectée. Toutes les sessions associées ont été révoquées.",
       );
     }
 
@@ -73,35 +109,30 @@ export async function POST(request: NextRequest) {
     //    réel et un nouveau couple est émis. La durée de vie absolue de la
     //    session est plafonnée par l'exp du refresh d'origine (pas de
     //    prolongation infinie).
-    const now = Math.floor(Date.now() / 1000);
-    const origExp = typeof payload.exp === "number" ? payload.exp : now;
-    const newRefreshExp = Math.min(now + REFRESH_SLIDING_S, origExp);
+    const newRefreshExp = Math.min(
+      now + REFRESH_SLIDING_S,
+      payload.sessionExpiresAt,
+    );
 
     if (newRefreshExp <= now) {
       return apiResponse.unauthorized("Refresh token expiré");
     }
 
-    const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET);
-
     const [accessToken, refreshToken] = await Promise.all([
-      new SignJWT({ userId: user.id, role: user.role, type: "access" })
-        .setProtectedHeader({ alg: "HS256" })
-        .setExpirationTime(`${ACCESS_TTL_S}s`)
-        .sign(JWT_SECRET),
-      new SignJWT({ userId: user.id, type: "refresh" })
-        .setProtectedHeader({ alg: "HS256" })
-        .setExpirationTime(newRefreshExp)
-        .sign(JWT_SECRET),
+      signPartnerAccessToken({
+        userId: user.id,
+        role: user.role,
+        sessionId: payload.sessionId,
+      }),
+      signPartnerRefreshToken(
+        {
+          userId: user.id,
+          sessionId: payload.sessionId,
+          sessionExpiresAt: payload.sessionExpiresAt,
+        },
+        newRefreshExp,
+      ),
     ]);
-
-    try {
-      await blacklistToken(data.refreshToken, origExp);
-    } catch (redisErr) {
-      log.error(
-        { err: redisErr instanceof Error ? redisErr.message : "unknown" },
-        "Échec blacklisting de l'ancien refresh token (rotation)",
-      );
-    }
 
     log.info({ userId: user.id }, "Tokens rafraîchis avec rotation");
 

@@ -57,6 +57,7 @@ Chaque module métier (`src/modules/<nom_du_module>`) suit un format standard. *
 | **quotas** | Limites opérationnelles effectives dérivées des abonnements. |
 | **commissions** | Calcul, snapshots et cycle de vie des commissions sur les commandes et réservations. |
 | **orders** | Création, cycle de vie et transition d'états des commandes. |
+| **deliveries** | Flotte restaurant, propositions, missions, preuve de remise et garde des espèces par les livreurs. |
 | **residences** | Logements, visibilité, calendrier, réservations et cycle de vie des séjours. |
 | **transactions** | Obligations financières et tentatives de paiement provider-agnostic. |
 | **notifications** | Modèle produit des notifications métier. |
@@ -84,6 +85,7 @@ Chaque module métier (`src/modules/<nom_du_module>`) suit un format standard. *
 | Commercial dish eligibility | Menu | `assertDishesCommerciallyEligible()` | `src/lib/quota-entitlements.ts` |
 | Order creation | Orders | `createRestaurantOrder()` | `src/lib/orders/restaurant-order.ts` |
 | Order transition | Orders | `transitionRestaurantOrder()` | `src/lib/db/commandes-mutations.ts` |
+| Delivery lifecycle | Deliveries | commandes publiques de `src/modules/deliveries/server.ts` | `src/modules/deliveries/` |
 | Commission lifecycle | Commissions | façade lifecycle minimale | `src/lib/commissions/ledger.ts` |
 | Cash debt | Commissions | API cash-debt publique | `src/lib/commissions/ledger.ts` |
 | Settlement | Commissions | commande settlement publique | `src/lib/commissions/ledger.ts` |
@@ -115,6 +117,7 @@ Le graphe des dépendances inter-modules autorisé est le suivant :
 - `Menu` → `Restaurants`, `Quotas`
 - `Commissions` → `Partners`, `Subscriptions`, `Transactions`, `Audit`, `Notifications`, `shared/money`
 - `Orders` → `Clients`, `Restaurants`, `Menu`, `ServiceMarkets`, `Commissions`, `Transactions`, `Notifications`, `shared/money`
+- `Deliveries` → `Orders`, `Restaurants`, `Transactions`, `Notifications`, `infrastructure/db`, `infrastructure/auth`, `infrastructure/realtime`
 - `Residences` → `Clients`, `ServiceMarkets`, `Identity`, `Quotas`, `Commissions`, `Transactions`, `Audit`, `Notifications`, `shared/money`
 - `Events` → `ServiceMarkets` (à la matérialisation du vertical)
 - `ServiceMarkets` → `infrastructure/db`, `Audit` uniquement pour les commandes administratives
@@ -243,6 +246,8 @@ Pendant la migration A3, `src/lib` est considéré comme du code *legacy*. Un br
 | :--- | :--- | :--- |
 | `src/lib/restaurants/policy.ts` | Restaurants | Lot géographique 6 |
 | `src/lib/orders/restaurant-order*.ts` | Orders | Lot géographique 6 |
+| `src/infrastructure/auth/driver-tokens.ts` | Auth | Suppression après migration de `src/lib/auth/tokens.ts` vers Infrastructure/Auth |
+| `src/infrastructure/auth/session-revocation.ts` | Auth | Suppression après migration du registre Redis vers Infrastructure/Auth |
 
 Le module `service-markets` ne dépend d'aucun vertical. Une activité choisit
 elle-même le contexte faisant autorité (`currentLocation`,

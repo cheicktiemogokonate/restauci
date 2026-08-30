@@ -1,7 +1,6 @@
 import { cache } from "react";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyToken } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { withDatabaseReadRetry } from "@/lib/db/read-retry";
 import { users } from "@/lib/db/schema";
@@ -20,12 +19,8 @@ export interface AdminSession {
  * rôle n'est pas admin.
  */
 export const getAdminSession = cache(async (): Promise<AdminSession> => {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
-  if (!token) redirect("/login");
-
-  const session = await verifyToken(token);
-  if (!session || typeof session.userId !== "string") redirect("/login");
+  const session = await getCurrentUser();
+  if (!session) redirect("/login");
 
   const [user] = await withDatabaseReadRetry(() =>
     db
@@ -37,7 +32,7 @@ export const getAdminSession = cache(async (): Promise<AdminSession> => {
         suspendu: users.suspendu,
       })
       .from(users)
-      .where(eq(users.id, session.userId as string))
+      .where(eq(users.id, session.userId))
       .limit(1),
   );
 

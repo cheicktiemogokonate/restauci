@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ClipboardList,
   CookingPot,
+  Bike,
   LayoutDashboard,
   LucideIcon,
   Menu,
@@ -35,6 +36,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/restaurateur", icon: LayoutDashboard },
   { label: "Commandes", href: "/restaurateur/commandes", icon: ClipboardList },
+  { label: "Livreurs", href: "/restaurateur/livreurs", icon: Bike },
   { label: "Menu", href: "/restaurateur/menu", icon: CookingPot },
   { label: "Vérification", href: "/partenaire/verification", icon: ShieldCheck },
 ];

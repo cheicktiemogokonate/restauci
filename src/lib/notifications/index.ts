@@ -3,7 +3,9 @@
 // pour eviter les erreurs lors du build Next.js
 
 import { db } from "@/lib/db";
+import { after } from "next/server";
 import { notifications, pushSubscriptions } from "@/lib/db/schema";
+import { isAllowedWebPushEndpoint } from "@/lib/notifications/web-push-endpoint";
 import { createLogger } from "@/lib/logger";
 import { pushSseEvent } from "@/lib/realtime/sse-push";
 import { and, eq } from "drizzle-orm";
@@ -15,6 +17,7 @@ const log = createLogger("notifications");
 export interface PersistedNotificationInput {
   userId?: string;
   clientId?: string;
+  driverId?: string;
   type: TypeNotification;
   titre: string;
   message: string;
@@ -55,17 +58,33 @@ export interface ClientNotificationPayload {
   badge?: number;
 }
 
+export interface DriverNotificationPayload {
+  driverId: string;
+  type: TypeNotification;
+  titre: string;
+  message: string;
+  lienType?: string;
+  lienId?: string;
+  data?: Record<string, unknown>;
+  son?: string;
+  badge?: number;
+}
+
 /** Écriture obligatoire, utilisable dans la transaction métier appelante. */
 export async function persistNotification(
   executor: Pick<DbExecutor, "insert">,
   payload: PersistedNotificationInput,
 ) {
-  if ((!payload.userId && !payload.clientId) || (payload.userId && payload.clientId)) {
+  const ownerCount = [payload.userId, payload.clientId, payload.driverId].filter(
+    Boolean,
+  ).length;
+  if (ownerCount !== 1) {
     throw new Error("Une notification doit avoir exactement un destinataire");
   }
   const [notification] = await executor.insert(notifications).values({
     userId: payload.userId ?? null,
     clientId: payload.clientId ?? null,
+    driverId: payload.driverId ?? null,
     type: payload.type,
     titre: payload.titre,
     message: payload.message,
@@ -107,6 +126,12 @@ export async function sendClientNotification(
   } catch (err) {
     log.error({ err }, "Erreur sauvegarde notification client");
   }
+  await deliverClientNotification(payload);
+}
+
+export async function deliverClientNotification(
+  payload: ClientNotificationPayload,
+): Promise<void> {
   await sendClientExpoPush(payload.clientId, {
     titre: payload.titre,
     message: payload.message,
@@ -118,6 +143,67 @@ export async function sendClientNotification(
     },
     son: payload.son,
     badge: payload.badge,
+  });
+}
+
+export function scheduleClientNotification(payload: ClientNotificationPayload) {
+  after(async () => {
+    try {
+      await deliverClientNotification(payload);
+    } catch (err) {
+      log.error({ err }, "Diffusion notification client impossible");
+    }
+  });
+}
+
+/** Notification livreur persistée puis diffusée sur ses appareils Expo. */
+export async function sendDriverNotification(
+  payload: DriverNotificationPayload,
+): Promise<void> {
+  try {
+    await persistNotification(db, payload);
+  } catch (err) {
+    log.error({ err }, "Erreur sauvegarde notification livreur");
+  }
+  await sendDriverExpoPush(payload.driverId, {
+    titre: payload.titre,
+    message: payload.message,
+    data: {
+      type: payload.type,
+      lienType: payload.lienType,
+      lienId: payload.lienId,
+      ...payload.data,
+    },
+    son: payload.son,
+    badge: payload.badge,
+  });
+}
+
+/** Diffusion externe seule après une persistance transactionnelle. */
+export async function deliverDriverNotification(
+  payload: DriverNotificationPayload,
+): Promise<void> {
+  await sendDriverExpoPush(payload.driverId, {
+    titre: payload.titre,
+    message: payload.message,
+    data: {
+      type: payload.type,
+      lienType: payload.lienType,
+      lienId: payload.lienId,
+      ...payload.data,
+    },
+    son: payload.son,
+    badge: payload.badge,
+  });
+}
+
+export function scheduleDriverNotification(payload: DriverNotificationPayload) {
+  after(async () => {
+    try {
+      await deliverDriverNotification(payload);
+    } catch (err) {
+      log.error({ err }, "Diffusion notification livreur impossible");
+    }
   });
 }
 
@@ -231,6 +317,17 @@ async function sendWebPush(
     subscriptions.map(async (sub) => {
       if (!sub.endpoint || !sub.p256dh || !sub.auth) return;
 
+      if (!isAllowedWebPushEndpoint(sub.endpoint)) {
+        await db
+          .delete(pushSubscriptions)
+          .where(eq(pushSubscriptions.id, sub.id));
+        log.warn(
+          { subscriptionId: sub.id },
+          "Subscription Web Push non autorisee supprimee",
+        );
+        return;
+      }
+
       try {
         await webPush!.sendNotification(
           {
@@ -279,7 +376,7 @@ interface ExpoPushPayload {
 }
 
 async function sendExpoPushToOwner(
-  owner: { userId: string } | { clientId: string },
+  owner: { userId: string } | { clientId: string } | { driverId: string },
   payload: ExpoPushPayload,
 ): Promise<void> {
   let Expo: typeof import("expo-server-sdk") | null;
@@ -297,7 +394,9 @@ async function sendExpoPushToOwner(
       and(
         "userId" in owner
           ? eq(pushSubscriptions.userId, owner.userId)
-          : eq(pushSubscriptions.clientId, owner.clientId),
+          : "clientId" in owner
+            ? eq(pushSubscriptions.clientId, owner.clientId)
+            : eq(pushSubscriptions.driverId, owner.driverId),
         eq(pushSubscriptions.type, "expo"),
       ),
     );
@@ -376,4 +475,11 @@ export async function sendClientExpoPush(
   payload: ExpoPushPayload,
 ) {
   return sendExpoPushToOwner({ clientId }, payload);
+}
+
+export async function sendDriverExpoPush(
+  driverId: string,
+  payload: ExpoPushPayload,
+) {
+  return sendExpoPushToOwner({ driverId }, payload);
 }

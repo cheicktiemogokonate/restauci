@@ -13,18 +13,11 @@ async function connectRestaurateur(page: Page) {
     },
   });
   expect(response.ok()).toBeTruthy();
-  const token = response.headers()["set-cookie"]?.match(/token=([^;]+)/)?.[1];
-  expect(token).toBeTruthy();
-  await page.context().addCookies([
-    {
-      name: "token",
-      value: token!,
-      domain: "127.0.0.1",
-      path: "/",
-      httpOnly: true,
-      sameSite: "Lax",
-    },
-  ]);
+  expect(
+    (await page.context().cookies()).some((cookie) =>
+      cookie.name.endsWith("restauci_session")
+    )
+  ).toBeTruthy();
 }
 
 async function publicMenu(page: Page) {
@@ -33,35 +26,86 @@ async function publicMenu(page: Page) {
   );
 }
 
-test("un restaurant hors ligne disparaît du menu public puis réapparaît", async ({ page }) => {
+async function waitForHydration(page: Page) {
+  await page.locator('html[data-e2e-hydrated="true"]').waitFor({
+    state: "attached",
+    timeout: 90_000,
+  });
+}
+
+test("un restaurant hors ligne reste visible mais refuse les commandes", async ({ page }) => {
   await connectRestaurateur(page);
   await page.goto("/restaurateur/profil");
+  await waitForHydration(page);
 
   const serviceSwitch = page.getByRole("switch", {
     name: "Mettre le restaurant en ligne",
   });
+  // Le scénario est réentrant : un retry repart de l'état laissé par une
+  // tentative interrompue, puis le finally restaure le service pour les specs
+  // suivantes.
+  if (!(await serviceSwitch.isChecked())) {
+    await serviceSwitch.click();
+    await expect(serviceSwitch).toBeChecked({ timeout: 90_000 });
+  }
   await expect(serviceSwitch).toBeChecked();
-  await serviceSwitch.click();
-  await expect(
-    page.getByText("Votre restaurant est hors ligne et invisible aux clients."),
-  ).toBeVisible();
+  try {
+    await serviceSwitch.click();
+    await expect(
+      page.getByText("Votre restaurant reste visible, mais les commandes sont fermées."),
+    ).toBeVisible();
 
-  await expect
-    .poll(async () => (await publicMenu(page)).status())
-    .toBe(404);
+    await expect
+      .poll(async () => (await publicMenu(page)).status(), { timeout: 90_000 })
+      .toBe(200);
 
-  await serviceSwitch.click();
+    const clientLogin = await page.request.post("/api/v1/client/auth/login", {
+      data: {
+        telephone: e2eCredentials.clientPhone,
+        password: e2eCredentials.clientPassword,
+        tokenTransport: "json",
+      },
+    });
+    expect(clientLogin.ok()).toBeTruthy();
+    const clientLoginBody = (await clientLogin.json()) as {
+      data: { tokens: { accessToken: string } };
+    };
+    const prevalidation = await page.request.post(
+      "/api/v1/client/commandes/prevalidate",
+      {
+        headers: {
+          Authorization: `Bearer ${clientLoginBody.data.tokens.accessToken}`,
+        },
+        data: {
+          restaurantSlug: e2eCredentials.restaurantSlug,
+          modeCommande: "emporter",
+        },
+      },
+    );
+    expect(prevalidation.status()).toBe(422);
+    await expect(prevalidation.json()).resolves.toMatchObject({
+      success: false,
+      error: "Ce restaurant n'accepte pas de commandes actuellement.",
+    });
+  } finally {
+    if (!(await serviceSwitch.isChecked())) {
+      await serviceSwitch.click();
+      await expect(serviceSwitch).toBeChecked({ timeout: 90_000 });
+    }
+  }
+
   await expect(
     page.getByText("Votre restaurant est visible et reçoit des commandes."),
   ).toBeVisible();
   await expect
-    .poll(async () => (await publicMenu(page)).status())
+    .poll(async () => (await publicMenu(page)).status(), { timeout: 90_000 })
     .toBe(200);
 });
 
 test("un plat masqué disparaît du menu public puis est rétabli", async ({ page }) => {
   await connectRestaurateur(page);
   await page.goto("/restaurateur/menu");
+  await waitForHydration(page);
 
   const availabilitySwitch = page.getByRole("switch", {
     name: `Rendre ${dishName} indisponible`,
@@ -87,6 +131,7 @@ test("un plat masqué disparaît du menu public puis est rétabli", async ({ pag
 test("le profil enregistre une adresse et un horaire sans modifier le service", async ({ page }) => {
   await connectRestaurateur(page);
   await page.goto("/restaurateur/profil");
+  await waitForHydration(page);
 
   const serviceSwitch = page.getByRole("switch", {
     name: "Mettre le restaurant en ligne",
@@ -94,8 +139,16 @@ test("le profil enregistre une adresse et un horaire sans modifier le service", 
   await expect(serviceSwitch).toBeChecked();
 
   await page.getByLabel("Adresse").fill("Cocody Riviera 3, Rue des Jardins");
-  await page.getByRole("button", { name: "Sauvegarder" }).click();
-  await expect(page.getByText("Configuration enregistrée avec succès.")).toBeVisible();
+  const saveProfile = page.getByRole("button", { name: "Sauvegarder" });
+  const profileSaved = page.getByText("Configuration enregistrée avec succès.");
+  // Les écritures Neon peuvent subir une coupure transitoire. La mise à jour
+  // est idempotente ; une nouvelle soumission doit réellement aboutir avant
+  // de poursuivre le scénario.
+  await expect(async () => {
+    if (await profileSaved.isVisible()) return;
+    await saveProfile.click();
+    await expect(profileSaved).toBeVisible({ timeout: 20_000 });
+  }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 5_000] });
   await expect(serviceSwitch).toBeChecked();
 
   const slotName = `Service E2E ${Date.now()}`;

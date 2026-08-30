@@ -11,6 +11,7 @@ import { persistAuditLog } from "@/lib/audit";
 import { sendNotification } from "@/lib/notifications";
 import { env } from "@/lib/env";
 import { getServiceMarketCapability } from "@/modules/service-markets/server";
+import { revokeOwnerSessions } from "@/lib/api/token-blacklist";
 
 
 export class AdminTransitionError extends Error {
@@ -218,6 +219,7 @@ export async function suspendreUser(
   adminId: string,
   motif:   string
 ) {
+  await revokeOwnerSessions("user", userId);
   return transactionalDb.transaction(async (tx) => {
     const [user] = await tx.update(users).set({
         suspendu: true, motifSuspension: motif, suspenduAt: new Date(), updatedAt: new Date(),
@@ -253,6 +255,7 @@ export async function suspendreClient(
   adminId:  string,
   motif:    string
 ) {
+  await revokeOwnerSessions("client", clientId);
   return transactionalDb.transaction(async (tx) => {
     const [client] = await tx.update(clients).set({
         actif: false, motifSuspension: motif, suspenduAt: new Date(), updatedAt: new Date(),

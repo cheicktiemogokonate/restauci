@@ -156,7 +156,7 @@ export function RestaurateurRegisterForm() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form method="post" action="" onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="register-full-name" className="text-[11px] font-bold text-brand-dark/85 block tracking-wide">
               Nom complet
@@ -241,7 +241,8 @@ export function RestaurateurRegisterForm() {
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
                 required
-                minLength={8}
+                minLength={12}
+                maxLength={128}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={"Créez votre mot de passe"}

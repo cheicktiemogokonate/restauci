@@ -1,14 +1,14 @@
 import { redis } from "@/lib/cache/redis";
+import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { partnerAccounts, restaurants } from "@/lib/db/schema";
-import { env } from "@/lib/env";
 import { commandeLogger } from "@/lib/loggers";
 import { eq } from "drizzle-orm";
-import { jwtVerify } from "jose";
-import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
-
-const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET);
+import {
+  acquireSseConnectionSlot,
+  type SseConnectionSlot,
+} from "@/lib/api/sse-concurrency";
 
 // Durée max d'une connexion SSE (4 minutes pour Vercel Pro)
 const MAX_DURATION_MS = 4 * 60 * 1000;
@@ -24,35 +24,12 @@ interface StoredSseEvent {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  let connectionSlot: SseConnectionSlot | null = null;
   try {
-    // Vérifier la session via cookie
-    const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
-
-    if (!token) {
-      return new Response("Non autorise", { status: 401 });
-    }
-
-    let payload: Record<string, unknown>;
-    try {
-      const verified = await jwtVerify(token, JWT_SECRET);
-      payload = verified.payload as Record<string, unknown>;
-    } catch (error) {
-      commandeLogger.error(
-        {
-          error: error instanceof Error ? error.message : "Unknown error",
-          stack:
-            process.env.NODE_ENV === "development" && error instanceof Error
-              ? error.stack
-              : undefined,
-        },
-        "SSE auth error",
-      );
-      return new Response("Non autorise", { status: 401 });
-    }
-
-    const userId = typeof payload?.userId === "string" ? payload.userId : null;
-    if (!userId) {
+    // Même garde canonique que le reste du dashboard : type web-session,
+    // révocation, rôle et suspension sont vérifiés avant d'ouvrir le flux.
+    const session = await getCurrentUser();
+    if (!session || session.role !== "partner") {
       return new Response("Non autorise", { status: 401 });
     }
 
@@ -63,7 +40,7 @@ export async function GET(request: NextRequest) {
         restaurants,
         eq(restaurants.partnerAccountId, partnerAccounts.id),
       )
-      .where(eq(partnerAccounts.userId, userId))
+      .where(eq(partnerAccounts.userId, session.userId))
       .limit(1);
 
     if (!restaurant) {
@@ -71,6 +48,14 @@ export async function GET(request: NextRequest) {
     }
 
     const restaurantId = restaurant.restaurants.id;
+    connectionSlot = await acquireSseConnectionSlot({
+      scope: "partner-orders",
+      ownerId: session.userId,
+      ttlSeconds: Math.ceil(MAX_DURATION_MS / 1_000) + 30,
+    });
+    if (!connectionSlot) {
+      return new Response("Trop de connexions simultanées", { status: 429 });
+    }
     const queueKey = `restauci:sse:queue:${restaurantId}`;
     const cursor = request.nextUrl.searchParams.get("cursor");
 
@@ -91,6 +76,7 @@ export async function GET(request: NextRequest) {
             controller.enqueue(encoder.encode(payload));
           } catch {
             isClosed = true;
+            cleanup?.();
           }
         };
 
@@ -114,6 +100,7 @@ export async function GET(request: NextRequest) {
               /* ignore */
             }
             isClosed = true;
+            cleanup?.();
           }
         }, MAX_DURATION_MS);
 
@@ -170,6 +157,7 @@ export async function GET(request: NextRequest) {
           clearInterval(pingInterval);
           clearInterval(pollInterval);
           clearTimeout(timeoutId);
+          void connectionSlot?.release();
         };
 
         // Nettoyer quand le client se déconnecte
@@ -196,6 +184,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    void connectionSlot?.release();
     commandeLogger.error(
       {
         error: error instanceof Error ? error.message : "Unknown error",

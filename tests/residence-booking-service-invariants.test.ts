@@ -15,6 +15,14 @@ describe("Bloc 9 residence booking service invariants", () => {
     "src/app/api/v1/public/residences/[id]/availability/route.ts",
     "utf8",
   );
+  const partnerReservationActions = readFileSync(
+    "src/app/(dashboard)/partenaire/reservations/actions.ts",
+    "utf8",
+  );
+  const partnerReservationWorkspace = readFileSync(
+    "src/components/partner/partner-reservations-workspace.tsx",
+    "utf8",
+  );
 
   it("locks the residence before checking overlap and inserting", () => {
     const start = service.indexOf("export async function createResidenceReservation");
@@ -87,5 +95,60 @@ describe("Bloc 9 residence booking service invariants", () => {
     expect(service.slice(deleteStart, nextStart)).toContain(
       "getPartnerResidenceRecord",
     );
+  });
+
+  it("protects owner reservation edits with ownership, availability and payment guards", () => {
+    const updateStart = service.indexOf(
+      "export async function updatePartnerResidenceReservation",
+    );
+    const cancelStart = service.indexOf(
+      "export async function cancelPartnerResidenceReservation",
+      updateStart,
+    );
+    const update = service.slice(updateStart, cancelStart);
+
+    expect(update).toContain(
+      "eq(residenceReservations.partnerAccountId, partnerAccountId)",
+    );
+    expect(update).toContain('transaction.status === "paid"');
+    expect(update.indexOf('transaction.status === "paid"')).toBeLessThan(
+      update.indexOf("updateResidenceReservationStayRecord"),
+    );
+    expect(update).toContain("excludeReservationId: reservation.id");
+    expect(update).toContain("nights !== reservation.nights");
+    expect(partnerReservationWorkspace).toContain(
+      "const canEdit = isFutureActive && !isPaid",
+    );
+  });
+
+  it("routes owner writes through canonical authenticated actions", () => {
+    expect(partnerReservationActions).toContain(
+      'requirePartnerActivity("residence")',
+    );
+    expect(partnerReservationActions).toContain(
+      "updatePartnerResidenceReservation(partner.id, input)",
+    );
+    expect(partnerReservationActions).toContain(
+      "cancelPartnerResidenceReservation(partner.id, input)",
+    );
+  });
+
+  it("records owner cancellation provenance and flags paid refunds", () => {
+    const cancelStart = service.indexOf(
+      "export async function cancelPartnerResidenceReservation",
+    );
+    const nextStart = service.indexOf(
+      "export async function getClientResidenceReservation",
+      cancelStart,
+    );
+    const cancellation = service.slice(cancelStart, nextStart);
+
+    expect(cancellation).toContain(
+      '{ source: "partner", reason: parsed.reason }',
+    );
+    expect(cancellation).toContain(
+      'const requiresManualRefund = transaction.status === "paid"',
+    );
+    expect(cancellation).toContain("sendClientExpoPush");
   });
 });

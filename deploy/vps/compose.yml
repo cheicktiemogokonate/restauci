@@ -1,0 +1,187 @@
+name: toutci
+
+services:
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL manquant}
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN manquant}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - frontend
+    pids_limit: 128
+    mem_limit: 256m
+
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      secrets:
+        - source: app_env
+          target: app_env
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ./.env.production
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      UPSTASH_REDIS_REST_URL: http://redis-http:8080
+      UPSTASH_REDIS_REST_TOKEN: ${REDIS_HTTP_TOKEN:?REDIS_HTTP_TOKEN manquant}
+    expose:
+      - "3000"
+    depends_on:
+      valkey:
+        condition: service_healthy
+      redis-http:
+        condition: service_started
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:3000/api/health').then(r => {
+            if (!r.ok) process.exit(1)
+          }).catch(() => process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    volumes:
+      - next_cache:/app/.next/cache
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - frontend
+      - backend
+    pids_limit: 256
+    mem_limit: 2g
+    stop_grace_period: 30s
+
+  valkey:
+    image: valkey/valkey:8.1.9-alpine3.24
+    restart: unless-stopped
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:?VALKEY_PASSWORD manquant}
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        exec valkey-server
+        --bind 0.0.0.0
+        --protected-mode yes
+        --requirepass "$${VALKEY_PASSWORD}"
+        --appendonly yes
+        --appendfsync everysec
+        --save 60 1000
+        --maxmemory 512mb
+        --maxmemory-policy volatile-lru
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - valkey-cli -a "$${VALKEY_PASSWORD}" --no-auth-warning ping | grep -q PONG
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+    pids_limit: 128
+    mem_limit: 768m
+
+  # Bridge temporaire compatible avec @upstash/redis. Il permet de quitter
+  # Upstash sans réécrire immédiatement tous les limiteurs. Service non publié.
+  redis-http:
+    image: hiett/serverless-redis-http:0.0.10
+    restart: unless-stopped
+    user: "65532:65532"
+    environment:
+      SRH_MODE: env
+      SRH_PORT: "8080"
+      SRH_TOKEN: ${REDIS_HTTP_TOKEN:?REDIS_HTTP_TOKEN manquant}
+      SRH_CONNECTION_STRING: redis://:${VALKEY_PASSWORD:?VALKEY_PASSWORD manquant}@valkey:6379
+      SRH_MAX_CONNECTIONS: "10"
+    depends_on:
+      valkey:
+        condition: service_healthy
+    expose:
+      - "8080"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+    pids_limit: 128
+    mem_limit: 256m
+
+  # Le port clamd est lié exclusivement à loopback pour le worker systemd.
+  # Il n'offre ni authentification ni chiffrement et ne doit jamais être public.
+  clamav:
+    image: clamav/clamav-debian:1.4_base
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - clamav_signatures:/var/lib/clamav
+    environment:
+      FRESHCLAM_CHECKS: "12"
+      CLAMD_STARTUP_TIMEOUT: "1800"
+    networks:
+      - scanner
+    pids_limit: 256
+    mem_limit: 4g
+
+networks:
+  frontend: {}
+  backend:
+    internal: true
+  scanner: {}
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  caddy_logs: {}
+  next_cache: {}
+  valkey_data: {}
+  clamav_signatures: {}
+
+secrets:
+  app_env:
+    file: ./.env.production

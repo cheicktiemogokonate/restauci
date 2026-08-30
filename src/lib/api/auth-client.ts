@@ -1,11 +1,15 @@
 import { NextRequest }  from "next/server";
 import { apiResponse }  from "./response";
-import { verifyToken }  from "@/lib/auth";  // adapte selon ton fichier auth
+import { verifyClientAccessToken } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { db } from "@/lib/db";
 import { clients } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { isTokenBlacklisted } from "@/lib/api/token-blacklist";
+import {
+  isSessionRevoked,
+  isOwnerSessionRevoked,
+  isTokenBlacklisted,
+} from "@/lib/api/token-blacklist";
 
 const log = createLogger("api-client-auth");
 
@@ -42,16 +46,49 @@ export async function getClientSession(req: NextRequest): Promise<
       };
     }
   } catch {
-    // Si Redis down → continuer sans vérif blacklist
+    return {
+      session: null,
+      error: apiResponse.error(
+        "Vérification de session temporairement indisponible",
+        "SERVICE_UNAVAILABLE",
+        { status: 503 },
+      ),
+    };
   }
 
   try {
-    const payload = await verifyToken(token);
+    const payload = await verifyClientAccessToken(token);
 
-    if (!payload?.clientId || payload.type !== "client") {
+    if (!payload) {
       return {
         session: null,
         error:   apiResponse.unauthorized("Token client invalide"),
+      };
+    }
+
+
+    try {
+      if (
+        (await isSessionRevoked(payload.sessionId)) ||
+        (await isOwnerSessionRevoked(
+          "client",
+          payload.clientId,
+          payload.issuedAtMs,
+        ))
+      ) {
+        return {
+          session: null,
+          error: apiResponse.unauthorized("Session révoquée. Reconnectez-vous."),
+        };
+      }
+    } catch {
+      return {
+        session: null,
+        error: apiResponse.error(
+          "Vérification de session temporairement indisponible",
+          "SERVICE_UNAVAILABLE",
+          { status: 503 },
+        ),
       };
     }
 

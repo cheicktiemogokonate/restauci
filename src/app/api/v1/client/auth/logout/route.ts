@@ -3,8 +3,11 @@ import {
   clearClientRefreshCookie,
 } from "@/lib/api/client-session-cookie";
 import { apiResponse } from "@/lib/api/response";
-import { blacklistToken } from "@/lib/api/token-blacklist";
-import { verifyToken } from "@/lib/auth";
+import { blacklistToken, revokeSession } from "@/lib/api/token-blacklist";
+import {
+  verifyClientAccessToken,
+  verifyClientRefreshToken,
+} from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import {
@@ -32,19 +35,51 @@ export async function POST(request: NextRequest) {
   });
 
   try {
-    await Promise.all(
-      [accessToken, refreshToken]
-        .filter((token): token is string => Boolean(token))
-        .map(async (token) => {
-          const payload = await verifyToken(token);
-          await blacklistToken(
-            token,
-            typeof payload?.exp === "number" ? payload.exp : undefined,
-          );
-        }),
-    );
+    const [accessPayload, refreshPayload] = await Promise.all([
+      accessToken ? verifyClientAccessToken(accessToken) : null,
+      refreshToken ? verifyClientRefreshToken(refreshToken) : null,
+    ]);
+    if ((accessToken && !accessPayload) || (refreshToken && !refreshPayload)) {
+      const response = apiResponse.unauthorized("Jeton de session invalide");
+      clearClientRefreshCookie(response);
+      return response;
+    }
+    if (
+      accessPayload &&
+      refreshPayload &&
+      (accessPayload.clientId !== refreshPayload.clientId ||
+        accessPayload.sessionId !== refreshPayload.sessionId)
+    ) {
+      const response = apiResponse.unauthorized("Jetons de sessions différentes");
+      clearClientRefreshCookie(response);
+      return response;
+    }
+
+    await Promise.all([
+      ...(accessToken && accessPayload
+        ? [blacklistToken(accessToken, accessPayload.exp)]
+        : []),
+      ...(refreshToken && refreshPayload
+        ? [blacklistToken(refreshToken, refreshPayload.exp)]
+        : []),
+      ...(refreshPayload
+        ? [
+            revokeSession(
+              refreshPayload.sessionId,
+              refreshPayload.sessionExpiresAt,
+            ),
+          ]
+        : []),
+    ]);
   } catch (err) {
     log.error({ err }, "Révocation de session client incomplète");
+    const response = apiResponse.error(
+      "Déconnexion sécurisée temporairement indisponible",
+      "SERVICE_UNAVAILABLE",
+      { status: 503 },
+    );
+    clearClientRefreshCookie(response);
+    return response;
   }
 
   const response = apiResponse.success({ loggedOut: true });

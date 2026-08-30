@@ -202,12 +202,12 @@ export async function confirmPaymentRecord(
   );
   await tx.execute(sql`SELECT id FROM ${payments} WHERE id = ${input.paymentId} FOR UPDATE`);
 
-  const [transaction, payment] = await Promise.all([
-    tx.query.financialTransactions.findFirst({
-      where: eq(financialTransactions.id, candidate.transactionId),
-    }),
-    tx.query.payments.findFirst({ where: eq(payments.id, input.paymentId) }),
-  ]);
+  const transaction = await tx.query.financialTransactions.findFirst({
+    where: eq(financialTransactions.id, candidate.transactionId),
+  });
+  const payment = await tx.query.payments.findFirst({
+    where: eq(payments.id, input.paymentId),
+  });
   if (!transaction) {
     throw new FinancialTransactionError(
       "TRANSACTION_NOT_FOUND",

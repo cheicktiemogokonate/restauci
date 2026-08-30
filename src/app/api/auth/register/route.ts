@@ -1,10 +1,15 @@
 import { getClientIp } from "@/lib/api/client-ip";
-import { hashPassword, setAuthCookie, signToken } from "@/lib/auth";
+import {
+  hashPassword,
+  setAuthCookie,
+  signWebSessionToken,
+} from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { authLogger } from "@/lib/loggers";
 import { authLimiter, checkRateLimit } from "@/lib/rate-limit";
 import { registerSchema } from "@/lib/validations/auth";
+import { securityIdentifier } from "@/lib/security/identifier";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -53,9 +58,10 @@ export async function POST(request: NextRequest) {
     }
 
     const { email, password, nom, telephone } = validation.data;
+    const accountId = securityIdentifier("partner-email", email);
 
     // Log tentative d'inscription (sans le mot de passe)
-    authLogger.info({ ip, email, nom }, "Registration attempt");
+    authLogger.info({ ip, accountId }, "Registration attempt");
 
     // Vérifier que l'email n'existe pas
     const existingUser = await db
@@ -65,8 +71,11 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (existingUser.length > 0) {
+      // Conserver un coût proche d'une création afin que le temps de réponse
+      // ne devienne pas un oracle fiable sur l'existence du compte.
+      await hashPassword(password);
       authLogger.warn(
-        { ip, email, reason: "email already exists" },
+        { ip, accountId, reason: "email already exists" },
         "Registration blocked (duplicate)",
       );
       // Anti-énumération : réponse de même forme qu'une création réussie,
@@ -100,7 +109,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Signer le JWT token
-    const token = await signToken({
+    const token = await signWebSessionToken({
       userId: newUser.id,
       email: newUser.email,
       role: newUser.role,
@@ -120,7 +129,7 @@ export async function POST(request: NextRequest) {
     await setAuthCookie(token);
 
     authLogger.info(
-      { ip, email, userId: newUser.id },
+      { ip, accountId, userId: newUser.id },
       "Registration successful",
     );
     return response;

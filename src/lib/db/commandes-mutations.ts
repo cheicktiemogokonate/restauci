@@ -97,7 +97,7 @@ export async function applyRestaurantOrderTransition(
   return { commande, transition, paymentTransition };
 }
 
-async function scheduleRestaurantOrderTransitionEffects(
+export async function scheduleRestaurantOrderTransitionEffects(
   result: NonNullable<Awaited<ReturnType<typeof applyRestaurantOrderTransition>>>,
 ) {
   const commande = result?.commande;

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   IDENTITY_DOCUMENT_SIDES,
+  IDENTITY_DOCUMENT_SCAN_STATUSES,
   IDENTITY_DOCUMENT_TYPES,
   IDENTITY_VERIFICATION_STATUSES,
 } from "./model";
@@ -18,6 +19,9 @@ export const identityVerificationStatusSchema = z.enum(
 );
 export const identityDocumentTypeSchema = z.enum(IDENTITY_DOCUMENT_TYPES);
 export const identityDocumentSideSchema = z.enum(IDENTITY_DOCUMENT_SIDES);
+export const identityDocumentScanStatusSchema = z.enum(
+  IDENTITY_DOCUMENT_SCAN_STATUSES,
+);
 
 export const identityDraftSchema = z
   .object({
@@ -78,6 +82,7 @@ export interface IdentityDocumentDTO {
   side: "front" | "back";
   contentType: "image/jpeg" | "image/png" | "application/pdf";
   sizeBytes: number;
+  scanStatus: "pending" | "processing" | "clean" | "rejected" | "error";
   uploadedAt: string;
 }
 

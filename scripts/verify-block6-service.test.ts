@@ -12,6 +12,8 @@ let partnerAccountId = "";
 describe.skipIf(!enabled)("services financiers Bloc 6", () => {
   afterAll(async () => {
     if (!pool || !partnerAccountId) return;
+    await pool.query("DELETE FROM payments WHERE transaction_id IN (SELECT id FROM transactions WHERE commission_settlement_id IN (SELECT id FROM commission_settlements WHERE reference_externe = ANY($1)))", [references]);
+    await pool.query("DELETE FROM transactions WHERE commission_settlement_id IN (SELECT id FROM commission_settlements WHERE reference_externe = ANY($1))", [references]);
     await pool.query("DELETE FROM commission_settlement_allocations WHERE settlement_id IN (SELECT id FROM commission_settlements WHERE reference_externe = ANY($1))", [references]);
     await pool.query("DELETE FROM commission_settlements WHERE reference_externe = ANY($1)", [references]);
     await pool.query("DELETE FROM commission_debt_cycles WHERE partner_account_id = $1", [partnerAccountId]);

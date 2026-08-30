@@ -45,7 +45,7 @@ export function ClientLoginForm() {
       <p className="mt-2 text-sm text-muted-foreground">
         Accédez à vos commandes et à votre profil.
       </p>
-      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+      <form method="post" action="" onSubmit={handleSubmit} className="mt-8 space-y-5">
         <div>
           <Label htmlFor="login-phone">Téléphone</Label>
           <div className="relative mt-2">

@@ -2,6 +2,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { pushSubscriptions } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
+import {
+  isAllowedWebPushEndpoint,
+  isValidWebPushKey,
+} from "@/lib/notifications/web-push-endpoint";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -9,16 +13,18 @@ import { z } from "zod";
 const log = createLogger("push-web-subscribe");
 
 const subscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.string().url().max(2_048).refine(isAllowedWebPushEndpoint),
   keys: z.object({
-    p256dh: z.string().min(1),
-    auth: z.string().min(1),
+    p256dh: z.string().refine((value) => isValidWebPushKey(value, 65)),
+    auth: z.string().refine((value) => isValidWebPushKey(value, 16)),
   }),
 });
 
 const unsubscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.string().url().max(2_048).refine(isAllowedWebPushEndpoint),
 });
+
+const MAX_WEB_PUSH_SUBSCRIPTIONS_PER_USER = 10;
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,6 +52,7 @@ export async function POST(req: NextRequest) {
       .where(
         and(
           eq(pushSubscriptions.userId, user.userId),
+          eq(pushSubscriptions.type, "web"),
           eq(pushSubscriptions.endpoint, endpoint),
         ),
       )
@@ -57,6 +64,24 @@ export async function POST(req: NextRequest) {
         .set({ p256dh: keys.p256dh, auth: keys.auth, lastUsedAt: new Date() })
         .where(eq(pushSubscriptions.id, existing[0].id));
     } else {
+      const subscriptions = await db
+        .select({ id: pushSubscriptions.id })
+        .from(pushSubscriptions)
+        .where(
+          and(
+            eq(pushSubscriptions.userId, user.userId),
+            eq(pushSubscriptions.type, "web"),
+          ),
+        )
+        .limit(MAX_WEB_PUSH_SUBSCRIPTIONS_PER_USER);
+
+      if (subscriptions.length >= MAX_WEB_PUSH_SUBSCRIPTIONS_PER_USER) {
+        return NextResponse.json(
+          { error: "Nombre maximal d'appareils atteint" },
+          { status: 409 },
+        );
+      }
+
       await db.insert(pushSubscriptions).values({
         userId: user.userId,
         type: "web",
@@ -106,6 +131,7 @@ export async function DELETE(req: NextRequest) {
       .where(
         and(
           eq(pushSubscriptions.userId, user.userId),
+          eq(pushSubscriptions.type, "web"),
           eq(pushSubscriptions.endpoint, parsed.data.endpoint),
         ),
       );

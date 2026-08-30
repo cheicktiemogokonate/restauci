@@ -40,7 +40,7 @@ describeDb("service markets PostGIS invariants", () => {
         source_manifest, created_by_user_id, published_at
        ) VALUES (
         $1, $2, 1,
-        ST_Multi(ST_GeomFromText('POLYGON((-4.1 5.2,-3.9 5.2,-3.9 5.4,-4.1 5.4,-4.1 5.2))', 4326)),
+        ST_Multi(ST_GeomFromText('POLYGON((-6.8 4.6,-6.6 4.6,-6.6 4.8,-6.8 4.8,-6.8 4.6))', 4326)),
         $3, '{"fixture":true}'::jsonb, $4, NOW()
        )`,
       [versionId, marketId, "a".repeat(64), adminId],
@@ -83,8 +83,8 @@ describeDb("service markets PostGIS invariants", () => {
   it("covers interior and exact boundary points", async () => {
     const result = await pool.query(
       `SELECT
-        ST_Covers(geometry, ST_SetSRID(ST_MakePoint(-4.0, 5.3), 4326)) AS interior,
-        ST_Covers(geometry, ST_SetSRID(ST_MakePoint(-4.1, 5.2), 4326)) AS boundary
+        ST_Covers(geometry, ST_SetSRID(ST_MakePoint(-6.7, 4.7), 4326)) AS interior,
+        ST_Covers(geometry, ST_SetSRID(ST_MakePoint(-6.8, 4.6), 4326)) AS boundary
        FROM service_market_versions WHERE id=$1`,
       [versionId],
     );
@@ -103,7 +103,7 @@ describeDb("service markets PostGIS invariants", () => {
         source_manifest, created_by_user_id, published_at
        ) VALUES (
         $1, $2, 1,
-        ST_Multi(ST_GeomFromText('POLYGON((-4.0 5.3,-3.8 5.3,-3.8 5.5,-4.0 5.5,-4.0 5.3))', 4326)),
+        ST_Multi(ST_GeomFromText('POLYGON((-6.7 4.7,-6.5 4.7,-6.5 4.9,-6.7 4.9,-6.7 4.7))', 4326)),
         $3, '{"fixture":true}'::jsonb, $4, NOW()
        )`,
       [overlapVersionId, overlapMarketId, "b".repeat(64), adminId],

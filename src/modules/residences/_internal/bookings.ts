@@ -36,27 +36,35 @@ export async function getResidenceBookingContextRecord(
 
 export async function hasResidenceConflictRecord(
   executor: DbExecutor,
-  input: { residenceId: string; checkIn: string; checkOut: string },
+  input: {
+    residenceId: string;
+    checkIn: string;
+    checkOut: string;
+    excludeReservationId?: string;
+  },
 ) {
-  const [reservation, ownerBlock] = await Promise.all([
-    executor.query.residenceReservations.findFirst({
-      where: and(
-        eq(residenceReservations.residenceId, input.residenceId),
-        ne(residenceReservations.status, "annulee"),
-        sql`${residenceReservations.checkIn} < ${input.checkOut}`,
-        sql`${residenceReservations.checkOut} > ${input.checkIn}`,
-      ),
-      columns: { id: true },
-    }),
-    executor.query.residenceUnavailablePeriods.findFirst({
-      where: and(
-        eq(residenceUnavailablePeriods.residenceId, input.residenceId),
-        sql`${residenceUnavailablePeriods.checkIn} < ${input.checkOut}`,
-        sql`${residenceUnavailablePeriods.checkOut} > ${input.checkIn}`,
-      ),
-      columns: { id: true },
-    }),
-  ]);
+  // Cet exécuteur peut être un client transactionnel node-postgres : ses
+  // requêtes doivent rester séquentielles sur la connexion réservée.
+  const reservation = await executor.query.residenceReservations.findFirst({
+    where: and(
+      eq(residenceReservations.residenceId, input.residenceId),
+      ne(residenceReservations.status, "annulee"),
+      input.excludeReservationId
+        ? ne(residenceReservations.id, input.excludeReservationId)
+        : undefined,
+      sql`${residenceReservations.checkIn} < ${input.checkOut}`,
+      sql`${residenceReservations.checkOut} > ${input.checkIn}`,
+    ),
+    columns: { id: true },
+  });
+  const ownerBlock = await executor.query.residenceUnavailablePeriods.findFirst({
+    where: and(
+      eq(residenceUnavailablePeriods.residenceId, input.residenceId),
+      sql`${residenceUnavailablePeriods.checkIn} < ${input.checkOut}`,
+      sql`${residenceUnavailablePeriods.checkOut} > ${input.checkIn}`,
+    ),
+    columns: { id: true },
+  });
   return Boolean(reservation || ownerBlock);
 }
 
@@ -115,6 +123,7 @@ function toReservationDTO(
     residenceTitle: row.residence.title,
     residenceCity: row.residence.city,
     residenceCoverUrl: row.residence.images[0]?.url ?? null,
+    residenceMaxGuests: row.residence.maxGuests,
     partnerAccountId: row.partnerAccountId,
     clientId: row.clientId,
     clientName: row.client.nom,
@@ -140,6 +149,8 @@ function toReservationDTO(
     checkoutUrl: payment?.checkoutUrl ?? null,
     confirmedAt: row.confirmedAt?.toISOString() ?? null,
     cancelledAt: row.cancelledAt?.toISOString() ?? null,
+    cancellationSource: row.cancellationSource,
+    cancellationReason: row.cancellationReason,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -266,14 +277,54 @@ export async function confirmResidenceReservationRecord(
   return updated ?? null;
 }
 
+export async function updateResidenceReservationStayRecord(
+  tx: TransactionExecutor,
+  input: {
+    reservationId: string;
+    checkIn: string;
+    checkOut: string;
+    nights: number;
+    guests: number;
+    now: Date;
+  },
+) {
+  const [updated] = await tx
+    .update(residenceReservations)
+    .set({
+      checkIn: input.checkIn,
+      checkOut: input.checkOut,
+      nights: input.nights,
+      guests: input.guests,
+      updatedAt: input.now,
+    })
+    .where(
+      and(
+        eq(residenceReservations.id, input.reservationId),
+        ne(residenceReservations.status, "annulee"),
+      ),
+    )
+    .returning();
+  return updated ?? null;
+}
+
 export async function cancelResidenceReservationRecord(
   tx: TransactionExecutor,
   reservationId: string,
   now: Date,
+  cancellation: {
+    source: "client" | "partner" | "system";
+    reason: string | null;
+  } = { source: "system", reason: null },
 ) {
   const [updated] = await tx
     .update(residenceReservations)
-    .set({ status: "annulee", cancelledAt: now, updatedAt: now })
+    .set({
+      status: "annulee",
+      cancelledAt: now,
+      cancellationSource: cancellation.source,
+      cancellationReason: cancellation.reason,
+      updatedAt: now,
+    })
     .where(
       and(
         eq(residenceReservations.id, reservationId),

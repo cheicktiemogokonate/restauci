@@ -1,5 +1,6 @@
 import { getClientIp } from "@/lib/api/client-ip";
 import { getCurrentUser } from "@/lib/auth";
+import { commissionLedgerHttpStatus } from "@/lib/commissions/ledger";
 import { db } from "@/lib/db";
 import { updateStatutCommande } from "@/lib/db/mutations";
 import { getMyRestaurant } from "@/lib/db/queries";
@@ -9,12 +10,17 @@ import { commandeStatutSchema } from "@/lib/validations/commande";
 import { canRestaurateurSetCommandeStatus } from "@/types/commandes";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  cancelRestaurantDeliveryOrder,
+  DeliveryDomainError,
+} from "@/modules/deliveries/server";
 
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
   const ip = getClientIp(request);
+  const { id: commandeId } = await context.params;
 
   try {
     const session = await getCurrentUser();
@@ -58,8 +64,6 @@ export async function PATCH(
         { status: 400 },
       );
     }
-
-    const { id: commandeId } = await context.params;
 
     commandeLogger.info(
       { ip, commandeId, statut: validation.data.statut },
@@ -127,11 +131,18 @@ export async function PATCH(
 
     // Chemin métier unique : la mutation applique une transition atomique,
     // les horodatages, l'invalidation du cache et les événements temps réel.
-    const updatedCommande = await updateStatutCommande(
-      commandeId,
-      restaurant.id,
-      validation.data.statut,
-    );
+    const updatedCommande =
+      existingCommande.modeCommande === "livraison" &&
+      validation.data.statut === "annulee"
+        ? await cancelRestaurantDeliveryOrder(
+            { userId: session.userId, restaurantId: restaurant.id },
+            commandeId,
+          )
+        : await updateStatutCommande(
+            commandeId,
+            restaurant.id,
+            validation.data.statut,
+          );
 
     if (!updatedCommande) {
       return NextResponse.json(
@@ -172,6 +183,24 @@ export async function PATCH(
     );
     return NextResponse.json({ commande: updatedCommande }, { status: 200 });
   } catch (error) {
+    if (error instanceof DeliveryDomainError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: 409 },
+      );
+    }
+    // Invariants métier du registre de commissions → erreur explicite, jamais 500.
+    const commissionError = commissionLedgerHttpStatus(error);
+    if (commissionError) {
+      commandeLogger.warn(
+        { ip, commandeId, code: commissionError.code },
+        "Clôture refusée par le registre de commissions",
+      );
+      return NextResponse.json(
+        { error: commissionError.message, code: commissionError.code },
+        { status: commissionError.status },
+      );
+    }
     commandeLogger.error(
       {
         ip,

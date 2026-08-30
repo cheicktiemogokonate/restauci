@@ -391,13 +391,13 @@ export async function getEffectiveSubscriptionContext(
       partnerAccountId,
     );
   const executor = options.executor ?? db;
-  const [account, effective] = await Promise.all([
-    executor.query.partnerAccounts.findFirst({
-      where: eq(partnerAccounts.id, parsedPartnerAccountId),
-      columns: { activityType: true },
-    }),
-    getEffectivePlan(parsedPartnerAccountId, options),
-  ]);
+  // L'exécuteur peut être une connexion transactionnelle node-postgres :
+  // elle ne doit pas recevoir deux requêtes concurrentes.
+  const account = await executor.query.partnerAccounts.findFirst({
+    where: eq(partnerAccounts.id, parsedPartnerAccountId),
+    columns: { activityType: true },
+  });
+  const effective = await getEffectivePlan(parsedPartnerAccountId, options);
   if (!account) throw new Error("Compte partenaire introuvable");
 
   return {

@@ -7,6 +7,11 @@ import {
   createRestaurantOrder as createRestaurantOrderLegacy,
   type CreateRestaurantOrderResult,
 } from "@/lib/orders/restaurant-order";
+import {
+  applyRestaurantOrderTransition,
+  scheduleRestaurantOrderTransitionEffects,
+} from "@/lib/db/commandes-mutations";
+import type { TransactionExecutor } from "@/infrastructure/db";
 import { isRestaurantOrderable } from "@/modules/restaurants/model";
 import {
   prevalidateRestaurantOrderSchema,
@@ -61,4 +66,54 @@ export async function prevalidateRestaurantOrder(
   }
   const geography = await validateRestaurantOrderGeography(db, restaurant, parsed);
   return { valid: true as const, geography };
+}
+
+export async function completeDeliveryOrderInTransaction(
+  tx: TransactionExecutor,
+  input: { orderId: string; restaurantId: string; now: Date },
+) {
+  const result = await applyRestaurantOrderTransition(tx, {
+    id: input.orderId,
+    restaurantId: input.restaurantId,
+    targetStatus: "servie",
+    allowedPreviousStatuses: ["prete"],
+    allowDeliveryCompletion: true,
+    now: input.now,
+  });
+  if (!result) {
+    throw new Error("La commande a déjà été clôturée.");
+  }
+  return result;
+}
+
+export function scheduleCompletedDeliveryOrderEffects(
+  result: NonNullable<
+    Awaited<ReturnType<typeof applyRestaurantOrderTransition>>
+  >,
+) {
+  return scheduleRestaurantOrderTransitionEffects(result);
+}
+
+export async function cancelDeliveryOrderInTransaction(
+  tx: TransactionExecutor,
+  input: { orderId: string; restaurantId: string; now: Date },
+) {
+  const result = await applyRestaurantOrderTransition(tx, {
+    id: input.orderId,
+    restaurantId: input.restaurantId,
+    targetStatus: "annulee",
+    now: input.now,
+  });
+  if (!result) {
+    throw new Error("La commande a déjà été clôturée.");
+  }
+  return result;
+}
+
+export function scheduleCancelledDeliveryOrderEffects(
+  result: NonNullable<
+    Awaited<ReturnType<typeof applyRestaurantOrderTransition>>
+  >,
+) {
+  return scheduleRestaurantOrderTransitionEffects(result);
 }

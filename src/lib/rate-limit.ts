@@ -16,6 +16,14 @@ export const authLimiter = new Ratelimit({
   prefix: "restauci:rl:auth",
 });
 
+/** Auth : ralentit aussi les attaques distribuées visant un même compte. */
+export const authAccountLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, "15 m"),
+  analytics: true,
+  prefix: "restauci:rl:auth-account",
+});
+
 /** API générale : 100 requêtes par IP par minute */
 export const apiLimiter = new Ratelimit({
   redis,
@@ -87,6 +95,14 @@ export const geoSearchLimiter = new Ratelimit({
   limiter:   Ratelimit.slidingWindow(60, "1 m"),
   analytics: true,
   prefix:    "restauci:rl:geo-search",
+});
+
+/** Callback de paiement : évite les vérifications fournisseur en boucle. */
+export const paymentCallbackLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(20, "1 h"),
+  analytics: true,
+  prefix: "restauci:rl:payment-callback",
 });
 
 // ============================================================================
@@ -168,10 +184,6 @@ export async function checkRateLimit(
  */
 import { NextRequest } from "next/server";
 export async function limitRequest(request: NextRequest, key: keyof typeof eventNames) {
-  if (!redis) {
-    return null;
-  }
-
   const ip = getClientIp(request);
   const eventName = eventNames[key];
 
@@ -187,12 +199,21 @@ export async function limitRequest(request: NextRequest, key: keyof typeof event
         { status: 429 }
       );
     }
-   } catch (error) {
-     apiLogger.warn({ 
-       error: error instanceof Error ? error.message : "Unknown error",
-       stack: process.env.NODE_ENV === "development" && error instanceof Error ? error.stack : undefined
-     }, "Redis unavailable, bypassing rate limiter");
-   }
+  } catch (error) {
+    apiLogger.error(
+      {
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      "Legacy rate limiter unavailable",
+    );
+    return NextResponse.json(
+      {
+        error: "Service temporairement indisponible. Réessayez dans un instant.",
+        code: "SERVICE_UNAVAILABLE",
+      },
+      { status: 503, headers: { "Retry-After": "5" } },
+    );
+  }
 
   return null;
 }

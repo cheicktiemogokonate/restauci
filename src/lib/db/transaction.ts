@@ -15,9 +15,9 @@ const pool =
   globalForSubscriptionDb.subscriptionPool ??
   new Pool({
     connectionString: env.DATABASE_URL,
-    max: 3,
+    max: process.env.E2E_TEST === "true" ? 1 : 3,
     idleTimeoutMillis: 10_000,
-    connectionTimeoutMillis: 10_000,
+    connectionTimeoutMillis: process.env.E2E_TEST === "true" ? 30_000 : 10_000,
   });
 
 if (process.env.NODE_ENV !== "production") {

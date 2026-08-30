@@ -29,10 +29,16 @@ export async function validateBody<T extends z.ZodType>(
 
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
+    const flattened = parsed.error.flatten();
     return {
       data:  null,
       error: apiResponse.validationError(
-        parsed.error.flatten().fieldErrors as Record<string, string[]>
+        {
+          ...(flattened.fieldErrors as Record<string, string[]>),
+          ...(flattened.formErrors.length > 0
+            ? { _form: flattened.formErrors }
+            : {}),
+        }
       ),
     };
   }
@@ -51,10 +57,16 @@ export function validateSearchParams<T extends z.ZodType>(
   const parsed = schema.safeParse(raw);
 
   if (!parsed.success) {
+    const flattened = parsed.error.flatten();
     return {
       data:  null,
       error: apiResponse.validationError(
-        parsed.error.flatten().fieldErrors as Record<string, string[]>
+        {
+          ...(flattened.fieldErrors as Record<string, string[]>),
+          ...(flattened.formErrors.length > 0
+            ? { _form: flattened.formErrors }
+            : {}),
+        }
       ),
     };
   }

@@ -11,7 +11,10 @@ import {
   verifyResponseSchema,
 } from "./mapper";
 
-const PAYSTACK_API_URL = "https://api.paystack.co";
+const PAYSTACK_API_URL =
+  env.NODE_ENV === "production"
+    ? "https://api.paystack.co"
+    : (env.PAYSTACK_TEST_API_URL ?? "https://api.paystack.co");
 const TIMEOUT_MS = 10_000;
 
 export class PaystackGatewayError extends Error {

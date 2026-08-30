@@ -35,7 +35,11 @@ try {
 
 const developmentUrl = isTestDatabase
   ? developmentFileUrl
-  : process.env.DATABASE_URL ?? developmentFileUrl
+  : process.env.DATABASE_MIGRATION_URL ??
+    fileValues.DATABASE_MIGRATION_URL ??
+    process.env.DATABASE_URL ??
+    developmentFileUrl ??
+    fileValues.DATABASE_URL
 const testUrl =
   process.env.TEST_DATABASE_URL ??
   process.env.DATABASE_URL_TEST ??
@@ -43,7 +47,7 @@ const testUrl =
   fileValues.DATABASE_URL_TEST
 const databaseUrl = isTestDatabase
   ? testUrl
-  : developmentUrl ?? fileValues.DATABASE_URL
+  : developmentUrl
 
 if (!databaseUrl) {
   throw new Error(

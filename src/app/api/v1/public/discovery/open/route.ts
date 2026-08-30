@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { env } from "@/lib/env";
 import { recordDiscoveryClick } from "@/modules/discovery/server";
 
 export async function GET(request: NextRequest) {
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
   const destinationPath = await recordDiscoveryClick(token);
   if (!destinationPath) return NextResponse.redirect(new URL("/", request.url));
 
-  const destination = new URL(destinationPath, request.url);
+  const destination = new URL(destinationPath, env.NEXT_PUBLIC_APP_URL);
   destination.searchParams.set("discovery", token);
   return NextResponse.redirect(destination);
 }

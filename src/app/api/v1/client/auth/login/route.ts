@@ -1,11 +1,20 @@
 import { getClientIp } from "@/lib/api/client-ip";
 import { apiResponse } from "@/lib/api/response";
 import { validateBody } from "@/lib/api/validate";
-import { signToken } from "@/lib/auth";
+import {
+  createSessionId,
+  signClientAccessToken,
+  signClientRefreshToken,
+} from "@/lib/auth";
 import { db } from "@/lib/db";
 import { clients } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
-import { checkRateLimit, clientAuthLimiter } from "@/lib/rate-limit";
+import {
+  authAccountLimiter,
+  checkRateLimit,
+  clientAuthLimiter,
+} from "@/lib/rate-limit";
+import { securityIdentifier } from "@/lib/security/identifier";
 import { compare } from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
@@ -17,18 +26,28 @@ const log = createLogger("v1-client-login");
 
 const loginSchema = z.object({
   telephone: z.string().min(8),
-  password: z.string().min(1),
+  password: z.string().min(1).max(128),
   rememberMe: z.boolean().default(false),
   tokenTransport: clientTokenTransportSchema,
 });
 
 export async function POST(req: NextRequest) {
-  const ip = getClientIp(req);
-  const rl = await checkRateLimit(clientAuthLimiter, ip);
-  if (rl) return rl;
+  const bypassRateLimit =
+    process.env.NODE_ENV !== "production" && process.env.E2E_TEST === "true";
+  if (!bypassRateLimit) {
+    const ip = getClientIp(req);
+    const rl = await checkRateLimit(clientAuthLimiter, ip);
+    if (rl) return rl;
+  }
 
   const { data, error } = await validateBody(req, loginSchema);
   if (error) return error;
+
+  const accountId = securityIdentifier("client-phone", data.telephone);
+  if (!bypassRateLimit) {
+    const accountRateLimit = await checkRateLimit(authAccountLimiter, accountId);
+    if (accountRateLimit) return accountRateLimit;
+  }
 
   try {
     const [client] = await db
@@ -48,6 +67,16 @@ export async function POST(req: NextRequest) {
     const erreurGenerique = "Numéro de téléphone ou mot de passe incorrect";
 
     if (!client || !client.password) {
+      await compare(
+        data.password,
+        "$2b$12$uTgttD2C7DC66CkZOWNP..p1.dVZb72d./VYmD08jia4VsjYPs3O2",
+      );
+      return apiResponse.unauthorized(erreurGenerique);
+    }
+
+    const isValid = await compare(data.password, client.password);
+    if (!isValid) {
+      log.warn({ clientId: client.id }, "Mauvais mot de passe client");
       return apiResponse.unauthorized(erreurGenerique);
     }
 
@@ -59,25 +88,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const isValid = await compare(data.password, client.password);
-    if (!isValid) {
-      log.warn({ clientId: client.id }, "Mauvais mot de passe client");
-      return apiResponse.unauthorized(erreurGenerique);
-    }
-
-    const accessExpiry = "15m";
-    const refreshExpiry = data.rememberMe ? "30d" : "7d";
     const refreshMaxAge = data.rememberMe ? 30 * 24 * 3600 : 7 * 24 * 3600;
+    const now = Math.floor(Date.now() / 1_000);
+    const sessionExpiresAt = now + refreshMaxAge;
+    const sessionId = createSessionId();
 
     const [accessToken, refreshToken] = await Promise.all([
-      signToken({ clientId: client.id, type: "client" }, accessExpiry),
-      signToken(
+      signClientAccessToken({ clientId: client.id, sessionId }),
+      signClientRefreshToken(
         {
           clientId: client.id,
-          type: "client-refresh",
+          sessionId,
           sessionDuration: data.rememberMe ? "extended" : "standard",
+          sessionExpiresAt,
         },
-        refreshExpiry,
+        sessionExpiresAt,
       ),
     ]);
 

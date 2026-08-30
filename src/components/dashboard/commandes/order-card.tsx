@@ -134,7 +134,10 @@ export const OrderCard = memo(function OrderCard({
   const [isPending, startTransition] = useTransition();
   const isActionPending = isPending || isUpdating;
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  // Le serveur et le navigateur peuvent franchir une limite de minute entre
+  // le rendu SSR et l'hydratation. On affiche donc l'âge relatif seulement
+  // après montage, à partir d'une horloge exclusivement cliente.
+  const [now, setNow] = useState<number | null>(null);
   // L'état affiché vient toujours du serveur. L'ancien état optimiste pouvait
   // rester affiché après un échec réseau ou une transition concurrente.
   const statusConfig = getStatusConfig(order.status);
@@ -144,11 +147,16 @@ export const OrderCard = memo(function OrderCard({
   const isReady = order.status === "prete";
   const isServed = order.status === "servie";
   const isDelivery = order.orderType === "Livraison";
-  const waitIndicator = getWaitIndicator(order.createdAt, order.status, now);
+  const waitIndicator =
+    now === null ? null : getWaitIndicator(order.createdAt, order.status, now);
 
   useEffect(() => {
+    const initialTick = window.setTimeout(() => setNow(Date.now()), 0);
     const interval = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(initialTick);
+      window.clearInterval(interval);
+    };
   }, []);
 
   // Source unique de vérité pour les transitions valides : STATUT_TRANSITIONS (backend, @/types/commandes)
@@ -357,6 +365,7 @@ export const OrderCard = memo(function OrderCard({
               <Button
                 variant="outline"
                 size="icon-lg"
+                aria-label="Voir détails"
                 onClick={() => onViewDetails?.(order)}
               >
                 <Eye className="h-4 w-4 text-muted-foreground" />

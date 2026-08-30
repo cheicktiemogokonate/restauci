@@ -28,6 +28,7 @@ import {
 } from "./contracts";
 import {
   canEditIdentityVerification,
+  areIdentityDocumentsClean,
   IdentityVerificationError,
   isIdentityDocumentExpired,
   isIdentityDocumentSetComplete,
@@ -126,7 +127,7 @@ export async function uploadPartnerIdentityDocument(input: {
   body: Buffer;
 }) {
   const parsed = identityDocumentUploadSchema.parse(input.document);
-  const validated = validateIdentityDocument(input.body);
+  const validated = await validateIdentityDocument(input.body);
   if (!validated) {
     throw new IdentityVerificationError(
       "DOCUMENT_INVALID",
@@ -151,12 +152,13 @@ export async function uploadPartnerIdentityDocument(input: {
   const stored = await putPrivateIdentityDocument({
     partnerAccountId: input.partnerAccountId,
     verificationId: draft.id,
-    body: input.body,
+    body: validated.body,
     contentType: validated.contentType,
     extension: validated.extension,
   });
 
   let previousStorageKey: string | null = null;
+  let previousCleanStorageKey: string | null = null;
   try {
     await transactionalDb.transaction(async (tx) => {
       const current = await lockVerificationRecord(tx, draft.id);
@@ -175,10 +177,11 @@ export async function uploadPartnerIdentityDocument(input: {
         side: parsed.side,
         storageKey: stored.key,
         contentType: validated.contentType,
-        sizeBytes: input.body.length,
+        sizeBytes: validated.body.length,
         sha256: validated.sha256,
       });
       previousStorageKey = replacement.previousStorageKey;
+      previousCleanStorageKey = replacement.previousCleanStorageKey;
     });
   } catch (error) {
     await deletePrivateIdentityDocument(stored.key).catch(() => undefined);
@@ -192,6 +195,16 @@ export async function uploadPartnerIdentityDocument(input: {
         verificationId: draft.id,
       });
     });
+  }
+  if (previousCleanStorageKey) {
+    await deletePrivateIdentityDocument(previousCleanStorageKey).catch(
+      (error) => {
+        console.error("[identity] ancien justificatif nettoyé non supprimé", {
+          error,
+          verificationId: draft.id,
+        });
+      },
+    );
   }
   return getPartnerIdentityVerification(input.partnerAccountId);
 }
@@ -221,6 +234,16 @@ export async function submitPartnerIdentityVerification(
       documentExpiresOn: parsed.documentExpiresOn,
       documentSides: current.documents.map((document) => document.side),
     });
+    if (
+      !areIdentityDocumentsClean(
+        current.documents.map((document) => document.scanStatus),
+      )
+    ) {
+      throw new IdentityVerificationError(
+        "DOCUMENT_SCAN_PENDING",
+        "Chaque justificatif doit être analysé et assaini avant la soumission.",
+      );
+    }
     const now = new Date();
     await tx
       .update(partnerIdentityVerifications)
@@ -275,6 +298,16 @@ export async function verifyPartnerIdentity(
       documentExpiresOn: current.documentExpiresOn!,
       documentSides: current.documents.map((document) => document.side),
     });
+    if (
+      !areIdentityDocumentsClean(
+        current.documents.map((document) => document.scanStatus),
+      )
+    ) {
+      throw new IdentityVerificationError(
+        "DOCUMENT_SCAN_PENDING",
+        "Les justificatifs ne sont pas tous déclarés sûrs.",
+      );
+    }
     const now = new Date();
     await tx
       .update(partnerIdentityVerifications)
@@ -362,7 +395,11 @@ export async function assertPartnerIdentityVerified(partnerAccountId: string) {
 
 async function readAuthorizedDocument(
   document:
-    | { storageKey: string; contentType: string }
+    | {
+        cleanStorageKey: string | null;
+        cleanContentType: string | null;
+        scanStatus: "pending" | "processing" | "clean" | "rejected" | "error";
+      }
     | undefined,
 ) {
   if (!document) {
@@ -371,9 +408,25 @@ async function readAuthorizedDocument(
       "Justificatif introuvable.",
     );
   }
+  if (document.scanStatus === "rejected") {
+    throw new IdentityVerificationError(
+      "DOCUMENT_REJECTED",
+      "Ce justificatif a été rejeté par l’analyse de sécurité.",
+    );
+  }
+  if (
+    document.scanStatus !== "clean" ||
+    !document.cleanStorageKey ||
+    !document.cleanContentType
+  ) {
+    throw new IdentityVerificationError(
+      "DOCUMENT_SCAN_PENDING",
+      "Ce justificatif n’est pas encore disponible après analyse.",
+    );
+  }
   try {
-    const stored = await readPrivateIdentityDocument(document.storageKey);
-    return { ...stored, contentType: document.contentType };
+    const stored = await readPrivateIdentityDocument(document.cleanStorageKey);
+    return { ...stored, contentType: document.cleanContentType };
   } catch {
     throw new IdentityVerificationError(
       "DOCUMENT_STORAGE_UNAVAILABLE",

@@ -42,26 +42,24 @@ export async function confirmResidenceReservationPaymentInTransaction(
         relationEq(account.id, reservation.partnerAccountId),
       columns: { userId: true },
     });
-    await Promise.all([
-      persistNotification(tx, {
-        clientId: reservation.clientId,
+    await persistNotification(tx, {
+      clientId: reservation.clientId,
+      type: "systeme",
+      titre: "Séjour confirmé",
+      message: `Votre réservation du ${reservation.checkIn} au ${reservation.checkOut} est confirmée.`,
+      lienType: "reservation_residence",
+      lienId: reservation.id,
+    });
+    if (partner) {
+      await persistNotification(tx, {
+        userId: partner.userId,
         type: "systeme",
-        titre: "Séjour confirmé",
-        message: `Votre réservation du ${reservation.checkIn} au ${reservation.checkOut} est confirmée.`,
+        titre: "Réservation payée",
+        message: `Le séjour du ${reservation.checkIn} au ${reservation.checkOut} est confirmé.`,
         lienType: "reservation_residence",
         lienId: reservation.id,
-      }),
-      partner
-        ? persistNotification(tx, {
-            userId: partner.userId,
-            type: "systeme",
-            titre: "Réservation payée",
-            message: `Le séjour du ${reservation.checkIn} au ${reservation.checkOut} est confirmé.`,
-            lienType: "reservation_residence",
-            lienId: reservation.id,
-          })
-        : Promise.resolve(),
-    ]);
+      });
+    }
     return reservation;
   }
 

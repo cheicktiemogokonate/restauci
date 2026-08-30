@@ -14,6 +14,16 @@ export type IdentityDocumentType = (typeof IDENTITY_DOCUMENT_TYPES)[number];
 export const IDENTITY_DOCUMENT_SIDES = ["front", "back"] as const;
 export type IdentityDocumentSide = (typeof IDENTITY_DOCUMENT_SIDES)[number];
 
+export const IDENTITY_DOCUMENT_SCAN_STATUSES = [
+  "pending",
+  "processing",
+  "clean",
+  "rejected",
+  "error",
+] as const;
+export type IdentityDocumentScanStatus =
+  (typeof IDENTITY_DOCUMENT_SCAN_STATUSES)[number];
+
 export const IDENTITY_DOCUMENT_CONTENT_TYPES = [
   "image/jpeg",
   "image/png",
@@ -47,6 +57,12 @@ export function isIdentityDocumentSetComplete(input: {
   );
 }
 
+export function areIdentityDocumentsClean(
+  statuses: readonly IdentityDocumentScanStatus[],
+) {
+  return statuses.length > 0 && statuses.every((status) => status === "clean");
+}
+
 export function isIdentityDocumentExpired(
   expiresOn: string,
   today: string,
@@ -63,6 +79,8 @@ export class IdentityVerificationError extends Error {
       | "VERIFICATION_INCOMPLETE"
       | "DOCUMENT_INVALID"
       | "DOCUMENT_NOT_FOUND"
+      | "DOCUMENT_SCAN_PENDING"
+      | "DOCUMENT_REJECTED"
       | "DOCUMENT_STORAGE_UNAVAILABLE"
       | "IDENTITY_NOT_VERIFIED",
     message: string,

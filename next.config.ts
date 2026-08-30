@@ -27,7 +27,13 @@ function getR2RemotePattern() {
 const r2RemotePattern = getR2RemotePattern();
 
 const nextConfig: NextConfig = {
+  // Génère un serveur Node minimal, exécutable sur Vercel aujourd'hui comme
+  // dans une image OCI standard sur un VPS demain.
+  output: "standalone",
   poweredByHeader: false,
+  ...(process.env.DEPLOYMENT_VERSION
+    ? { deploymentId: process.env.DEPLOYMENT_VERSION }
+    : {}),
   ...(process.env.NEXT_DIST_DIR
     ? {
         distDir: process.env.NEXT_DIST_DIR,

@@ -25,6 +25,7 @@ function documentDTO(row: DocumentRow): IdentityDocumentDTO {
     side: row.side,
     contentType: row.contentType,
     sizeBytes: row.sizeBytes,
+    scanStatus: row.scanStatus,
     uploadedAt: row.uploadedAt.toISOString(),
   };
 }
@@ -124,12 +125,27 @@ export async function replaceIdentityDocumentRecord(
         contentType: input.contentType,
         sizeBytes: input.sizeBytes,
         sha256: input.sha256,
+        scanStatus: "pending",
+        cleanStorageKey: null,
+        cleanContentType: null,
+        cleanSizeBytes: null,
+        cleanSha256: null,
+        scanAttempts: 0,
+        scanStartedAt: null,
+        scanCompletedAt: null,
+        scanEngine: null,
+        scanResult: null,
+        lastScanError: null,
         uploadedAt: new Date(),
       },
     })
     .returning();
   if (!document) throw new Error("Enregistrement du document impossible.");
-  return { document, previousStorageKey: previous?.storageKey ?? null };
+  return {
+    document,
+    previousStorageKey: previous?.storageKey ?? null,
+    previousCleanStorageKey: previous?.cleanStorageKey ?? null,
+  };
 }
 
 export async function getDocumentForPartner(
@@ -139,8 +155,9 @@ export async function getDocumentForPartner(
   const [row] = await db
     .select({
       id: partnerIdentityDocuments.id,
-      storageKey: partnerIdentityDocuments.storageKey,
-      contentType: partnerIdentityDocuments.contentType,
+      cleanStorageKey: partnerIdentityDocuments.cleanStorageKey,
+      cleanContentType: partnerIdentityDocuments.cleanContentType,
+      scanStatus: partnerIdentityDocuments.scanStatus,
     })
     .from(partnerIdentityDocuments)
     .innerJoin(
@@ -166,7 +183,12 @@ export async function getDocumentForPartner(
 export async function getDocumentForAdmin(documentId: string) {
   return db.query.partnerIdentityDocuments.findFirst({
     where: eq(partnerIdentityDocuments.id, documentId),
-    columns: { id: true, storageKey: true, contentType: true },
+    columns: {
+      id: true,
+      cleanStorageKey: true,
+      cleanContentType: true,
+      scanStatus: true,
+    },
   });
 }
 

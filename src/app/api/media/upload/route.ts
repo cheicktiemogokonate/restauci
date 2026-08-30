@@ -6,9 +6,12 @@ import { apiLogger } from "@/lib/loggers";
 import {
   ACCEPTED_IMAGE_TYPES,
   MAX_IMAGE_SIZE,
-  validateImageType,
+  sanitizeImage,
 } from "@/lib/media/image";
 import { isR2Configured, uploadImageToR2 } from "@/lib/r2";
+import { enforceContentLength } from "@/lib/api/request-size";
+
+const MAX_MULTIPART_OVERHEAD = 128 * 1024;
 
 export const runtime = "nodejs";
 
@@ -36,7 +39,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const formData = await request.formData();
+  const sizeError = enforceContentLength(
+    request,
+    MAX_IMAGE_SIZE + MAX_MULTIPART_OVERHEAD,
+  );
+  if (sizeError) return sizeError;
+
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json(
+      { error: "Corps multipart invalide." },
+      { status: 400 },
+    );
+  }
   const file = formData.get("file");
 
   if (!(file instanceof File)) {
@@ -67,7 +84,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const validatedImage = validateImageType(buffer, file.type);
+    const validatedImage = await sanitizeImage(buffer, file.type);
 
     if (!validatedImage) {
       apiLogger.warn(
@@ -81,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await uploadImageToR2({
-      body: buffer,
+      body: validatedImage.body,
       contentType: validatedImage.contentType,
       extension: validatedImage.extension,
       ownerId: session.userId,

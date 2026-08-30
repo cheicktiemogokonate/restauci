@@ -3,6 +3,7 @@ import { apiResponse } from "@/lib/api/response";
 import { db } from "@/lib/db";
 import { createLogger } from "@/lib/logger";
 import { NextRequest } from "next/server";
+import { acquireSseConnectionSlot } from "@/lib/api/sse-concurrency";
 
 const log = createLogger("v1-client-commande-stream");
 
@@ -28,6 +29,29 @@ export async function GET(
   const commande = await readCommande();
   if (!commande) return apiResponse.notFound("Commande");
 
+  let connectionSlot;
+  try {
+    connectionSlot = await acquireSseConnectionSlot({
+      scope: "client-order",
+      ownerId: clientId,
+      ttlSeconds: 330,
+    });
+  } catch (err) {
+    log.error({ err, clientId }, "Quota SSE indisponible");
+    return apiResponse.error(
+      "Suivi temps réel temporairement indisponible",
+      "SERVICE_UNAVAILABLE",
+      { status: 503 },
+    );
+  }
+  if (!connectionSlot) {
+    return apiResponse.error(
+      "Trop de connexions de suivi simultanées",
+      "RATE_LIMIT_EXCEEDED",
+      { status: 429 },
+    );
+  }
+
   const encoder = new TextEncoder();
   let isClosed = false;
   let lastVersion = commande.updatedAt.toISOString();
@@ -37,6 +61,7 @@ export async function GET(
       const close = () => {
         if (isClosed) return;
         isClosed = true;
+        void connectionSlot.release();
         controller.close();
       };
       const send = (event: string, data: unknown) => {
@@ -47,6 +72,7 @@ export async function GET(
           );
         } catch {
           isClosed = true;
+          void connectionSlot.release();
         }
       };
 
@@ -102,6 +128,7 @@ export async function GET(
 
       request.signal.addEventListener("abort", () => {
         isClosed = true;
+        void connectionSlot.release();
         clearInterval(pingInterval);
         clearInterval(pollInterval);
         clearTimeout(timeout);

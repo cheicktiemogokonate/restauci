@@ -7,6 +7,9 @@ import {
   MAX_IDENTITY_DOCUMENT_SIZE,
 } from "@/modules/identity/model";
 import { uploadPartnerIdentityDocument } from "@/modules/identity/server";
+import { enforceContentLength } from "@/lib/api/request-size";
+
+const MAX_MULTIPART_OVERHEAD = 128 * 1024;
 
 export const runtime = "nodejs";
 
@@ -19,7 +22,21 @@ export async function POST(request: NextRequest) {
     );
     if (rateLimitResponse) return rateLimitResponse;
 
-    const formData = await request.formData();
+    const sizeError = enforceContentLength(
+      request,
+      MAX_IDENTITY_DOCUMENT_SIZE + MAX_MULTIPART_OVERHEAD,
+    );
+    if (sizeError) return sizeError;
+
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json(
+        { error: "Corps multipart invalide." },
+        { status: 400 },
+      );
+    }
     const file = formData.get("file");
     const side = formData.get("side");
     if (!(file instanceof File) || typeof side !== "string") {

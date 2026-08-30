@@ -17,6 +17,17 @@ const STAMP = Date.now();
 const SHOTS = "test-results/browser-journeys";
 mkdirSync(SHOTS, { recursive: true });
 
+const PARTNER_EMAIL = process.env.E2E_PARTNER_EMAIL;
+const PARTNER_PASSWORD = process.env.E2E_PARTNER_PASSWORD;
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
+const AUTH_COOKIE_NAME = process.env.JWT_COOKIE_NAME ?? "restauci_session";
+if (!PARTNER_EMAIL || !PARTNER_PASSWORD || !ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  throw new Error(
+    "E2E_PARTNER_EMAIL, E2E_PARTNER_PASSWORD, E2E_ADMIN_EMAIL et E2E_ADMIN_PASSWORD sont requis.",
+  );
+}
+
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 const q = async (sql, params = []) => (await pool.query(sql, params)).rows;
 
@@ -40,10 +51,6 @@ const platResto = openResto
       )
     )[0]
   : null;
-const partnerUser = (
-  await q("SELECT id FROM users WHERE email = 'orlando@restauci.com' LIMIT 1")
-)[0];
-
 // Client temporaire via API mobile
 const CLIENT_PHONE = `+22508${String(STAMP).slice(-8)}`;
 const regRes = await fetch(`${BASE}/api/v1/client/auth/register`, {
@@ -66,8 +73,11 @@ async function webLoginCookie(email, password) {
     body: JSON.stringify({ email, password }),
   });
   const setCookie = res.headers.getSetCookie?.() ?? [];
-  const raw = setCookie.find((c) => c.startsWith("token="))?.split(";")[0] ?? null;
-  return raw ? raw.replace(/^token=/, "") : null;
+  const raw =
+    setCookie
+      .find((cookie) => cookie.startsWith(`${AUTH_COOKIE_NAME}=`))
+      ?.split(";")[0] ?? null;
+  return raw ? raw.slice(AUTH_COOKIE_NAME.length + 1) : null;
 }
 
 const browser = await chromium.launch();
@@ -156,9 +166,9 @@ try {
 
   // ════════ 2. Espace restaurateur (cookie injecté) ════════
   {
-    const token = await webLoginCookie("orlando@restauci.com", "password123");
+    const token = await webLoginCookie(PARTNER_EMAIL, PARTNER_PASSWORD);
     const page = await newPage("restaurateur");
-    await context.addCookies([{ name: "token", value: token ?? "", domain: "127.0.0.1", path: "/" }]);
+    await context.addCookies([{ name: AUTH_COOKIE_NAME, value: token ?? "", domain: "127.0.0.1", path: "/" }]);
 
     await page.goto("/restaurateur/commandes", { waitUntil: "domcontentloaded", timeout: 60000 });
     const hasShell = await page.locator("body").textContent();
@@ -186,11 +196,9 @@ try {
 
   // ════════ 3. Administration (cookie injecté) ════════
   {
-    const token = await webLoginCookie("admin@restauci.com", "password123");
-    console.log(`   [debug] admin token: ${token ? token.slice(0, 25) + "..." : "NULL"}`);
+    const token = await webLoginCookie(ADMIN_EMAIL, ADMIN_PASSWORD);
     const page = await newPage("admin");
-    await context.addCookies([{ name: "token", value: token ?? "", domain: "127.0.0.1", path: "/" }]);
-    console.log(`   [debug] cookies contexte: ${JSON.stringify(await context.cookies("http://127.0.0.1:3464/admin"))}`);
+    await context.addCookies([{ name: AUTH_COOKIE_NAME, value: token ?? "", domain: "127.0.0.1", path: "/" }]);
 
     const pages = [
       ["/admin", /Bonjour|Tableau/i],

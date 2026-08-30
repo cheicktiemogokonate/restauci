@@ -62,6 +62,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const isVercelDeployment = Boolean(process.env.VERCEL);
   return (
     <html
       lang="fr"
@@ -76,12 +77,17 @@ export default function RootLayout({
           Aller au contenu principal
         </a>
         <div id="contenu-principal">
-          <Providers>{children}</Providers>
+          <Providers exposeE2eHydration={process.env.E2E_TEST === "true"}>
+            {children}
+          </Providers>
         </div>
         <Toaster position="top-right" richColors />
-        {/* Mesure des Core Web Vitals en production Vercel */}
-        <Analytics />
-        <SpeedInsights />
+        {isVercelDeployment ? (
+          <>
+            <Analytics />
+            <SpeedInsights />
+          </>
+        ) : null}
       </body>
     </html>
   );

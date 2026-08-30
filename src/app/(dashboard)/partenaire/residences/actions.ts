@@ -23,6 +23,15 @@ const residenceGeocodingSchema = z.object({
 
 function expectedActionError(error: unknown) {
   if (error instanceof ZodError) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(
+        "[residences] Payload partenaire invalide:",
+        error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      );
+    }
     return error.issues[0]?.message ?? "Vérifiez les informations saisies.";
   }
   if (error instanceof ResidenceDomainError) return error.message;

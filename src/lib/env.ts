@@ -32,6 +32,22 @@ const envSchema = z.object({
     .default("restauci_session")
     .describe("Nom du cookie de session"),
 
+  // Second facteur partagé de transition pour les administrateurs. La
+  // protection reste active par défaut et ne peut être suspendue que par une
+  // variable serveur explicite, afin qu'un secret manquant ne crée jamais un
+  // contournement silencieux.
+  ADMIN_MFA_REQUIRED: z
+    .enum(["true", "false"])
+    .optional()
+    .default("true")
+    .transform((value) => value === "true"),
+  ADMIN_TOTP_SECRET: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z2-7]{26,128}$/, "ADMIN_TOTP_SECRET doit être en base32")
+    .optional(),
+
   // ── Cache Redis (Upstash) ─────────────────────────────────────
   UPSTASH_REDIS_REST_URL: z.string()
     .url()
@@ -74,11 +90,24 @@ const envSchema = z.object({
   R2_KYC_ACCESS_KEY_ID: z.string().min(1).optional(),
   R2_KYC_SECRET_ACCESS_KEY: z.string().min(1).optional(),
 
+  // Stockage KYC S3-compatible et portable (R2 aujourd'hui, SeaweedFS/Ceph
+  // sur VPS demain). Les variables R2_KYC_* restent un bridge de transition.
+  KYC_STORAGE_ENDPOINT: z.string().url().optional(),
+  KYC_STORAGE_REGION: z.string().min(1).default("auto"),
+  KYC_STORAGE_ACCESS_KEY_ID: z.string().min(1).optional(),
+  KYC_STORAGE_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  KYC_STORAGE_BUCKET: z.string().min(3).max(63).optional(),
+  KYC_STORAGE_FORCE_PATH_STYLE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+
   // ── Web Push (VAPID) ─────────────────────────────────────────
   VAPID_PUBLIC_KEY: z.string().min(1).optional(),
   VAPID_PRIVATE_KEY: z.string().min(1).optional(),
   VAPID_EMAIL: z.string().min(1).optional(),
   NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().min(1).optional(),
+  WEB_PUSH_ALLOWED_HOSTS: z.string().optional(),
 
   // ── Expo Push ────────────────────────────────────────────────
   EXPO_ACCESS_TOKEN: z.string().optional(),
@@ -88,6 +117,9 @@ const envSchema = z.object({
     .string()
     .regex(/^sk_(test|live)_[A-Za-z0-9]+$/, "PAYSTACK_SECRET_KEY invalide")
     .optional(),
+  // Point d'entrée strictement réservé aux tests E2E. En production, la
+  // passerelle reste verrouillée sur l'API officielle de Paystack.
+  PAYSTACK_TEST_API_URL: z.string().url().optional(),
 
   // ── Tâches planifiées ─────────────────────────────────────────
   CRON_SECRET: z.string().min(32, "CRON_SECRET doit contenir au moins 32 caractères").optional(),
@@ -127,6 +159,30 @@ const envSchema = z.object({
       code: "custom",
       path: ["PAYSTACK_SECRET_KEY"],
       message: "Une clé Paystack LIVE est interdite hors production",
+    });
+  }
+  if (values.NODE_ENV === "production" && values.PAYSTACK_TEST_API_URL) {
+    context.addIssue({
+      code: "custom",
+      path: ["PAYSTACK_TEST_API_URL"],
+      message: "PAYSTACK_TEST_API_URL est interdit en production",
+    });
+  }
+  const portableKycValues = [
+    values.KYC_STORAGE_ENDPOINT,
+    values.KYC_STORAGE_ACCESS_KEY_ID,
+    values.KYC_STORAGE_SECRET_ACCESS_KEY,
+    values.KYC_STORAGE_BUCKET,
+  ];
+  if (
+    portableKycValues.some(Boolean) &&
+    portableKycValues.some((value) => !value)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["KYC_STORAGE_ENDPOINT"],
+      message:
+        "KYC_STORAGE_ENDPOINT, KYC_STORAGE_ACCESS_KEY_ID, KYC_STORAGE_SECRET_ACCESS_KEY et KYC_STORAGE_BUCKET doivent être configurés ensemble",
     });
   }
 });

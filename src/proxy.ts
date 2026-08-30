@@ -1,4 +1,9 @@
 import { getClientIp } from "@/lib/api/client-ip";
+import {
+  AUTH_COOKIE_NAME,
+  AUTH_TOKEN_AUDIENCE,
+  AUTH_TOKEN_ISSUER,
+} from "@/lib/auth/tokens";
 import { env } from "@/lib/env";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
@@ -16,6 +21,8 @@ const ROUTES_PUBLIQUES = [
   "/residences",
   "/residences/*",
   "/client/*",
+  "/livreur",
+  "/livreur/*",
   // L'espace consommateur utilise sa propre authentification Bearer.
   // Ces pages doivent donc pouvoir charger avant que le garde client-side
   // vérifie le jeton stocké par l'application.
@@ -23,6 +30,8 @@ const ROUTES_PUBLIQUES = [
   "/panier/*",
   "/commandes",
   "/commandes/*",
+  "/reservations",
+  "/reservations/*",
   "/profil",
   "/conditions-generales",
   "/confidentialite",
@@ -45,16 +54,75 @@ const API_PUBLIQUES = [
 ];
 
 // Configuration du rate limiter global (Redis via Upstash)
+const globalRedis = new Redis({
+  url: env.UPSTASH_REDIS_REST_URL,
+  token: env.UPSTASH_REDIS_REST_TOKEN,
+});
+
 const globalLimiter = new Ratelimit({
-  redis: new Redis({
-    url: env.UPSTASH_REDIS_REST_URL,
-    token: env.UPSTASH_REDIS_REST_TOKEN,
-  }),
+  redis: globalRedis,
   limiter: Ratelimit.slidingWindow(200, "1 m"),
   prefix: "restauci:rl:global",
 });
 
 const IS_PRODUCTION = env.NODE_ENV === "production";
+const LOCAL_RATE_WINDOW_MS = 60_000;
+const LOCAL_RATE_LIMIT = 200;
+const MAX_LOCAL_RATE_KEYS = 10_000;
+const localRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function passesLocalRateLimit(identifier: string): boolean {
+  const now = Date.now();
+  const current = localRateBuckets.get(identifier);
+
+  if (!current || current.resetAt <= now) {
+    if (localRateBuckets.size >= MAX_LOCAL_RATE_KEYS) {
+      for (const [key, bucket] of localRateBuckets) {
+        if (bucket.resetAt <= now) localRateBuckets.delete(key);
+      }
+      if (localRateBuckets.size >= MAX_LOCAL_RATE_KEYS) {
+        localRateBuckets.delete(localRateBuckets.keys().next().value ?? "");
+      }
+    }
+    localRateBuckets.set(identifier, {
+      count: 1,
+      resetAt: now + LOCAL_RATE_WINDOW_MS,
+    });
+    return true;
+  }
+
+  current.count += 1;
+  return current.count <= LOCAL_RATE_LIMIT;
+}
+
+function isTrustedMutation(req: NextRequest): boolean {
+  if (!new Set(["POST", "PUT", "PATCH", "DELETE"]).has(req.method)) {
+    return true;
+  }
+
+  const { pathname } = req.nextUrl;
+  if (
+    pathname.startsWith("/api/v1/") ||
+    pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/api/cron/")
+  ) {
+    return true;
+  }
+
+  if (req.headers.get("sec-fetch-site") === "cross-site") return false;
+
+  const origin = req.headers.get("origin");
+  if (!origin) return true;
+
+  const trustedOrigins = new Set([req.nextUrl.origin]);
+  try {
+    trustedOrigins.add(new URL(env.NEXT_PUBLIC_APP_URL).origin);
+  } catch {
+    // NEXT_PUBLIC_APP_URL est déjà validée au démarrage.
+  }
+
+  return trustedOrigins.has(origin);
+}
 
 /**
  * CSP stricte à nonce (production uniquement).
@@ -65,10 +133,12 @@ const IS_PRODUCTION = env.NODE_ENV === "production";
  * next.config.ts ('unsafe-eval' nécessaire au HMR/React DevTools).
  */
 function buildCspHeader(nonce: string): string {
+  const vercelAnalyticsSource = process.env.VERCEL
+    ? " https://va.vercel-scripts.com"
+    : "";
   return [
     "default-src 'self'",
-    // va.vercel-scripts.com : scripts Vercel Analytics / Speed Insights
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://va.vercel-scripts.com`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${vercelAnalyticsSource}`,
     // 'unsafe-inline' requis : framer-motion/gsap injectent des <style> à l'exécution
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
@@ -116,6 +186,19 @@ export async function proxy(req: NextRequest) {
       }
     } catch (error) {
       console.warn("[proxy] Global rate limiter error:", error);
+      if (!passesLocalRateLimit(ip)) {
+        return NextResponse.json(
+          { error: "Trop de requetes" },
+          { status: 429, headers: { "Retry-After": "60" } },
+        );
+      }
+    }
+
+    if (!isTrustedMutation(req)) {
+      return NextResponse.json(
+        { error: "Origine de la requête non autorisée" },
+        { status: 403 },
+      );
     }
   }
 
@@ -148,7 +231,7 @@ export async function proxy(req: NextRequest) {
   }
 
   // --- Verification du token JWT ---
-  const token = req.cookies.get("token")?.value;
+  const token = req.cookies.get(AUTH_COOKIE_NAME)?.value;
 
   if (!token) {
     if (pathname.startsWith("/api/")) {
@@ -158,7 +241,13 @@ export async function proxy(req: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, JWT_SECRET, {
+      algorithms: ["HS256"],
+      issuer: AUTH_TOKEN_ISSUER,
+      audience: AUTH_TOKEN_AUDIENCE.web,
+      typ: "JWT",
+      requiredClaims: ["iat", "exp", "jti"],
+    });
     const now = Math.floor(Date.now() / 1000);
     const exp = typeof payload.exp === "number" ? payload.exp : 0;
 
@@ -166,8 +255,42 @@ export async function proxy(req: NextRequest) {
       const res = pathname.startsWith("/api/")
         ? NextResponse.json({ error: "Session expiree" }, { status: 401 })
         : NextResponse.redirect(new URL("/login", req.url));
-      res.cookies.delete("token");
+      res.cookies.delete(AUTH_COOKIE_NAME);
       return res;
+    }
+
+    const issuedAtMs = payload.issuedAtMs;
+    if (
+      payload.type !== "web-session" ||
+      typeof payload.userId !== "string" ||
+      typeof payload.email !== "string" ||
+      typeof payload.jti !== "string" ||
+      typeof payload.iat !== "number" ||
+      typeof issuedAtMs !== "number" ||
+      !Number.isSafeInteger(issuedAtMs)
+    ) {
+      throw new Error("Invalid token type");
+    }
+
+    const tokenDigest = Array.from(
+      new Uint8Array(
+        await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)),
+      ),
+    )
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    if (await globalRedis.get(`toutci:blacklist:${tokenDigest}`)) {
+      throw new Error("Revoked token");
+    }
+    const ownerCutoff = await globalRedis.get<string>(
+      `toutci:revoked-owner:user:${payload.userId}`,
+    );
+    if (
+      ownerCutoff &&
+      Number.isFinite(Number(ownerCutoff)) &&
+      issuedAtMs <= Number(ownerCutoff)
+    ) {
+      throw new Error("Revoked account sessions");
     }
 
     const role = typeof payload.role === "string" ? payload.role : "";
@@ -180,11 +303,11 @@ export async function proxy(req: NextRequest) {
   } catch {
     if (pathname.startsWith("/api/")) {
       const res = NextResponse.json({ error: "Non autorise" }, { status: 401 });
-      res.cookies.delete("token");
+      res.cookies.delete(AUTH_COOKIE_NAME);
       return res;
     }
     const res = NextResponse.redirect(new URL("/login", req.url));
-    res.cookies.delete("token");
+    res.cookies.delete(AUTH_COOKIE_NAME);
     return res;
   }
 }

@@ -131,6 +131,35 @@ export async function confirmRestaurantOrderCashInTransaction(
   return confirmPaymentRecord(tx, { paymentId: pendingCash.id, now });
 }
 
+/**
+ * Retourne la tentative qui fait autorité pour une commande : paiement déjà
+ * confirmé, ou tentative cash encore en attente de remise physique.
+ */
+export async function getRestaurantOrderPaymentSummaryInTransaction(
+  tx: TransactionExecutor,
+  orderId: string,
+) {
+  const transaction = await getRestaurantOrderTransactionRecord(tx, orderId);
+  if (!transaction) return null;
+  const confirmed = transaction.payments.find(
+    (payment) => payment.status === "confirmed",
+  );
+  const pendingCash = transaction.payments.find(
+    (payment) => payment.status === "pending" && payment.method === "cash",
+  );
+  const payment = confirmed ?? pendingCash;
+  return payment
+    ? {
+        transactionId: transaction.id,
+        transactionStatus: transaction.status,
+        paymentId: payment.id,
+        paymentStatus: payment.status,
+        method: payment.method,
+        amountFcfa: payment.amountFcfa,
+      }
+    : null;
+}
+
 export async function cancelRestaurantOrderTransactionInTransaction(
   tx: TransactionExecutor,
   orderId: string,

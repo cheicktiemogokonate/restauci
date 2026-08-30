@@ -11,6 +11,16 @@
 import { Pool } from "pg";
 
 const BASE = process.argv[2] ?? "http://localhost:3000";
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
+const PARTNER_EMAIL = process.env.E2E_PARTNER_EMAIL;
+const PARTNER_PASSWORD = process.env.E2E_PARTNER_PASSWORD;
+const AUTH_COOKIE_NAME = process.env.JWT_COOKIE_NAME ?? "restauci_session";
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD || !PARTNER_EMAIL || !PARTNER_PASSWORD) {
+  throw new Error(
+    "E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_PARTNER_EMAIL et E2E_PARTNER_PASSWORD sont requis.",
+  );
+}
 const results = [];
 let section = "";
 
@@ -24,7 +34,7 @@ function record(name, pass, detail = "") {
   console.log(`${pass ? "✅" : "❌"} ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
-async function req(path, { method = "GET", body, cookie, bearer, form, raw, follow } = {}) {
+async function req(path, { method = "GET", body, cookie, bearer, form, follow } = {}) {
   const headers = { connection: "close" };
   if (cookie) headers.cookie = cookie;
   if (bearer) headers.authorization = `Bearer ${bearer}`;
@@ -110,18 +120,18 @@ try {
   setSection("Identités & jetons");
 
   // Comptes réels du seed dev
-  const adminLogin = await req("/api/auth/login", { method: "POST", body: { email: "admin@restauci.com", password: "password123" } });
-  const adminCookie = adminLogin.setCookie.find((c) => c.startsWith("token="))?.split(";")[0];
+  const adminLogin = await req("/api/auth/login", { method: "POST", body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } });
+  const adminCookie = adminLogin.setCookie.find((c) => c.startsWith(`${AUTH_COOKIE_NAME}=`))?.split(";")[0];
   record("login web admin → 200 + cookie httpOnly", adminLogin.status === 200 && adminCookie?.length > 20);
 
-  const partnerLogin = await req("/api/auth/login", { method: "POST", body: { email: "orlando@restauci.com", password: "password123" } });
-  const partnerCookie = partnerLogin.setCookie.find((c) => c.startsWith("token="))?.split(";")[0];
+  const partnerLogin = await req("/api/auth/login", { method: "POST", body: { email: PARTNER_EMAIL, password: PARTNER_PASSWORD } });
+  const partnerCookie = partnerLogin.setCookie.find((c) => c.startsWith(`${AUTH_COOKIE_NAME}=`))?.split(";")[0];
   record("login web partenaire → 200 + cookie", partnerLogin.status === 200 && Boolean(partnerCookie));
 
-  const badLogin = await req("/api/auth/login", { method: "POST", body: { email: "admin@restauci.com", password: "mauvais" } });
+  const badLogin = await req("/api/auth/login", { method: "POST", body: { email: ADMIN_EMAIL, password: "mauvais" } });
   record("login mauvais mot de passe → 401 générique", badLogin.status === 401 && /incorrect/i.test(badLogin.json?.error ?? ""));
 
-  const partnerV1 = await req("/api/v1/auth/login", { method: "POST", body: { email: "orlando@restauci.com", password: "password123", rememberMe: true } });
+  const partnerV1 = await req("/api/v1/auth/login", { method: "POST", body: { email: PARTNER_EMAIL, password: PARTNER_PASSWORD, rememberMe: true } });
   const partnerAccess = partnerV1.json?.data?.tokens?.accessToken;
   const partnerRefresh = partnerV1.json?.data?.tokens?.refreshToken;
   record("login mobile partenaire → access+refresh typés", partnerV1.status === 200 && Boolean(partnerAccess && partnerRefresh), `status=${partnerV1.status} ${JSON.stringify(partnerV1.json)?.slice(0,80) ?? ""}`);
@@ -135,7 +145,6 @@ try {
     body: { nom: "__e2emx Client", telephone: `+22509${String(STAMP).slice(-8)}`, password: "Matrix-e2e-2026", tokenTransport: "json" },
   });
   const clientAccess = reg.json?.data?.tokens?.accessToken;
-  const clientRefresh = reg.json?.data?.tokens?.refreshToken;
   const clientIdQuoted = reg.json?.data?.client?.id;
   const clientId = clientIdQuoted;
   if (!clientAccess) console.log("   [debug register client]", reg.status, JSON.stringify(reg.json ?? reg.text)?.slice(0, 150));
@@ -145,7 +154,7 @@ try {
   setSection("Routes publiques & santé");
 
   const health = await req("/api/health");
-  record("GET /api/health → healthy, sans SHA", health.status === 200 && health.json?.services?.database?.status === "up" && !("version" in (health.json ?? {})));
+  record("GET /api/health → liveness minimale, sans SHA", health.status === 200 && health.json?.status === "ok" && !("version" in (health.json ?? {})) && !("services" in (health.json ?? {})));
 
   const openapi = await req("/api/v1/openapi.json");
   record("GET /api/v1/openapi.json → spec valide", openapi.status === 200 && Boolean(openapi.json?.openapi || openapi.json?.paths));
@@ -157,7 +166,11 @@ try {
   const resSearchPost = pubResidences.status === 405 ? await req("/api/v1/public/residences/search", { method: "POST", body: {} }) : pubResidences;
   record("GET|POST /api/v1/public/residences/search", [200].includes(pubResidences.status) || [200, 400].includes(resSearchPost.status), `get=${pubResidences.status} post=${resSearchPost.status}`);
 
-  const restoSlug = (await q("SELECT slug FROM restaurants WHERE actif = true AND slug IS NOT NULL LIMIT 1"))[0]?.slug;
+  const restoSlug = (
+    await q(
+      "SELECT slug FROM restaurants WHERE actif = true AND suspendu = false AND en_ligne = true AND slug IS NOT NULL LIMIT 1",
+    )
+  )[0]?.slug;
   if (restoSlug) {
     const detail = await req(`/api/v1/public/restaurants/${restoSlug}`);
     const menu = await req(`/api/v1/public/restaurants/${restoSlug}/menu`);
@@ -210,24 +223,31 @@ try {
   record("refresh légitime → rotation (nouveau couple)", rot.status === 200 && Boolean(newAccess && newRefresh) && newRefresh !== partnerRefresh, `status=${rot.status} ${JSON.stringify(rot.json)?.slice(0,80) ?? ""}`);
 
   const replay = await req("/api/v1/auth/refresh", { method: "POST", body: { refreshToken: partnerRefresh } });
-  record("rejeu ancien refresh → révoqué", replay.status === 401);
+  record("rejeu ancien refresh → famille révoquée", replay.status === 401);
 
-  const logoutRes = await req("/api/v1/auth/logout", { method: "POST", bearer: newAccess, body: { refreshToken: newRefresh } });
+  const postReplayAccess = await req("/api/v1/restaurateur/stats", { bearer: newAccess });
+  record("access de la famille rejouée → révoqué", postReplayAccess.status === 401);
+
+  const logoutLogin = await req("/api/v1/auth/login", { method: "POST", body: { email: PARTNER_EMAIL, password: PARTNER_PASSWORD } });
+  const logoutAccess = logoutLogin.json?.data?.tokens?.accessToken;
+  const logoutRefresh = logoutLogin.json?.data?.tokens?.refreshToken;
+  const logoutRes = await req("/api/v1/auth/logout", { method: "POST", bearer: logoutAccess, body: { refreshToken: logoutRefresh } });
   record("logout avec révocation du couple", logoutRes.status === 200, `status=${logoutRes.status} ${JSON.stringify(logoutRes.json)?.slice(0,80) ?? ""}`);
-  const postLogout = await req("/api/v1/restaurateur/stats", { bearer: newAccess });
+  const postLogout = await req("/api/v1/restaurateur/stats", { bearer: logoutAccess });
   record("access après logout → révoqué", postLogout.status === 401);
-  const postLogoutRefresh = await req("/api/v1/auth/refresh", { method: "POST", body: { refreshToken: newRefresh } });
+  const postLogoutRefresh = await req("/api/v1/auth/refresh", { method: "POST", body: { refreshToken: logoutRefresh } });
   record("refresh après logout → révoqué", postLogoutRefresh.status === 401);
 
   // Reconnexion pour la suite des tests métier
-  const relogin = await req("/api/v1/auth/login", { method: "POST", body: { email: "orlando@restauci.com", password: "password123" } });
+  const relogin = await req("/api/v1/auth/login", { method: "POST", body: { email: PARTNER_EMAIL, password: PARTNER_PASSWORD } });
   const liveAccess = relogin.json?.data?.tokens?.accessToken ?? partnerAccess;
 
   // ══════════════════ MÉTIER RESTAURATEUR ══════════════════
   setSection("Métier restaurateur (cookie web + Bearer)");
 
   const restos = await q(
-    "SELECT r.id FROM restaurants r JOIN partner_accounts pa ON pa.id = r.partner_account_id WHERE pa.user_id = (SELECT id FROM users WHERE email='orlando@restauci.com') LIMIT 1"
+    "SELECT r.id FROM restaurants r JOIN partner_accounts pa ON pa.id = r.partner_account_id WHERE pa.user_id = (SELECT id FROM users WHERE email=$1) LIMIT 1",
+    [PARTNER_EMAIL],
   );
   const myRestaurantId = restos[0]?.id;
 
@@ -241,7 +261,8 @@ try {
   // CRUD plat temporaire
   const realCategoryId = (
     await q(
-      "SELECT c.id FROM categories c JOIN restaurants r ON r.id = c.restaurant_id JOIN partner_accounts pa ON pa.id = r.partner_account_id WHERE pa.user_id = (SELECT id FROM users WHERE email='orlando@restauci.com') LIMIT 1",
+      "SELECT c.id FROM categories c JOIN restaurants r ON r.id = c.restaurant_id JOIN partner_accounts pa ON pa.id = r.partner_account_id WHERE pa.user_id = (SELECT id FROM users WHERE email=$1) LIMIT 1",
+      [PARTNER_EMAIL],
     )
   )[0]?.id ?? null;
 
@@ -265,7 +286,8 @@ try {
       : JSON.stringify([]);
     const paRow = (
       await q(
-        "SELECT pa.id FROM partner_accounts pa JOIN users u ON u.id = pa.user_id WHERE u.email='orlando@restauci.com' LIMIT 1",
+        "SELECT pa.id FROM partner_accounts pa JOIN users u ON u.id = pa.user_id WHERE u.email=$1 LIMIT 1",
+        [PARTNER_EMAIL],
       )
     )[0];
     const inserted = await q(
@@ -303,9 +325,24 @@ try {
   record("GET liste restaurants (admin)", adminRestoList.status === 200);
 
   // Restaurant temporaire pour valider le flux admin sans toucher au réel
+  const adminFixtureOwner = (
+    await q(
+      `INSERT INTO users (
+        id, email, password, role, nom, telephone, email_verifie, created_at, updated_at
+      ) VALUES (
+        gen_random_uuid(), $1, 'e2e-only', 'partner', 'e2emx admin fixture', $2,
+        true, NOW(), NOW()
+      ) RETURNING id`,
+      [
+        `__e2ematrix-admin-owner-${STAMP}@t.local`,
+        `+22506${String(STAMP).slice(-8)}`,
+      ],
+    )
+  )[0];
   const adminPaId = (
     await q(
-      "INSERT INTO partner_accounts (id, user_id, activity_type, created_at, updated_at) VALUES (gen_random_uuid(), (SELECT id FROM users WHERE email='admin@restauci.com'), 'restaurant', NOW(), NOW()) ON CONFLICT (user_id) DO UPDATE SET updated_at = NOW() RETURNING id",
+      "INSERT INTO partner_accounts (id, user_id, activity_type, created_at, updated_at) VALUES (gen_random_uuid(), $1, 'restaurant', NOW(), NOW()) RETURNING id",
+      [adminFixtureOwner.id],
     )
   )[0]?.id;
   await q("DELETE FROM restaurants WHERE partner_account_id = $1 AND nom LIKE '%e2emx%'", [adminPaId]);
@@ -394,13 +431,12 @@ try {
       )
     )[0]?.id;
     await q("DELETE FROM restaurants WHERE partner_account_id = $1", [paB]);
-    const tmpRestoB = await q(
+    await q(
       `INSERT INTO restaurants (id, partner_account_id, nom, slug, telephone, adresse, ville, latitude, longitude, modes_commande, actif, suspendu, en_ligne, accepte_commandes, frais_livraison, created_at, updated_at)
        VALUES (gen_random_uuid(), $1, 'e2emx B', $2, '+225000000001', 'test', 'Abidjan', 5.35, -4.0, ARRAY['sur_place'], true, false, true, true, 0, NOW(), NOW())
        RETURNING id`,
       [paB, `mxb-${STAMP}`],
     );
-    const tmpRestoBId = tmpRestoB[0]?.id;
     const loginB = await req("/api/v1/auth/login", { method: "POST", body: { email: `mx${STAMP}@t.local`, password: "Matrix-e2e-2026" } });
     if (loginB.status === 200 && tempCommandeId) {
       const bearerB = loginB.json.data.tokens.accessToken;
@@ -422,9 +458,9 @@ try {
   record("mot de passe trop court → 400", badReg.status === 400, `status=${badReg.status}`);
   const dupRegister = await req("/api/auth/register", {
     method: "POST",
-    body: { email: "admin@restauci.com", password: "MotDePasse-Solide-2026!", nom: "Dup Test", telephone: "+2250777888999" },
+    body: { email: ADMIN_EMAIL, password: "MotDePasse-Solide-2026!", nom: "Dup Test", telephone: "+2250777888999" },
   });
-  record("inscription email existant → réponse neutre anti-énumération", dupRegister.status === 200 && dupRegister.json?.alreadyRegistered === true && !dupRegister.setCookie.some((c) => c.startsWith("token=")), `status=${dupRegister.status}`);
+  record("inscription email existant → réponse neutre anti-énumération", dupRegister.status === 200 && dupRegister.json?.alreadyRegistered === true && !dupRegister.setCookie.some((c) => c.startsWith(`${AUTH_COOKIE_NAME}=`)), `status=${dupRegister.status}`);
 
   // Upload média : rejet d'un fichier texte déguisé (aucun stockage)
   const fakeForm = new FormData();
@@ -434,23 +470,8 @@ try {
 
   // ══════════════════ NETTOYAGE ══════════════════
   setSection("Nettoyage des entités temporaires");
-  let cleaned = 0;
-  if (createdPlatId) { cleaned += (await q("DELETE FROM plats WHERE id=$1", [createdPlatId])).rowCount ?? 0; }
-  if (tempRestoId) { cleaned += (await q("DELETE FROM restaurants WHERE id=$1", [tempRestoId])).rowCount ?? 0; }
-  if (tempCommandeId) { cleaned += (await q("DELETE FROM commandes WHERE id=$1", [tempCommandeId])).rowCount ?? 0; }
-  cleaned += (await q("DELETE FROM restaurants WHERE nom LIKE '%e2emx%' OR slug LIKE 'mx%' OR slug LIKE 'mxb-%'")).rowCount ?? 0;
-  cleaned += (await q("DELETE FROM partner_accounts WHERE user_id IN (SELECT id FROM users WHERE email LIKE '%@t.local%' AND nom LIKE 'e2emx%')")).rowCount ?? 0;
-  cleaned += (await q("DELETE FROM users WHERE email LIKE '__e2ematrix%' OR email LIKE 'mx%@t.local'")).rowCount ?? 0;
-  cleaned += (await q("DELETE FROM clients WHERE nom LIKE '__e2emx%'")).rowCount ?? 0;
-  console.log(`🧹 ${cleaned} entité(s) supprimée(s)`);
-
-  try {
-    const postCleaned = await cleanupLeftovers(pool);
-    console.log(`🧹 ${postCleaned} entité(s) temporaire(s) supprimée(s)`);
-  } catch (e) {
-    // Nettoyage best-effort : un reliquat ne doit pas masquer le résultat des tests.
-    console.log(`⚠️ nettoyage partiel: ${e.message?.slice(0, 120)} (relancer le script purge les restes)`);
-  }
+  const cleaned = await cleanupLeftovers(pool);
+  console.log(`🧹 ${cleaned} entité(s) temporaire(s) supprimée(s)`);
   if (results.length === 0 || results.some((r) => !r.pass)) {
     // exitCode décidé plus bas par la section résultat
   }

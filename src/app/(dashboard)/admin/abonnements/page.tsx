@@ -19,7 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { db } from "@/lib/db";
+import { batchRead, db } from "@/lib/db";
 import { withDatabaseReadRetry } from "@/lib/db/read-retry";
 import {
   partnerAccounts,
@@ -70,7 +70,7 @@ export default async function AdminAbonnementsPage({
     activeSubscribers,
     recentPeriods,
   ] = await withDatabaseReadRetry(() =>
-    db.batch([
+    batchRead([
       db
         .select({
           id: subscriptionRequests.id,

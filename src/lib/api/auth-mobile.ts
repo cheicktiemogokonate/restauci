@@ -1,4 +1,8 @@
-import { isTokenBlacklisted } from "@/lib/api/token-blacklist";
+import {
+  isSessionRevoked,
+  isOwnerSessionRevoked,
+  isTokenBlacklisted,
+} from "@/lib/api/token-blacklist";
 import { db } from "@/lib/db";
 import { partnerAccounts, restaurants, users } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
@@ -8,7 +12,7 @@ import { apiResponse } from "./response";
 
 // Utilise la même librairie JWT que le reste de l'app
 // Adapte l'import selon ce que tu trouves dans src/lib/auth/index.ts
-import { verifyToken } from "@/lib/auth";
+import { verifyPartnerAccessToken } from "@/lib/auth";
 
 const log = createLogger("api-mobile-auth");
 
@@ -45,9 +49,8 @@ export async function getMobileSession(
 
   const token = authHeader.slice(7); // Retire "Bearer "
 
-  // Vérifier si le token est blacklisté (logout / rotation du refresh).
-  // Si Redis est indisponible on dégrade gracieusement (cohérent avec
-  // getClientSession) : la suspension reste vérifiée en base plus bas.
+  // La révocation est un contrôle de sécurité : en cas de panne Redis, les
+  // routes authentifiées échouent fermées au lieu de réaccepter un jeton volé.
   try {
     if (await isTokenBlacklisted(token)) {
       return {
@@ -56,22 +59,58 @@ export async function getMobileSession(
       };
     }
   } catch (err) {
-    log.warn(
+    log.error(
       { err: err instanceof Error ? err.message : "unknown" },
       "Blacklist indisponible lors de la vérification de session mobile",
     );
+    return {
+      session: null,
+      error: apiResponse.error(
+        "Vérification de session temporairement indisponible",
+        "SERVICE_UNAVAILABLE",
+        { status: 503 },
+      ),
+    };
   }
 
   try {
-    // Utilise la même fonction de vérification JWT que l'app web
-    const payload = await verifyToken(token);
+    const payload = await verifyPartnerAccessToken(token);
 
     // Un access token explicite est exigé : un refresh token (longue durée)
     // ne doit jamais être utilisable directement comme Bearer.
-    if (!payload?.userId || payload.type !== "access") {
+    if (!payload) {
       return {
         session: null,
         error: apiResponse.unauthorized("Token invalide"),
+      };
+    }
+
+    try {
+      if (
+        (await isSessionRevoked(payload.sessionId)) ||
+        (await isOwnerSessionRevoked(
+          "user",
+          payload.userId,
+          payload.issuedAtMs,
+        ))
+      ) {
+        return {
+          session: null,
+          error: apiResponse.unauthorized("Session révoquée. Reconnectez-vous."),
+        };
+      }
+    } catch (err) {
+      log.error(
+        { err: err instanceof Error ? err.message : "unknown" },
+        "Registre des sessions indisponible",
+      );
+      return {
+        session: null,
+        error: apiResponse.error(
+          "Vérification de session temporairement indisponible",
+          "SERVICE_UNAVAILABLE",
+          { status: 503 },
+        ),
       };
     }
 

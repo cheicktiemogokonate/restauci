@@ -1,10 +1,20 @@
 import { getClientIp } from "@/lib/api/client-ip";
-import { comparePassword, setAuthCookie, signToken } from "@/lib/auth";
+import {
+  comparePassword,
+  setAuthCookie,
+  signWebSessionToken,
+} from "@/lib/auth";
 import { db } from "@/lib/db";
 import { partnerAccounts, users } from "@/lib/db/schema";
 import { authLogger } from "@/lib/loggers";
-import { authLimiter, checkRateLimit } from "@/lib/rate-limit";
+import {
+  authAccountLimiter,
+  authLimiter,
+  checkRateLimit,
+} from "@/lib/rate-limit";
+import { securityIdentifier } from "@/lib/security/identifier";
 import { loginSchema } from "@/lib/validations/auth";
+import { verifyAdminMfa } from "@/lib/auth/admin-mfa";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -14,13 +24,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
+  const bypassRateLimit =
+    process.env.NODE_ENV !== "production" && process.env.E2E_TEST === "true";
   // Bypass réservé aux tests e2e : il est doublement conditionné (NODE_ENV
   // ET E2E_TEST) pour qu'une fuite de E2E_TEST=true en production soit
   // sans effet sur la surface d'attaque du login.
-  if (
-    process.env.NODE_ENV !== "production" &&
-    process.env.E2E_TEST === "true"
-  ) {
+  if (bypassRateLimit) {
     // rate limiting désactivé en environnement de test e2e uniquement
   } else {
     const rateLimitResponse = await checkRateLimit(authLimiter, ip);
@@ -55,10 +64,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password } = validation.data;
+    const { email, password, otp } = validation.data;
+    const accountId = securityIdentifier("partner-email", email);
+
+    if (!bypassRateLimit) {
+      const accountRateLimit = await checkRateLimit(
+        authAccountLimiter,
+        accountId,
+      );
+      if (accountRateLimit) return accountRateLimit;
+    }
 
     // Log tentative de connexion (sans le mot de passe)
-    authLogger.info({ ip, email }, "Login attempt");
+    authLogger.info({ ip, accountId }, "Login attempt");
 
     // Chercher l'utilisateur par email (exclure password)
     const user = await db
@@ -76,7 +94,14 @@ export async function POST(request: NextRequest) {
 
     if (user.length === 0) {
       // Email inexistant → message générique pour sécurité
-      authLogger.warn({ ip, email, reason: "user not found" }, "Login failed");
+      await comparePassword(
+        password,
+        "$2b$12$uTgttD2C7DC66CkZOWNP..p1.dVZb72d./VYmD08jia4VsjYPs3O2",
+      );
+      authLogger.warn(
+        { ip, accountId, reason: "user not found" },
+        "Login failed",
+      );
       return NextResponse.json(
         { error: "Identifiants incorrects" },
         { status: 401 },
@@ -89,7 +114,7 @@ export async function POST(request: NextRequest) {
     if (!passwordValid) {
       // Password faux → message générique pour sécurité
       authLogger.warn(
-        { ip, email, userId: user[0].id, reason: "invalid password" },
+        { ip, accountId, userId: user[0].id, reason: "invalid password" },
         "Login failed",
       );
       return NextResponse.json(
@@ -100,7 +125,7 @@ export async function POST(request: NextRequest) {
 
     if (user[0].suspendu) {
       authLogger.warn(
-        { ip, email, userId: user[0].id, reason: "suspended account" },
+        { ip, accountId, userId: user[0].id, reason: "suspended account" },
         "Login denied for suspended user",
       );
       return NextResponse.json(
@@ -109,8 +134,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (user[0].role === "admin" && !bypassRateLimit) {
+      const mfaResult = await verifyAdminMfa(user[0].id, otp);
+      if (mfaResult === "disabled") {
+        authLogger.warn(
+          { userId: user[0].id },
+          "Connexion admin sans MFA : exception de déploiement explicitement activée",
+        );
+      } else if (mfaResult === "not-configured") {
+        authLogger.error(
+          { userId: user[0].id },
+          "Connexion admin bloquée : TOTP non configuré",
+        );
+        return NextResponse.json(
+          {
+            error: "L’authentification forte administrateur n’est pas configurée.",
+            code: "ADMIN_MFA_NOT_CONFIGURED",
+          },
+          { status: 503 },
+        );
+      } else if (mfaResult === "unavailable") {
+        return NextResponse.json(
+          {
+            error: "Vérification du second facteur temporairement indisponible.",
+            code: "SERVICE_UNAVAILABLE",
+          },
+          { status: 503 },
+        );
+      } else if (mfaResult !== "ok") {
+        return NextResponse.json(
+          {
+            error: "Code de sécurité requis ou invalide.",
+            code: "MFA_REQUIRED",
+          },
+          { status: 401 },
+        );
+      }
+    }
+
     // Signer le JWT token
-    const token = await signToken({
+    const token = await signWebSessionToken({
       userId: user[0].id,
       email: user[0].email,
       role: user[0].role,
@@ -137,7 +200,7 @@ export async function POST(request: NextRequest) {
 
     await setAuthCookie(token);
 
-    authLogger.info({ ip, email, userId: user[0].id }, "Login successful");
+    authLogger.info({ ip, accountId, userId: user[0].id }, "Login successful");
     return response;
   } catch (error) {
     authLogger.error(

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  listDriverNotificationsSchema,
   listClientNotificationsSchema,
+  markDriverNotificationsReadSchema,
   markClientNotificationsReadSchema,
 } from "./contracts";
 
@@ -14,6 +16,17 @@ describe("contrats notifications client", () => {
     expect(
       listClientNotificationsSchema.safeParse({ limit: 101 }).success,
     ).toBe(false);
+  });
+
+  it("applique les mêmes bornes au compte livreur cloisonné", () => {
+    expect(listDriverNotificationsSchema.parse({})).toEqual({
+      page: 1,
+      limit: 20,
+      unreadOnly: false,
+    });
+    expect(
+      markDriverNotificationsReadSchema.safeParse({ markAll: true }).success,
+    ).toBe(true);
   });
 
   it("accepte soit une sélection soit toutes les notifications", () => {

@@ -8,6 +8,8 @@ import { getCommandeById }            from "@/lib/db/queries";
 import { updateStatutCommande }       from "@/lib/db/mutations";
 import { createLogger }               from "@/lib/logger";
 import { canRestaurateurSetCommandeStatus } from "@/types/commandes";
+import { deliveryErrorResponse } from "@/lib/api/delivery-response";
+import { cancelRestaurantDeliveryOrder } from "@/modules/deliveries/server";
 
 const log = createLogger("v1-restaurateur-commande-detail");
 
@@ -66,11 +68,10 @@ export async function PATCH(
       );
     }
 
-    const updated = await updateStatutCommande(
-      id,
-      session.restaurantId,
-      data.statut
-    );
+    const updated =
+      commande.modeCommande === "livraison" && data.statut === "annulee"
+        ? await cancelRestaurantDeliveryOrder(session, id)
+        : await updateStatutCommande(id, session.restaurantId, data.statut);
 
     if (!updated) {
       return apiResponse.error(
@@ -87,6 +88,8 @@ export async function PATCH(
 
     return apiResponse.success(updated);
   } catch (err) {
+    const deliveryError = deliveryErrorResponse(err);
+    if (deliveryError) return deliveryError;
     log.error({ err, id }, "Erreur mise à jour statut");
     return apiResponse.internalError();
   }

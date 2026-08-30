@@ -8,6 +8,7 @@ import {
   Loader2,
   Lock,
   Mail,
+  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,6 +22,8 @@ export function RestaurateurLoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +38,7 @@ export function RestaurateurLoginForm() {
 
     try {
       const endpoint = "/api/auth/login";
-      const body = { email, password };
+      const body = { email, password, ...(mfaRequired ? { otp } : {}) };
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -45,6 +48,12 @@ export function RestaurateurLoginForm() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        if (errorData.code === "MFA_REQUIRED") {
+          setMfaRequired(true);
+          setError("Saisissez le code à 6 chiffres de votre application d’authentification.");
+          setLoading(false);
+          return;
+        }
         setError(errorData.error || "Une erreur est survenue");
         setLoading(false);
         return;
@@ -144,7 +153,7 @@ export function RestaurateurLoginForm() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form method="post" action="" onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="restaurateur-email" className="text-[11px] font-bold text-brand-dark/85 block tracking-wide">
               Email
@@ -204,6 +213,35 @@ export function RestaurateurLoginForm() {
               </button>
             </div>
           </div>
+
+          {mfaRequired ? (
+            <div className="space-y-1.5">
+              <label htmlFor="admin-otp" className="text-[11px] font-bold text-brand-dark/85 block tracking-wide">
+                Code de sécurité
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <input
+                  id="admin-otp"
+                  name="one-time-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{6}"
+                  minLength={6}
+                  maxLength={6}
+                  required
+                  value={otp}
+                  onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="000000"
+                  className="w-full pl-10 pr-4 py-2.5 text-xs font-medium tracking-[0.35em] rounded-xl border border-gray-250/20 bg-gray-50/50 hover:bg-white text-brand-dark placeholder-gray-400/80 outline-none focus:border-[#0F8A5F]/55 focus:ring-2 focus:ring-[#0F8A5F]/10 focus:bg-white transition-all shadow-2xs disabled:opacity-50"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+          ) : null}
 
           <button
             type="submit"

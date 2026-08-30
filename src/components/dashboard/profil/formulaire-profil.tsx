@@ -230,7 +230,7 @@ export default function FormulaireProfil({
                 ? accepteCommandes
                   ? "Votre restaurant est visible et reçoit des commandes."
                   : "Votre restaurant est visible, mais les commandes sont suspendues."
-                : "Votre restaurant est hors ligne et invisible aux clients."}
+                : "Votre restaurant reste visible, mais les commandes sont fermées."}
             </p>
           </div>
         </div>
@@ -239,7 +239,7 @@ export default function FormulaireProfil({
           <div className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background/80 p-3.5">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">Restaurant en ligne</p>
-              <p className="text-xs text-muted-foreground">Hors ligne, il est masqué et aucune commande ne passe.</p>
+              <p className="text-xs text-muted-foreground">Hors ligne, il reste visible mais aucune commande ne passe.</p>
             </div>
             <Switch
               checked={enLigne}

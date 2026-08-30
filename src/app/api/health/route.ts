@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { redis } from "@/lib/cache/redis";
 import { sql } from "drizzle-orm";
+import { env } from "@/lib/env";
+import { hasValidCronAuthorization } from "@/lib/cron-auth";
 
 interface HealthStatus {
   status: "healthy" | "degraded" | "unhealthy";
@@ -12,7 +14,24 @@ interface HealthStatus {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const canReadDependencies =
+    Boolean(env.CRON_SECRET) &&
+    hasValidCronAuthorization(
+      request.headers.get("authorization"),
+      env.CRON_SECRET ?? "",
+    );
+
+  if (!canReadDependencies) {
+    return NextResponse.json(
+      { status: "ok" },
+      {
+        status: 200,
+        headers: { "Cache-Control": "public, max-age=30, stale-while-revalidate=30" },
+      },
+    );
+  }
+
   const status: HealthStatus = {
     status: "healthy",
     timestamp: new Date().toISOString(),

@@ -26,4 +26,17 @@ describe("Bloc 9 residence booking migration", () => {
     expect(migration).toMatch(/residence_reservations_residence_dates_idx[\s\S]*WHERE "status" <> 'annulee'/);
     expect(migration).toMatch(/residence_reservation_id_residence_reservations_id_fk[\s\S]*ON DELETE restrict/i);
   });
+
+  it("persists owner cancellation provenance and reason", () => {
+    const ownerManagementMigration = readFileSync(
+      "drizzle/migrations/0032_residence_owner_reservation_management.sql",
+      "utf8",
+    );
+    expect(ownerManagementMigration).toContain(
+      'ADD COLUMN IF NOT EXISTS "cancellation_source" varchar(20)',
+    );
+    expect(ownerManagementMigration).toContain(
+      'ADD COLUMN IF NOT EXISTS "cancellation_reason" varchar(500)',
+    );
+  });
 });

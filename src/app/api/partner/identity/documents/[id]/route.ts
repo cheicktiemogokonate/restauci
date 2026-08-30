@@ -17,7 +17,7 @@ function privateDocumentResponse(
   return new Response(new Uint8Array(body), {
     headers: {
       "Content-Type": contentType,
-      "Content-Disposition": `inline; filename="justificatif-identite.${extension}"`,
+      "Content-Disposition": `attachment; filename="justificatif-identite.${extension}"`,
       "Cache-Control": "private, no-store, max-age=0",
       Pragma: "no-cache",
       "X-Content-Type-Options": "nosniff",

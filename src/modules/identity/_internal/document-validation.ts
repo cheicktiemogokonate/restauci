@@ -8,7 +8,11 @@ export interface ValidatedIdentityDocument {
   contentType: IdentityDocumentContentType;
   extension: "jpg" | "png" | "pdf";
   sha256: string;
+  body: Buffer;
 }
+
+const ACTIVE_PDF_TOKENS =
+  /\/(?:JavaScript|JS|OpenAction|AA|Launch|EmbeddedFile|XFA)\b/i;
 
 function hasBytes(
   buffer: Uint8Array,
@@ -18,9 +22,9 @@ function hasBytes(
   return expected.every((byte, index) => buffer[offset + index] === byte);
 }
 
-export function validateIdentityDocument(
+export async function validateIdentityDocument(
   buffer: Buffer,
-): ValidatedIdentityDocument | null {
+): Promise<ValidatedIdentityDocument | null> {
   if (buffer.length === 0 || buffer.length > MAX_IDENTITY_DOCUMENT_SIZE) {
     return null;
   }
@@ -44,8 +48,23 @@ export function validateIdentityDocument(
   }
 
   if (!detected) return null;
+
+  let sanitizedBody = buffer;
+  if (detected.contentType === "application/pdf") {
+    const pdfText = buffer.toString("latin1");
+    if (!/%%EOF\s*$/.test(pdfText) || ACTIVE_PDF_TOKENS.test(pdfText)) {
+      return null;
+    }
+  } else {
+    const { sanitizeImage } = await import("@/lib/media/image");
+    const sanitized = await sanitizeImage(buffer, detected.contentType);
+    if (!sanitized) return null;
+    sanitizedBody = sanitized.body;
+  }
+
   return {
     ...detected,
-    sha256: createHash("sha256").update(buffer).digest("hex"),
+    body: sanitizedBody,
+    sha256: createHash("sha256").update(sanitizedBody).digest("hex"),
   };
 }

@@ -36,7 +36,13 @@ export interface DriverDetails {
 }
 
 export interface DeliveryTrackingDetails {
-  status: "en_attente" | "assignee" | "en_route" | "livree" | "echouee";
+  status:
+    | "en_attente"
+    | "assignee"
+    | "en_route"
+    | "livree"
+    | "echouee"
+    | "annulee";
   assignedAt: Date | null;
 }
 

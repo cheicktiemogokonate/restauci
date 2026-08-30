@@ -14,7 +14,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { cache } from "react";
-import { db } from "./index";
+import { batchRead, db } from "./index";
 import {
   auditLog,
   clients,
@@ -98,7 +98,7 @@ export async function getRestaurantsAdmin({
     .as("active_subscription_periods");
 
   const [items, totalResult] = await withDatabaseReadRetry(() =>
-    db.batch([
+    batchRead([
       db
         .select({
         id: restaurants.id,
@@ -379,7 +379,7 @@ export async function getCommandesGlobalAdmin({
   const offset = (page - 1) * limit;
 
   const [items, totalResult] = await withDatabaseReadRetry(() =>
-    db.batch([
+    batchRead([
       db
         .select({
         id: commandes.id,
@@ -418,7 +418,7 @@ export async function getCommandesGlobalAdmin({
 /** Détail complet d'une commande, destiné à la consultation administrateur. */
 export async function getCommandeDetailAdmin(commandeId: string) {
   const [commandRows, paymentRows] = await withDatabaseReadRetry(() =>
-    db.batch([
+    batchRead([
       db
         .select({
           id: commandes.id,
@@ -577,7 +577,7 @@ export async function getUsersAdmin({
     .as("active_user_subscription_periods");
 
   const [items, totalResult] = await withDatabaseReadRetry(() =>
-    db.batch([
+    batchRead([
       db
         .select({
         id: users.id,
@@ -645,7 +645,7 @@ export async function getClientsAdmin({
   const offset = (page - 1) * limit;
 
   const [items, totalResult] = await withDatabaseReadRetry(() =>
-    db.batch([
+    batchRead([
       db
         .select({
           id: clients.id,
@@ -904,7 +904,7 @@ export async function getCommissionsAdmin({
   const offset = (page - 1) * limit;
 
   const [items, totalResult, summaryResult] = await withDatabaseReadRetry(() =>
-    db.batch([
+    batchRead([
       db
         .select({
         id: commissions.id,
@@ -1015,7 +1015,7 @@ export async function getAuditLogAdmin({
   const offset = (page - 1) * limit;
 
   const [items, totalRows] = await withDatabaseReadRetry(() =>
-    db.batch([
+    batchRead([
       db
         .select({
           id: auditLog.id,

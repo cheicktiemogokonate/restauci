@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { detectImageType, validateImageType } from "./image";
+import sharp from "sharp";
+import { detectImageType, sanitizeImage, validateImageType } from "./image";
 
 describe("image media validation", () => {
   it("detects supported image signatures", () => {
@@ -29,5 +30,25 @@ describe("image media validation", () => {
         "image/jpeg",
       ),
     ).toBeNull();
+  });
+
+  it("fully decodes and re-encodes an accepted image", async () => {
+    const input = await sharp({
+      create: {
+        width: 2,
+        height: 2,
+        channels: 3,
+        background: "#ff0000",
+      },
+    })
+      .withMetadata({ orientation: 3 })
+      .png()
+      .toBuffer();
+
+    const result = await sanitizeImage(input, "image/png");
+    expect(result?.contentType).toBe("image/png");
+    expect(result?.body.length).toBeGreaterThan(0);
+    const metadata = await sharp(result!.body).metadata();
+    expect(metadata.orientation).toBeUndefined();
   });
 });

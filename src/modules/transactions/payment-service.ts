@@ -226,14 +226,16 @@ export async function retryRestaurantOrderPaystackPayment(input: {
       }
       return pending;
     }
-    const [commission, providerAccount] = await Promise.all([
-      tx.query.commissions.findFirst({ where: eq(commissions.commandeId, order.id) }),
-      tx.query.paymentProviderAccounts.findFirst({ where: and(
+    const commission = await tx.query.commissions.findFirst({
+      where: eq(commissions.commandeId, order.id),
+    });
+    const providerAccount = await tx.query.paymentProviderAccounts.findFirst({
+      where: and(
         eq(paymentProviderAccounts.partnerAccountId, transaction.partnerAccountId),
         eq(paymentProviderAccounts.provider, "paystack"),
         eq(paymentProviderAccounts.status, "active"),
-      ) }),
-    ]);
+      ),
+    });
     if (!commission || commission.collectionMode !== "provider_split" || !providerAccount) {
       throw new ProviderPaymentError("NOT_PAYABLE", "Paiement électronique indisponible.");
     }
@@ -339,18 +341,16 @@ export async function retryResidencePaystackPayment(input: {
       }
       return pending;
     }
-    const [commission, providerAccount] = await Promise.all([
-      tx.query.commissions.findFirst({
-        where: eq(commissions.residenceReservationId, input.reservationId),
-      }),
-      tx.query.paymentProviderAccounts.findFirst({
-        where: and(
-          eq(paymentProviderAccounts.partnerAccountId, transaction.partnerAccountId),
-          eq(paymentProviderAccounts.provider, "paystack"),
-          eq(paymentProviderAccounts.status, "active"),
-        ),
-      }),
-    ]);
+    const commission = await tx.query.commissions.findFirst({
+      where: eq(commissions.residenceReservationId, input.reservationId),
+    });
+    const providerAccount = await tx.query.paymentProviderAccounts.findFirst({
+      where: and(
+        eq(paymentProviderAccounts.partnerAccountId, transaction.partnerAccountId),
+        eq(paymentProviderAccounts.provider, "paystack"),
+        eq(paymentProviderAccounts.status, "active"),
+      ),
+    });
     if (!commission || commission.collectionMode !== "provider_split" || !providerAccount) {
       throw new ProviderPaymentError(
         "NOT_PAYABLE",

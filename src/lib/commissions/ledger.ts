@@ -806,3 +806,39 @@ export async function updateCommissionPolicy(input: {
     return { policy: updated, notificationCycles };
   });
 }
+
+/**
+ * Convertit une CommissionLedgerError en réponse métier HTTP.
+ * Les adaptateurs (route handlers) l'utilisent pour ne jamais exposer un 500
+ * sur des invariants métier connus (ex: commande sans snapshot de commission
+ * créée hors du circuit standard).
+ */
+export function commissionLedgerHttpStatus(
+  error: unknown,
+): {
+  status: 409 | 422;
+  code:
+    | "COMMISSION_SNAPSHOT_MANQUANT"
+    | "CASH_NOT_ALLOWED"
+    | "INVALID_SETTLEMENT"
+    | "SETTLEMENT_EXCEEDS_DEBT"
+    | "SETTLEMENT_CONFLICT";
+  message: string;
+} | null {
+  if (!(error instanceof CommissionLedgerError)) return null;
+  switch (error.code) {
+    case "COMMISSION_NOT_FOUND":
+      return {
+        status: 409,
+        code: "COMMISSION_SNAPSHOT_MANQUANT",
+        message:
+          "Cette commande ne peut pas être clôturée : aucune configuration de commission n'y est attachée. Recréez la commande via le parcours standard ou contactez le support.",
+      };
+    case "CASH_NOT_ALLOWED":
+      return { status: 422, code: error.code, message: error.message };
+    case "INVALID_SETTLEMENT":
+    case "SETTLEMENT_EXCEEDS_DEBT":
+    case "SETTLEMENT_CONFLICT":
+      return { status: 422, code: error.code, message: error.message };
+  }
+}

@@ -7,7 +7,10 @@ import { checkRateLimit, mobileApiLimiter } from "@/lib/rate-limit";
 import { getCommandeById }            from "@/lib/db/queries";
 import { updateStatutCommande }       from "@/lib/db/mutations";
 import { createLogger }               from "@/lib/logger";
+import { commissionLedgerHttpStatus } from "@/lib/commissions/ledger";
 import { canRestaurateurSetCommandeStatus } from "@/types/commandes";
+import { deliveryErrorResponse } from "@/lib/api/delivery-response";
+import { cancelRestaurantDeliveryOrder } from "@/modules/deliveries/server";
 
 const log = createLogger("v1-restaurateur-commande-stat");
 
@@ -43,11 +46,10 @@ export async function PATCH(
       );
     }
 
-    const updated = await updateStatutCommande(
-      id,
-      session.restaurantId,
-      data.statut
-    );
+    const updated =
+      commande.modeCommande === "livraison" && data.statut === "annulee"
+        ? await cancelRestaurantDeliveryOrder(session, id)
+        : await updateStatutCommande(id, session.restaurantId, data.statut);
 
     if (!updated) {
       return apiResponse.error(
@@ -64,6 +66,16 @@ export async function PATCH(
 
     return apiResponse.success(updated);
   } catch (err) {
+    const deliveryError = deliveryErrorResponse(err);
+    if (deliveryError) return deliveryError;
+    // Invariants métier du registre de commissions → erreur explicite, jamais 500.
+    const commissionError = commissionLedgerHttpStatus(err);
+    if (commissionError) {
+      log.warn({ id, code: commissionError.code }, "Clôture refusée par le registre de commissions");
+      return apiResponse.error(commissionError.message, commissionError.code, {
+        status: commissionError.status,
+      });
+    }
     log.error({ err, id }, "Erreur mise à jour statut");
     return apiResponse.internalError();
   }

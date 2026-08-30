@@ -16,6 +16,8 @@ import {
 } from "@/modules/service-markets/server";
 
 import {
+  cancelPartnerResidenceReservationSchema,
+  createResidenceReservationSchema,
   listAdminResidencesSchema,
   publicResidenceSearchSchema,
   rejectResidenceSchema,
@@ -23,8 +25,10 @@ import {
   residenceSlugSchema,
   saveResidenceSchema,
   suspendResidenceSchema,
-  type ListAdminResidencesInput,
+  updatePartnerResidenceReservationSchema,
+  type CancelPartnerResidenceReservationInput,
   type CreateResidenceReservationInput,
+  type ListAdminResidencesInput,
   type PartnerResidenceDTO,
   type PartnerResidenceWithPublicationDTO,
   type PublicResidenceDTO,
@@ -33,7 +37,7 @@ import {
   type ResidenceStayInput,
   type ResidenceUnavailablePeriodInput,
   type SaveResidenceInput,
-  createResidenceReservationSchema,
+  type UpdatePartnerResidenceReservationInput,
   residenceStaySchema,
   residenceUnavailablePeriodIdSchema,
   residenceUnavailablePeriodSchema,
@@ -71,6 +75,7 @@ import {
   listPartnerResidenceReservationDTORecords,
   listResidenceUnavailablePeriodRecords,
   lockResidenceRecord,
+  updateResidenceReservationStayRecord,
 } from "./_internal/bookings";
 import {
   evaluateResidenceVisibility,
@@ -103,6 +108,7 @@ import {
   recordDiscoveryConversion,
 } from "@/modules/discovery/server";
 import { rankDiscoveryPage } from "@/modules/discovery/ranking";
+import { isManagedPublicMediaUrl } from "@/lib/r2";
 
 type DestinationEvaluation = {
   status: ResidenceDestinationStatus;
@@ -158,16 +164,20 @@ async function composePartnerResidencePublication(
   partnerResidences: PartnerResidenceDTO[],
   options: { executor?: DbExecutor; persistFirstPublished?: boolean } = {},
 ): Promise<PartnerResidenceWithPublicationDTO[]> {
-  const [verification, destinations] = await Promise.all([
-    getPartnerIdentityVerification(partnerAccountId, {
-      executor: options.executor,
-    }),
-    Promise.all(
-      partnerResidences.map((residence) =>
-        evaluateResidenceDestination(residence, options.executor),
-      ),
-    ),
-  ]);
+  // Cette projection est aussi appelée pendant la transaction de réservation.
+  // node-postgres n'autorise pas plusieurs requêtes simultanées sur le même
+  // client réservé, donc les lectures restent volontairement séquentielles.
+  const verification = await getPartnerIdentityVerification(partnerAccountId, {
+    executor: options.executor,
+  });
+  const destinations: Array<
+    Awaited<ReturnType<typeof evaluateResidenceDestination>>
+  > = [];
+  for (const residence of partnerResidences) {
+    destinations.push(
+      await evaluateResidenceDestination(residence, options.executor),
+    );
+  }
   const ownerIdentityStatus: ResidenceOwnerIdentityStatus =
     verification?.status ?? "not_submitted";
 
@@ -419,13 +429,18 @@ async function getPublicResidenceById(
     context.partnerAccountId,
     executor,
   );
-  const [composed, hasProviderAccount] = await Promise.all([
-    composePartnerResidencePublication(context.partnerAccountId, records, {
+  const composed = await composePartnerResidencePublication(
+    context.partnerAccountId,
+    records,
+    {
       executor,
       persistFirstPublished: false,
-    }),
-    hasActivePaystackProviderAccount(context.partnerAccountId, executor),
-  ]);
+    },
+  );
+  const hasProviderAccount = await hasActivePaystackProviderAccount(
+    context.partnerAccountId,
+    executor,
+  );
   const residence = composed.find((item) => item.id === residenceId);
   if (!residence?.publication.isPubliclyVisible) return null;
   return {
@@ -583,26 +598,24 @@ export async function createResidenceReservation(
       where: eq(partnerAccounts.id, reservation.partnerAccountId),
       columns: { userId: true },
     });
-    await Promise.all([
-      persistNotification(tx, {
-        clientId,
+    await persistNotification(tx, {
+      clientId,
+      type: "systeme",
+      titre: "Réservation créée",
+      message: `Votre séjour à ${context.residence.title} attend le paiement Paystack.`,
+      lienType: "reservation_residence",
+      lienId: reservation.id,
+    });
+    if (partner) {
+      await persistNotification(tx, {
+        userId: partner.userId,
         type: "systeme",
-        titre: "Réservation créée",
-        message: `Votre séjour à ${context.residence.title} attend le paiement Paystack.`,
+        titre: "Nouvelle demande de réservation",
+        message: `${context.residence.title} est demandé du ${parsed.checkIn} au ${parsed.checkOut}.`,
         lienType: "reservation_residence",
         lienId: reservation.id,
-      }),
-      partner
-        ? persistNotification(tx, {
-            userId: partner.userId,
-            type: "systeme",
-            titre: "Nouvelle demande de réservation",
-            message: `${context.residence.title} est demandé du ${parsed.checkIn} au ${parsed.checkOut}.`,
-            lienType: "reservation_residence",
-            lienId: reservation.id,
-          })
-        : Promise.resolve(),
-    ]);
+      });
+    }
     return { reservationId: reservation.id, paymentId: payment.id };
   });
   await recordDiscoveryConversion({
@@ -637,6 +650,278 @@ export function listPartnerResidenceReservations(partnerAccountId: string) {
     partnerAccountId,
     getTodayInAbidjan(),
   );
+}
+
+export async function updatePartnerResidenceReservation(
+  partnerAccountId: string,
+  input: UpdatePartnerResidenceReservationInput,
+) {
+  const parsed = updatePartnerResidenceReservationSchema.parse(input);
+  const now = new Date();
+  const today = getTodayInAbidjan(now);
+  const updated = await transactionalDb.transaction(async (tx) => {
+    const candidate = await tx.query.residenceReservations.findFirst({
+      where: and(
+        eq(residenceReservations.id, parsed.reservationId),
+        eq(residenceReservations.partnerAccountId, partnerAccountId),
+      ),
+      columns: { residenceId: true },
+    });
+    if (!candidate) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_FOUND",
+        "Réservation introuvable.",
+      );
+    }
+
+    await lockResidenceRecord(tx, candidate.residenceId);
+    await tx.execute(
+      sql`SELECT id FROM ${residenceReservations} WHERE id = ${parsed.reservationId} FOR UPDATE`,
+    );
+    const reservation = await tx.query.residenceReservations.findFirst({
+      where: and(
+        eq(residenceReservations.id, parsed.reservationId),
+        eq(residenceReservations.partnerAccountId, partnerAccountId),
+      ),
+    });
+    if (!reservation) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_FOUND",
+        "Réservation introuvable.",
+      );
+    }
+    if (reservation.status === "annulee" || today >= reservation.checkIn) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_EDITABLE",
+        "Seule une réservation future et active peut être modifiée.",
+      );
+    }
+    const transaction = await getResidenceReservationTransactionInTransaction(
+      tx,
+      reservation.id,
+    );
+    if (!transaction) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_FOUND",
+        "Transaction de réservation introuvable.",
+      );
+    }
+    if (transaction.status === "paid") {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_EDITABLE",
+        "Une réservation déjà payée ne peut pas être modifiée par le propriétaire.",
+      );
+    }
+
+    const residence = await getResidenceBookingContextRecord(
+      reservation.residenceId,
+      tx,
+    );
+    if (!residence) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_NOT_FOUND",
+        "Résidence introuvable.",
+      );
+    }
+    const { nights } = validateResidenceStay({
+      checkIn: parsed.checkIn,
+      checkOut: parsed.checkOut,
+      guests: parsed.guests,
+      maxGuests: residence.maxGuests,
+      today,
+    });
+    if (nights !== reservation.nights) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_EDITABLE",
+        `La durée doit rester de ${reservation.nights} nuit${reservation.nights > 1 ? "s" : ""} pour conserver le montant payé.`,
+      );
+    }
+    if (
+      await hasResidenceConflictRecord(tx, {
+        residenceId: reservation.residenceId,
+        checkIn: parsed.checkIn,
+        checkOut: parsed.checkOut,
+        excludeReservationId: reservation.id,
+      })
+    ) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_UNAVAILABLE",
+        "Ces nouvelles dates ne sont pas disponibles.",
+      );
+    }
+
+    const changed =
+      parsed.checkIn !== reservation.checkIn ||
+      parsed.checkOut !== reservation.checkOut ||
+      parsed.guests !== reservation.guests;
+    if (!changed) {
+      return {
+        reservationId: reservation.id,
+        clientId: reservation.clientId,
+        residenceTitle: residence.title,
+        changed: false,
+      };
+    }
+
+    const saved = await updateResidenceReservationStayRecord(tx, {
+      reservationId: reservation.id,
+      checkIn: parsed.checkIn,
+      checkOut: parsed.checkOut,
+      nights,
+      guests: parsed.guests,
+      now,
+    });
+    if (!saved) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_EDITABLE",
+        "La réservation ne peut plus être modifiée.",
+      );
+    }
+    await persistNotification(tx, {
+      clientId: reservation.clientId,
+      type: "systeme",
+      titre: "Séjour modifié par le propriétaire",
+      message: `${residence.title} est désormais réservé du ${parsed.checkIn} au ${parsed.checkOut} pour ${parsed.guests} voyageur${parsed.guests > 1 ? "s" : ""}.`,
+      lienType: "reservation_residence",
+      lienId: reservation.id,
+    });
+    return {
+      reservationId: reservation.id,
+      clientId: reservation.clientId,
+      residenceTitle: residence.title,
+      changed: true,
+    };
+  });
+
+  if (updated.changed) {
+    await sendClientExpoPush(updated.clientId, {
+      titre: "Séjour modifié par le propriétaire",
+      message: `Les dates de votre séjour à ${updated.residenceTitle} ont été mises à jour.`,
+      data: {
+        type: "systeme",
+        lienType: "reservation_residence",
+        lienId: updated.reservationId,
+      },
+    });
+  }
+  const reservation = await getResidenceReservationDTORecord(
+    updated.reservationId,
+    today,
+  );
+  if (!reservation) {
+    throw new ResidenceDomainError(
+      "RESIDENCE_RESERVATION_NOT_FOUND",
+      "Réservation introuvable après sa modification.",
+    );
+  }
+  return reservation;
+}
+
+export async function cancelPartnerResidenceReservation(
+  partnerAccountId: string,
+  input: CancelPartnerResidenceReservationInput,
+) {
+  const parsed = cancelPartnerResidenceReservationSchema.parse(input);
+  const now = new Date();
+  const today = getTodayInAbidjan(now);
+  const outcome = await transactionalDb.transaction(async (tx) => {
+    const reservation = await tx.query.residenceReservations.findFirst({
+      where: and(
+        eq(residenceReservations.id, parsed.reservationId),
+        eq(residenceReservations.partnerAccountId, partnerAccountId),
+      ),
+    });
+    if (!reservation) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_FOUND",
+        "Réservation introuvable.",
+      );
+    }
+    if (reservation.status === "annulee") {
+      return {
+        reservationId: reservation.id,
+        clientId: reservation.clientId,
+        changed: false,
+        requiresManualRefund: false,
+      };
+    }
+    if (today >= reservation.checkIn) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_CANCELLABLE",
+        "Une réservation commencée ne peut plus être annulée par le propriétaire.",
+      );
+    }
+
+    const transaction = await getResidenceReservationTransactionInTransaction(
+      tx,
+      reservation.id,
+    );
+    if (!transaction) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_FOUND",
+        "Transaction de réservation introuvable.",
+      );
+    }
+    if (transaction.status === "pending") {
+      await cancelTransactionInTransaction(tx, transaction.id, now);
+    }
+    if (transaction.status !== "paid") {
+      await voidPendingResidenceCommissionInTransaction(tx, reservation.id, now);
+    }
+
+    const cancelled = await cancelResidenceReservationRecord(
+      tx,
+      reservation.id,
+      now,
+      { source: "partner", reason: parsed.reason },
+    );
+    if (!cancelled) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_CANCELLABLE",
+        "La réservation ne peut plus être annulée.",
+      );
+    }
+    const requiresManualRefund = transaction.status === "paid";
+    await persistNotification(tx, {
+      clientId: reservation.clientId,
+      type: "systeme",
+      titre: "Réservation annulée par le propriétaire",
+      message: `Motif : ${parsed.reason}.${requiresManualRefund ? " Le remboursement n’est pas automatique ; contactez le support pour son traitement." : ""}`,
+      lienType: "reservation_residence",
+      lienId: reservation.id,
+    });
+    return {
+      reservationId: reservation.id,
+      clientId: reservation.clientId,
+      changed: true,
+      requiresManualRefund,
+    };
+  });
+
+  if (outcome.changed) {
+    await sendClientExpoPush(outcome.clientId, {
+      titre: "Réservation annulée par le propriétaire",
+      message: outcome.requiresManualRefund
+        ? "Votre séjour a été annulé. Contactez le support pour le remboursement."
+        : "Votre séjour a été annulé et les dates ont été libérées.",
+      data: {
+        type: "systeme",
+        lienType: "reservation_residence",
+        lienId: outcome.reservationId,
+      },
+    });
+  }
+  const reservation = await getResidenceReservationDTORecord(
+    outcome.reservationId,
+    today,
+  );
+  if (!reservation) {
+    throw new ResidenceDomainError(
+      "RESIDENCE_RESERVATION_NOT_FOUND",
+      "Réservation introuvable après son annulation.",
+    );
+  }
+  return { reservation, requiresManualRefund: outcome.requiresManualRefund };
 }
 
 export async function getClientResidenceReservation(
@@ -703,31 +988,30 @@ export async function cancelClientResidenceReservation(
       tx,
       parsedId,
       now,
+      { source: "client", reason: null },
     );
     const partner = await tx.query.partnerAccounts.findFirst({
       where: eq(partnerAccounts.id, reservation.partnerAccountId),
       columns: { userId: true },
     });
-    await Promise.all([
-      persistNotification(tx, {
-        clientId,
+    await persistNotification(tx, {
+      clientId,
+      type: "systeme",
+      titre: "Réservation annulée",
+      message: "Votre réservation de résidence a été annulée.",
+      lienType: "reservation_residence",
+      lienId: parsedId,
+    });
+    if (partner) {
+      await persistNotification(tx, {
+        userId: partner.userId,
         type: "systeme",
         titre: "Réservation annulée",
-        message: "Votre réservation de résidence a été annulée.",
+        message: `Le séjour du ${reservation.checkIn} au ${reservation.checkOut} a été annulé.`,
         lienType: "reservation_residence",
         lienId: parsedId,
-      }),
-      partner
-        ? persistNotification(tx, {
-            userId: partner.userId,
-            type: "systeme",
-            titre: "Réservation annulée",
-            message: `Le séjour du ${reservation.checkIn} au ${reservation.checkOut} a été annulé.`,
-            lienType: "reservation_residence",
-            lienId: parsedId,
-          })
-        : Promise.resolve(),
-    ]);
+      });
+    }
     return cancelledReservation;
   });
   await sendClientExpoPush(clientId, {
@@ -828,7 +1112,9 @@ export function createResidence(
   partnerAccountId: string,
   input: SaveResidenceInput,
 ) {
-  return createResidenceRecord(partnerAccountId, saveResidenceSchema.parse(input));
+  const parsed = saveResidenceSchema.parse(input);
+  assertManagedResidencePhotos(parsed);
+  return createResidenceRecord(partnerAccountId, parsed);
 }
 
 export function updateResidence(
@@ -836,11 +1122,22 @@ export function updateResidence(
   residenceId: string,
   input: SaveResidenceInput,
 ) {
+  const parsed = saveResidenceSchema.parse(input);
+  assertManagedResidencePhotos(parsed);
   return updateResidenceRecord(
     partnerAccountId,
     residenceIdSchema.parse(residenceId),
-    saveResidenceSchema.parse(input),
+    parsed,
   );
+}
+
+function assertManagedResidencePhotos(input: SaveResidenceInput) {
+  if (input.photos.some((photo) => !isManagedPublicMediaUrl(photo.url))) {
+    throw new ResidenceDomainError(
+      "RESIDENCE_MEDIA_INVALID",
+      "Chaque photo doit provenir du stockage média sécurisé de la plateforme.",
+    );
+  }
 }
 
 export async function publishResidence(

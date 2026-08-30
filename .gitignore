@@ -35,6 +35,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!deploy/vps/production.env.example
 
 # vercel
 .vercel
@@ -52,5 +53,6 @@ insert-admin.ts
 findings.md
 progress.md
 task_plan.md
+SECURITY_AUDIT_REPORT_*.md
 .next-production-webpack-check-network/
 .vscode/mcp.json
