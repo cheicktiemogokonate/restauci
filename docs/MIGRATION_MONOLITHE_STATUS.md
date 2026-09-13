@@ -143,6 +143,8 @@
 - `git diff --check` réussi.
 - Adaptation Hobby : 6/6 tests cron ciblés, porte `ci:quality` verte, suite
   complète à 432 tests réussis / 74 ignorés et build de 84 pages réussi.
+- Contrôle post-déploiement : les modules `.mjs` publics de MapLibre sont
+  explicitement exclus de l'authentification cookie par le proxy.
 
 ## Décisions, blocages et action requise
 

@@ -218,7 +218,7 @@ export async function proxy(req: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
-    /\.(png|jpg|svg|ico|css|js|webp|woff2?)$/.test(pathname)
+    /\.(png|jpg|svg|ico|css|m?js|webp|woff2?)$/.test(pathname)
   ) {
     return NextResponse.next();
   }
