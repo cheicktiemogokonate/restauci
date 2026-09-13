@@ -1,14 +1,15 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { and, asc, count, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
+import { db } from "@/infrastructure/db";
+import { env } from "@/infrastructure/env";
 import {
   partnerAccounts,
   partnerIdentityDocuments,
   partnerIdentityVerifications,
   users,
-} from "@/lib/db/schema";
-import type { DbExecutor, TransactionExecutor } from "@/lib/db/transaction";
+} from "@/infrastructure/db/schema";
+import type { DbExecutor, TransactionExecutor } from "@/infrastructure/db/transaction";
 import type {
   AdminIdentityVerificationDetailsDTO,
   IdentityDocumentDTO,
@@ -19,6 +20,12 @@ import type {
 type VerificationRow = typeof partnerIdentityVerifications.$inferSelect;
 type DocumentRow = typeof partnerIdentityDocuments.$inferSelect;
 
+export type IdentityDocumentScanClaim =
+  | { state: "claimed"; document: DocumentRow }
+  | {
+      state: "not_found" | "stale_message" | "already_finished" | "busy" | "exhausted";
+    };
+
 function documentDTO(row: DocumentRow): IdentityDocumentDTO {
   return {
     id: row.id,
@@ -26,6 +33,10 @@ function documentDTO(row: DocumentRow): IdentityDocumentDTO {
     contentType: row.contentType,
     sizeBytes: row.sizeBytes,
     scanStatus: row.scanStatus,
+    scanAttempts: row.scanAttempts,
+    scanRetryable:
+      row.scanStatus === "error" &&
+      row.scanAttempts < env.KYC_SCAN_MAX_ATTEMPTS,
     uploadedAt: row.uploadedAt.toISOString(),
   };
 }
@@ -146,6 +157,212 @@ export async function replaceIdentityDocumentRecord(
     previousStorageKey: previous?.storageKey ?? null,
     previousCleanStorageKey: previous?.cleanStorageKey ?? null,
   };
+}
+
+export async function claimIdentityDocumentForScan(input: {
+  documentId: string;
+  expectedSha256: string;
+  maxAttempts: number;
+  staleBefore: Date;
+}): Promise<IdentityDocumentScanClaim> {
+  const now = new Date();
+  const [document] = await db
+    .update(partnerIdentityDocuments)
+    .set({
+      scanStatus: "processing",
+      scanAttempts: sql`${partnerIdentityDocuments.scanAttempts} + 1`,
+      scanStartedAt: now,
+      scanCompletedAt: null,
+      scanEngine: null,
+      scanResult: null,
+      lastScanError: null,
+    })
+    .where(
+      and(
+        eq(partnerIdentityDocuments.id, input.documentId),
+        eq(partnerIdentityDocuments.sha256, input.expectedSha256),
+        lt(partnerIdentityDocuments.scanAttempts, input.maxAttempts),
+        or(
+          eq(partnerIdentityDocuments.scanStatus, "pending"),
+          eq(partnerIdentityDocuments.scanStatus, "error"),
+          and(
+            eq(partnerIdentityDocuments.scanStatus, "processing"),
+            lt(partnerIdentityDocuments.scanStartedAt, input.staleBefore),
+          ),
+        ),
+      ),
+    )
+    .returning();
+
+  if (document) return { state: "claimed", document };
+
+  const current = await db.query.partnerIdentityDocuments.findFirst({
+    where: eq(partnerIdentityDocuments.id, input.documentId),
+    columns: {
+      sha256: true,
+      scanStatus: true,
+      scanAttempts: true,
+    },
+  });
+  if (!current) return { state: "not_found" };
+  if (current.sha256 !== input.expectedSha256) {
+    return { state: "stale_message" };
+  }
+  if (current.scanStatus === "clean" || current.scanStatus === "rejected") {
+    return { state: "already_finished" };
+  }
+  if (current.scanAttempts >= input.maxAttempts) {
+    return { state: "exhausted" };
+  }
+  return { state: "busy" };
+}
+
+export async function markIdentityDocumentScanClean(input: {
+  documentId: string;
+  storageKey: string;
+  cleanStorageKey: string;
+  cleanContentType: "image/jpeg" | "image/png" | "application/pdf";
+  cleanSizeBytes: number;
+  cleanSha256: string;
+  engine: string;
+}) {
+  const [updated] = await db
+    .update(partnerIdentityDocuments)
+    .set({
+      scanStatus: "clean",
+      cleanStorageKey: input.cleanStorageKey,
+      cleanContentType: input.cleanContentType,
+      cleanSizeBytes: input.cleanSizeBytes,
+      cleanSha256: input.cleanSha256,
+      scanCompletedAt: new Date(),
+      scanEngine: input.engine.slice(0, 100),
+      scanResult: "clean",
+      lastScanError: null,
+    })
+    .where(
+      and(
+        eq(partnerIdentityDocuments.id, input.documentId),
+        eq(partnerIdentityDocuments.storageKey, input.storageKey),
+        eq(partnerIdentityDocuments.scanStatus, "processing"),
+      ),
+    )
+    .returning({ id: partnerIdentityDocuments.id });
+  return Boolean(updated);
+}
+
+export async function markIdentityDocumentScanRejected(input: {
+  documentId: string;
+  storageKey: string;
+  engine: string;
+  result: string;
+}) {
+  const [updated] = await db
+    .update(partnerIdentityDocuments)
+    .set({
+      scanStatus: "rejected",
+      scanCompletedAt: new Date(),
+      scanEngine: input.engine.slice(0, 100),
+      scanResult: input.result.slice(0, 255),
+      lastScanError: null,
+    })
+    .where(
+      and(
+        eq(partnerIdentityDocuments.id, input.documentId),
+        eq(partnerIdentityDocuments.storageKey, input.storageKey),
+        eq(partnerIdentityDocuments.scanStatus, "processing"),
+      ),
+    )
+    .returning({ id: partnerIdentityDocuments.id });
+  return Boolean(updated);
+}
+
+export async function markIdentityDocumentScanError(input: {
+  documentId: string;
+  storageKey: string;
+  error: string;
+}) {
+  const [updated] = await db
+    .update(partnerIdentityDocuments)
+    .set({
+      scanStatus: "error",
+      scanCompletedAt: new Date(),
+      scanResult: "scan_error",
+      lastScanError: input.error.slice(0, 2_000),
+      cleanStorageKey: null,
+      cleanContentType: null,
+      cleanSizeBytes: null,
+      cleanSha256: null,
+    })
+    .where(
+      and(
+        eq(partnerIdentityDocuments.id, input.documentId),
+        eq(partnerIdentityDocuments.storageKey, input.storageKey),
+        eq(partnerIdentityDocuments.scanStatus, "processing"),
+      ),
+    )
+    .returning({ id: partnerIdentityDocuments.id });
+  return Boolean(updated);
+}
+
+export async function markIdentityDocumentQueueError(input: {
+  documentId: string;
+  expectedSha256: string;
+  error: string;
+}) {
+  await db
+    .update(partnerIdentityDocuments)
+    .set({
+      scanStatus: "error",
+      scanAttempts: env.KYC_SCAN_MAX_ATTEMPTS,
+      scanCompletedAt: new Date(),
+      scanResult: "queue_error",
+      lastScanError: input.error.slice(0, 2_000),
+    })
+    .where(
+      and(
+        eq(partnerIdentityDocuments.id, input.documentId),
+        eq(partnerIdentityDocuments.sha256, input.expectedSha256),
+        eq(partnerIdentityDocuments.scanStatus, "pending"),
+      ),
+    );
+}
+
+export async function listPartnerDocumentsAwaitingScan(input: {
+  partnerAccountId: string;
+  maxAttempts: number;
+  staleBefore: Date;
+}) {
+  return db
+    .select({
+      id: partnerIdentityDocuments.id,
+      sha256: partnerIdentityDocuments.sha256,
+      storageKey: partnerIdentityDocuments.storageKey,
+    })
+    .from(partnerIdentityDocuments)
+    .innerJoin(
+      partnerIdentityVerifications,
+      eq(
+        partnerIdentityVerifications.id,
+        partnerIdentityDocuments.verificationId,
+      ),
+    )
+    .where(
+      and(
+        eq(
+          partnerIdentityVerifications.partnerAccountId,
+          input.partnerAccountId,
+        ),
+        lt(partnerIdentityDocuments.scanAttempts, input.maxAttempts),
+        or(
+          eq(partnerIdentityDocuments.scanStatus, "pending"),
+          eq(partnerIdentityDocuments.scanStatus, "error"),
+          and(
+            eq(partnerIdentityDocuments.scanStatus, "processing"),
+            lt(partnerIdentityDocuments.scanStartedAt, input.staleBefore),
+          ),
+        ),
+      ),
+    );
 }
 
 export async function getDocumentForPartner(

@@ -1,3 +1,3 @@
 import "server-only";
 
-export { createLogger } from "@/lib/logger";
+export { createLogger } from "@/infrastructure/logger";

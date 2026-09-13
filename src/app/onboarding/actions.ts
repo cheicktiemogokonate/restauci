@@ -2,20 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
-import { getCurrentUser } from "@/lib/auth";
 import type { ChoosePartnerActivityInput } from "@/modules/partners/contracts";
 import { PartnerAccountDomainError } from "@/modules/partners/model";
-import { choosePartnerActivity } from "@/modules/partners/server";
+import {
+  chooseCurrentPartnerActivity,
+  PartnerAuthorizationError,
+} from "@/modules/partners/server";
 
 export async function chooseActivityAction(
   activityType: ChoosePartnerActivityInput,
 ) {
-  const session = await getCurrentUser();
-  if (!session || session.role !== "partner") {
-    return { success: false as const, message: "Session partenaire requise." };
-  }
   try {
-    const account = await choosePartnerActivity(session.userId, activityType);
+    const account = await chooseCurrentPartnerActivity(activityType);
     revalidatePath("/onboarding");
     revalidatePath("/partenaire");
     return {
@@ -26,7 +24,10 @@ export async function chooseActivityAction(
           : "/partenaire/onboarding",
     };
   } catch (error) {
-    if (error instanceof PartnerAccountDomainError) {
+    if (
+      error instanceof PartnerAccountDomainError ||
+      error instanceof PartnerAuthorizationError
+    ) {
       return { success: false as const, message: error.message };
     }
     if (error instanceof ZodError) {

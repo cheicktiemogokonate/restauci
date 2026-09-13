@@ -14,6 +14,7 @@ import { RESIDENCE_BOOKING_PAYMENT_METHODS } from "./model";
 const nullableCoordinate = z.number().finite().nullable();
 
 export const residencePhotoInputSchema = z.object({
+  assetId: z.string().uuid().optional(),
   url: z.string().url("L’URL de la photo est invalide.").max(2_000),
   altText: z.string().trim().max(255).nullable().default(null),
 });
@@ -248,6 +249,20 @@ export interface PublicResidenceSearchResultDTO {
   totalPages: number;
 }
 
+/** Candidat déjà filtré par les règles Résidences, avant classement Discovery. */
+export interface ResidenceDiscoveryEligibleRecord {
+  item: Omit<
+    PublicResidenceDTO,
+    "placement" | "partnerBadgeEnabled" | "discoveryToken"
+  >;
+  candidate: {
+    resourceId: string;
+    partnerAccountId: string;
+    planCode: "decouverte" | "croissance" | "partenaire_fier";
+    organicRank: number;
+  };
+}
+
 export interface ResidenceUnavailablePeriodDTO {
   id: string;
   residenceId: string;
@@ -314,6 +329,7 @@ export interface ResidenceStayQuoteDTO {
 
 export interface AdminResidenceListItemDTO {
   id: string;
+  partnerAccountId: string;
   title: string;
   city: string;
   accountName: string;
@@ -322,6 +338,11 @@ export interface AdminResidenceListItemDTO {
   publicationIntent: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdminResidenceListItemWithPublicationDTO
+  extends AdminResidenceListItemDTO {
+  publication: ResidencePublicationStatusDTO;
 }
 
 export interface AdminResidenceDetailsDTO extends PartnerResidenceDTO {
@@ -335,4 +356,18 @@ export interface AdminResidenceDetailsDTO extends PartnerResidenceDTO {
 export interface AdminResidenceWithPublicationDTO
   extends AdminResidenceDetailsDTO {
   publication: ResidencePublicationStatusDTO;
+}
+
+export interface AdminResidenceAccountSummaryDTO {
+  residences: Array<{
+    id: string;
+    title: string;
+    moderationStatus: ResidenceModerationStatus;
+    isPubliclyVisible: boolean;
+  }>;
+  visibleCount: number;
+  quota: {
+    planCode: string;
+    maxPublicResidences: number | null;
+  };
 }

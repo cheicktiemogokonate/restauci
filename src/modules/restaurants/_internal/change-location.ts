@@ -2,8 +2,8 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 import { transactionalDb } from "@/infrastructure/db";
-import { restaurants } from "@/lib/db/schema";
-import { invalidateRestaurantCache } from "@/lib/cache";
+import { restaurants } from "@/infrastructure/db/schema";
+import { invalidateRestaurantCache } from "@/infrastructure/cache";
 import {
   getServiceMarketCapability,
   resolveServiceMarketAtCoordinates,

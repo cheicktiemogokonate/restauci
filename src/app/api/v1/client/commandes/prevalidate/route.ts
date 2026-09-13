@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { getClientSession } from "@/lib/api/auth-client";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, commandeClientLimiter } from "@/lib/rate-limit";
+import { getClientSession } from "@/app/api/_shared/auth-client";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, commandeClientLimiter } from "@/infrastructure/rate-limit";
 import { prevalidateRestaurantOrderSchema } from "@/modules/orders/contracts";
 import { RestaurantOrderError } from "@/modules/orders/model";
 import { prevalidateRestaurantOrder } from "@/modules/orders/server";

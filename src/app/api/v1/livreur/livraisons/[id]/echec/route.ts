@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireDriverSession } from "@/lib/api/auth-driver";
-import { deliveryErrorResponse } from "@/lib/api/delivery-response";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, mobileApiLimiter } from "@/lib/rate-limit";
+import { requireDriverSession } from "@/app/api/_shared/auth-driver";
+import { deliveryErrorResponse } from "@/app/api/_shared/delivery-response";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, mobileApiLimiter } from "@/infrastructure/rate-limit";
 import { DELIVERY_FAILURE_REASONS } from "@/modules/deliveries/model";
 import { failDriverDelivery } from "@/modules/deliveries/server";
 

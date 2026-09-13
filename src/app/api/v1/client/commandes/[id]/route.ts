@@ -1,13 +1,14 @@
-import { getClientSession } from "@/lib/api/auth-client";
-import { apiResponse } from "@/lib/api/response";
-import { db } from "@/lib/db";
-import { commandes, financialTransactions, livraisons, payments, restaurants } from "@/lib/db/schema";
-import { transitionRestaurantOrder } from "@/lib/db/commandes-mutations";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, clientApiLimiter } from "@/lib/rate-limit";
-import { and, desc, eq } from "drizzle-orm";
+import { getClientSession } from "@/app/api/_shared/auth-client";
+import { apiResponse } from "@/app/api/_shared/response";
+import {
+  getClientOrder,
+  transitionRestaurantOrder,
+} from "@/modules/orders/server";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, clientApiLimiter } from "@/infrastructure/rate-limit";
 import { NextRequest } from "next/server";
 import { FinancialTransactionError } from "@/modules/transactions/model";
+import { getClientDelivery } from "@/modules/deliveries/server";
 
 const log = createLogger("v1-client-commande-detail");
 
@@ -35,68 +36,18 @@ export async function GET(
   const routeParams = await params;
 
   try {
-    const [commande] = await db
-      .select({
-        id: commandes.id,
-        numero: commandes.numero,
-        statut: commandes.statut,
-        modeCommande: commandes.modeCommande,
-        items: commandes.items,
-        sousTotal: commandes.sousTotal,
-        fraisLivraison: commandes.fraisLivraison,
-        total: commandes.total,
-        noteClient: commandes.noteClient,
-        adresseLivraison: commandes.adresseLivraison,
-        numeroTable: commandes.numeroTable,
-        createdAt: commandes.createdAt,
-        heureAcceptee: commandes.heureAcceptee,
-        heurePrete: commandes.heurePrete,
-        heureServie: commandes.heureServie,
-        restaurantId: commandes.restaurantId,
-        clientId: commandes.clientId,
-      })
-      .from(commandes)
-      .where(
-        and(
-          eq(commandes.id, routeParams.id),
-          eq(commandes.clientId, (await session).clientId), // Sécurité : le client ne voit que SES commandes
-        ),
-      )
-      .limit(1);
+    const clientId = (await session).clientId;
+    const commande = await getClientOrder(routeParams.id, clientId);
 
     if (!commande) return apiResponse.notFound("Commande");
 
-    // Récupérer le nom du restaurant
-    const [restaurant] = await db
-      .select({ nom: restaurants.nom, logoUrl: restaurants.logoUrl })
-      .from(restaurants)
-      .where(eq(restaurants.id, commande.restaurantId))
-      .limit(1);
-
     const livraison =
       commande.modeCommande === "livraison"
-        ? await db.query.livraisons.findFirst({
-            where: eq(livraisons.commandeId, commande.id),
-            columns: {
-              statut: true,
-              heureDepart: true,
-              heureLivree: true,
-            },
-          })
+        ? await getClientDelivery(clientId, commande.id)
         : null;
-    const [providerPayment] = await db.select({
-      provider: payments.provider,
-      method: payments.method,
-      status: payments.status,
-      checkoutUrl: payments.checkoutUrl,
-    }).from(payments)
-      .innerJoin(financialTransactions, eq(financialTransactions.id, payments.transactionId))
-      .where(and(
-        eq(financialTransactions.restaurantOrderId, commande.id),
-        eq(payments.provider, "paystack"),
-      ))
-      .orderBy(desc(payments.createdAt))
-      .limit(1);
+    const providerPayment = commande.financialTransaction?.payments
+      .filter((payment) => payment.provider === "paystack")
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
     const timelineEtapes: readonly string[] =
       commande.statut === "en_attente_paiement"
         ? (["en_attente_paiement"] as const)
@@ -106,7 +57,7 @@ export async function GET(
     const effectiveStatus =
       commande.statut === "servie"
         ? "servie"
-        : livraison?.statut === "en_route"
+        : livraison?.status === "en_route"
           ? "en_route"
           : commande.statut;
 
@@ -119,7 +70,7 @@ export async function GET(
         recue: commande.createdAt,
         en_preparation: commande.heureAcceptee,
         prete: commande.heurePrete,
-        en_route: livraison?.heureDepart ?? null,
+        en_route: livraison?.startedAt ? new Date(livraison.startedAt) : null,
         servie: commande.heureServie,
       };
 
@@ -133,16 +84,39 @@ export async function GET(
     });
 
     return apiResponse.success({
-      ...commande,
-      restaurant: restaurant ?? null,
+      id: commande.id,
+      numero: commande.numero,
+      statut: commande.statut,
+      modeCommande: commande.modeCommande,
+      items: commande.items,
+      sousTotal: commande.sousTotal,
+      fraisLivraison: commande.fraisLivraison,
+      total: commande.total,
+      noteClient: commande.noteClient,
+      adresseLivraison: commande.adresseLivraison,
+      numeroTable: commande.numeroTable,
+      createdAt: commande.createdAt,
+      heureAcceptee: commande.heureAcceptee,
+      heurePrete: commande.heurePrete,
+      heureServie: commande.heureServie,
+      restaurantId: commande.restaurantId,
+      clientId: commande.clientId,
+      restaurant: commande.restaurant,
       statutLabel:
         effectiveStatus === "en_route"
           ? "En livraison"
           : STATUT_LABELS_CLIENT[commande.statut] ?? commande.statut,
-      livraisonStatut: livraison?.statut ?? null,
+      livraisonStatut: livraison?.status ?? null,
       estAnnulee: commande.statut === "annulee",
       timeline: commande.statut === "annulee" ? [] : etapes,
-      payment: providerPayment ?? null,
+      payment: providerPayment
+        ? {
+            provider: providerPayment.provider,
+            method: providerPayment.method,
+            status: providerPayment.status,
+            checkoutUrl: providerPayment.checkoutUrl,
+          }
+        : null,
     });
   } catch (err) {
     log.error(
@@ -165,12 +139,15 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    const commande = await transitionRestaurantOrder({
-      id,
-      clientId: (await session).clientId,
-      targetStatus: "annulee",
-      allowedPreviousStatuses: ["en_attente_paiement", "recue"],
-    });
+    const clientId = (await session).clientId;
+    const commande = await transitionRestaurantOrder(
+      { type: "client", id: clientId, clientId },
+      {
+        orderId: id,
+        targetStatus: "annulee",
+        allowedPreviousStatuses: ["en_attente_paiement", "recue"],
+      },
+    );
 
     if (!commande) {
       return apiResponse.error(

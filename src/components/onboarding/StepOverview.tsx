@@ -11,7 +11,7 @@ import {
   getEstablishmentCategoryLabel,
   getEstablishmentTypeLabel,
   getServiceTypeLabel,
-} from "@/lib/onboarding/settings";
+} from "@/modules/restaurants/presentation/onboarding-settings";
 import { RestaurantConfig } from "./types";
 import { Button } from "../ui/button";
 

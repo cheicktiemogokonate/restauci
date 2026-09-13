@@ -8,13 +8,17 @@ import { Input } from "@/components/ui/input";
 import {
   associatePaystackSubaccountAction,
   disablePaystackSubaccountAction,
-} from "@/lib/actions/admin-provider-accounts";
+} from "@/app/_actions/admin-provider-accounts";
 
 export function PaystackProviderAccountCard(props: {
   resourceType: "restaurant" | "residence";
   resourceId: string;
   partnerAccountId: string;
-  account: { providerAccountReference: string; status: "active" | "disabled"; verifiedAt: Date } | null;
+  account: {
+    providerAccountReference: string;
+    status: "pending" | "active" | "disabled";
+    verifiedAt: Date | null;
+  } | null;
 }) {
   const [code, setCode] = useState(props.account?.providerAccountReference ?? "");
   const [pending, startTransition] = useTransition();
@@ -22,7 +26,7 @@ export function PaystackProviderAccountCard(props: {
     <section className="rounded-xl border bg-white p-5 sm:p-6">
       <div className="flex items-start gap-3">
         <span className="flex size-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><BadgeDollarSign className="size-5" /></span>
-        <div><h2 className="font-semibold text-gray-900">Compte de règlement Paystack</h2><p className="text-sm text-gray-500">Association manuelle d’un subaccount déjà créé et vérifié dans Paystack.</p></div>
+        <div><h2 className="font-semibold text-gray-900">Compte de règlement Paystack</h2><p className="text-sm text-gray-500">Outil de secours : l’association normale est créée par le partenaire après son KYC.</p></div>
       </div>
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <Input value={code} onChange={(event) => setCode(event.target.value)} placeholder="ACCT_xxxxxxxxxx" disabled={pending} />
@@ -39,7 +43,7 @@ export function PaystackProviderAccountCard(props: {
           } catch (error) { toast.error(error instanceof Error ? error.message : "Désactivation impossible"); }
         })}>Désactiver</Button> : null}
       </div>
-      <p className="mt-2 text-xs text-gray-500">Statut : {props.account?.status === "active" ? "actif et vérifié" : props.account ? "désactivé" : "non associé"}</p>
+      <p className="mt-2 text-xs text-gray-500">Statut : {props.account?.status === "active" ? "actif" : props.account?.status === "pending" ? "validation Paystack en attente" : props.account ? "désactivé" : "non associé"}</p>
     </section>
   );
 }

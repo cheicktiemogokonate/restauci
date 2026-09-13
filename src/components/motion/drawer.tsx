@@ -3,8 +3,8 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, type ReactNode } from "react";
-import { EASE_OUT, SPRING_PANEL } from "@/lib/ease";
-import { cn } from "@/lib/utils";
+import { EASE_OUT, SPRING_PANEL } from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 
 export interface DrawerProps {
   open: boolean;

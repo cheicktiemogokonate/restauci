@@ -1,31 +1,29 @@
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
 import {
   signClientAccessToken,
   signClientRefreshToken,
   verifyClientRefreshToken,
-} from "@/lib/auth";
-import { createLogger } from "@/lib/logger";
+} from "@/modules/auth/server";
+import { createLogger } from "@/infrastructure/logger";
 import { NextRequest } from "next/server";
-import { db } from "@/lib/db";
-import { clients } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { getClientSessionState } from "@/modules/clients/server";
 import {
   CLIENT_REFRESH_COOKIE,
   applyClientRefreshTransport,
   clearClientRefreshCookie,
-} from "@/lib/api/client-session-cookie";
+} from "@/app/api/_shared/client-session-cookie";
 import {
   consumeTokenOnce,
   isOwnerSessionRevoked,
   isSessionRevoked,
   revokeSession,
-} from "@/lib/api/token-blacklist";
+} from "@/infrastructure/auth/revocation";
 import {
   clientRefreshRequestSchema,
   getClientRefreshLifetime,
   resolveClientRefreshToken,
-} from "@/lib/api/client-token-transport";
+} from "@/app/api/_shared/client-token-transport";
 
 const log = createLogger("v1-client-auth-refresh");
 
@@ -99,12 +97,8 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    const [client] = await db
-      .select({ id: clients.id, actif: clients.actif })
-      .from(clients)
-      .where(eq(clients.id, payload.clientId))
-      .limit(1);
-    if (!client?.actif) {
+    const client = await getClientSessionState(payload.clientId);
+    if (!client?.active) {
       const response = apiResponse.forbidden("Compte client désactivé");
       clearClientRefreshCookie(response);
       return response;

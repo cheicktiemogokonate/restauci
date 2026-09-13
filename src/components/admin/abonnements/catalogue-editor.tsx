@@ -29,7 +29,7 @@ import {
   publishSubscriptionCatalogueDraftAction,
   restoreSubscriptionCatalogueRevisionToDraftAction,
   saveSubscriptionCatalogueDraftAction,
-} from "@/lib/actions/admin-subscriptions";
+} from "@/app/_actions/admin-subscriptions";
 import {
   subscriptionCataloguePayloadSchema,
   type SubscriptionCataloguePayload,
@@ -130,9 +130,9 @@ function ExposurePreview({
 
         <div className="border-t bg-muted/35 p-5 sm:p-6 lg:border-l lg:border-t-0">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            Simulation d’une page
+            Projection indicative d’une page
           </p>
-          <div className="mt-4 grid grid-cols-4 gap-2" aria-label="Simulation de huit résultats">
+          <div className="mt-4 grid grid-cols-4 gap-2" aria-label="Projection de huit emplacements">
             {Array.from({ length: 8 }, (_, index) => {
               const promotedCount = policy.enabled
                 ? Math.floor((8 * policy.sponsoredShareBps) / 10_000)

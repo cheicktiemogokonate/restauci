@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/admin/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { IdentityStatusBadge } from "@/modules/identity/presentation/identity-status-badge";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
+import { getAdminSession } from "@/modules/auth/server";
 import { listIdentityVerifications } from "@/modules/identity/server";
 import type { IdentityVerificationStatus } from "@/modules/identity/model";
 

@@ -3,20 +3,14 @@
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { StatusBadge } from "@/components/admin/ui/status-badge";
 import { Table, type TableColumn } from "@/components/motion/table";
-import { formatDate, formatHeure } from "@/lib/utils/format";
+import { formatDate, formatHeure } from "@/shared/format";
 import { History } from "lucide-react";
 import Link from "next/link";
+import type { AdminAuditRowDTO } from "@/modules/audit/contracts";
 
-interface AuditRow {
-  id: string;
-  adminId: string;
-  adminNom: string;
-  action: string;
-  ressourceType: string;
-  ressourceId: string;
-  details: Record<string, unknown> | null;
+type AuditRow = Omit<AdminAuditRowDTO, "createdAt"> & {
   createdAt: Date | string;
-}
+};
 
 const actionLabels: Record<string, string> = {
   restaurant_valide: "Restaurant validé",
@@ -36,6 +30,7 @@ const actionLabels: Record<string, string> = {
   abonnement_expire: "Abonnement expiré",
   abonnement_regrade: "Abonnement modifié",
   catalogue_modifie: "Catalogue modifié",
+  admin_account_created: "Compte administrateur créé",
 };
 
 function resourceHref(row: AuditRow) {
@@ -46,6 +41,7 @@ function resourceHref(row: AuditRow) {
   if (row.ressourceType === "user" || row.ressourceType === "client") {
     return "/admin/users";
   }
+  if (row.ressourceType === "admin_account") return "/admin/users";
   return null;
 }
 
@@ -80,7 +76,7 @@ export function AuditAdminTable({ rows }: { rows: AuditRow[] }) {
     },
     {
       key: "adminNom",
-      header: "Administrateur",
+      header: "Acteur",
       sortable: true,
       width: "180px",
       cell: (row) => <span className="font-medium">{row.adminNom}</span>,
@@ -146,6 +142,19 @@ export function AuditAdminTable({ rows }: { rows: AuditRow[] }) {
           </span>
         );
       },
+    },
+    {
+      key: "correlationId",
+      header: "Corrélation",
+      width: "230px",
+      cell: (row) => (
+        <span
+          className="font-mono text-xs text-muted-foreground"
+          title={row.eventId ?? undefined}
+        >
+          {row.correlationId ?? "Action historique"}
+        </span>
+      ),
     },
   ];
 

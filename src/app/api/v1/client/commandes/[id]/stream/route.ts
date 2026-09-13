@@ -1,9 +1,9 @@
-import { getClientSession } from "@/lib/api/auth-client";
-import { apiResponse } from "@/lib/api/response";
-import { db } from "@/lib/db";
-import { createLogger } from "@/lib/logger";
+import { getClientSession } from "@/app/api/_shared/auth-client";
+import { apiResponse } from "@/app/api/_shared/response";
+import { createLogger } from "@/infrastructure/logger";
 import { NextRequest } from "next/server";
-import { acquireSseConnectionSlot } from "@/lib/api/sse-concurrency";
+import { acquireSseConnectionSlot } from "@/app/api/_shared/sse-concurrency";
+import { getClientOrderState } from "@/modules/orders/server";
 
 const log = createLogger("v1-client-commande-stream");
 
@@ -19,12 +19,7 @@ export async function GET(
 
   const { id } = await params;
   const clientId = (await session).clientId;
-  const readCommande = () =>
-    db.query.commandes.findFirst({
-      where: (commande, { and, eq }) =>
-        and(eq(commande.id, id), eq(commande.clientId, clientId)),
-      columns: { id: true, statut: true, updatedAt: true },
-    });
+  const readCommande = () => getClientOrderState(id, clientId);
 
   const commande = await readCommande();
   if (!commande) return apiResponse.notFound("Commande");

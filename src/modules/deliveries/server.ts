@@ -7,13 +7,13 @@ import {
   isTokenBlacklisted,
   revokeOwnerSessions,
   revokeSession,
-} from "@/infrastructure/auth/session-revocation";
+} from "@/infrastructure/auth/revocation";
 import {
   signDriverActivationToken,
   verifyDriverAccessToken,
   verifyDriverActivationToken,
   verifyDriverRefreshToken,
-} from "@/infrastructure/auth/driver-tokens";
+} from "@/infrastructure/auth/tokens";
 import {
   activateDriverCredentialsSchema,
   clientConfirmDeliverySchema,

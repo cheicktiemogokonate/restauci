@@ -3,7 +3,7 @@ import {
   clearClientMemoryCache,
   readClientMemoryCache,
   writeClientMemoryCache,
-} from "../src/lib/client-app/client-memory-cache";
+} from "../src/modules/clients/presentation/client-app/client-memory-cache";
 
 describe("cache mémoire du parcours client", () => {
   afterEach(() => {

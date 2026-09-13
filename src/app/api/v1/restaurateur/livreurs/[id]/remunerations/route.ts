@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
-import { requireRestaurateurSession } from "@/lib/api/auth-mobile";
-import { deliveryErrorResponse } from "@/lib/api/delivery-response";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, mobileApiLimiter } from "@/lib/rate-limit";
+import { requireRestaurateurSession } from "@/app/api/_shared/auth-mobile";
+import { deliveryErrorResponse } from "@/app/api/_shared/delivery-response";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, mobileApiLimiter } from "@/infrastructure/rate-limit";
 import { confirmDriverCompensationPaymentSchema } from "@/modules/deliveries/contracts";
 import { confirmDriverCompensationPayment } from "@/modules/deliveries/server";
 

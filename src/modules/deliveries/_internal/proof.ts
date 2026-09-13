@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { env } from "@/lib/env";
+import { env } from "@/infrastructure/env";
 import { DELIVERY_PROOF_CODE_LENGTH } from "../model";
 
 function proofDigest(deliveryId: string, code: string): Buffer {

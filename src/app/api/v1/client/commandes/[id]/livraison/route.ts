@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
-import { getClientSession } from "@/lib/api/auth-client";
-import { apiResponse } from "@/lib/api/response";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, clientApiLimiter } from "@/lib/rate-limit";
+import { getClientSession } from "@/app/api/_shared/auth-client";
+import { apiResponse } from "@/app/api/_shared/response";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, clientApiLimiter } from "@/infrastructure/rate-limit";
 import { getClientDelivery } from "@/modules/deliveries/server";
 
 const log = createLogger("v1-client-delivery");

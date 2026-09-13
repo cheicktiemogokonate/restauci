@@ -2,8 +2,8 @@
 
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
-import { SPRING_PRESS } from "@/lib/ease";
-import { cn } from "@/lib/utils";
+import { SPRING_PRESS } from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 
 export function IconButton({
   onClick,

@@ -4,7 +4,7 @@ import type {
   CreneauHoraire,
   PlatAvecCategorie,
   Restaurant,
-} from "@/lib/db/types";
+} from "@/infrastructure/db/types";
 
 export type { PlatAvecCategorie };
 

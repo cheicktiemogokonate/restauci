@@ -4,7 +4,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { clientApi } from "@/lib/client-app/api-client";
+import { clientApi } from "@/modules/clients/presentation/client-app/api-client";
 import { CheckCircle2, MapPin, Search } from "lucide-react";
 import { useState, useTransition } from "react";
 

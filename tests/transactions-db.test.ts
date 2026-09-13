@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { readFileSync } from "node:fs";
+import {
+  warmApplicationDatabaseConnections,
+  warmNeonTestPool,
+} from "./support/neon-test-connection";
 
 const runDatabaseTests = process.env.RUN_TRANSACTION_DB_TESTS === "true";
 const allowDevelopmentDatabase =
@@ -32,8 +36,14 @@ const describeDatabase = runDatabaseTests ? describe : describe.skip;
 
 describeDatabase("transactions and payments database invariants", () => {
   let transactionService: typeof import("@/modules/transactions/server");
-  let commissionLedger: typeof import("@/lib/commissions/ledger");
-  const pool = new Pool({ connectionString: databaseUrl, max: 5 });
+  let commissionLedger: typeof import("@/modules/commissions/server");
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    max: 2,
+    connectionTimeoutMillis: 30_000,
+    idleTimeoutMillis: 60_000,
+    keepAlive: true,
+  });
   const suffix = crypto.randomUUID();
   const partnerUserId = crypto.randomUUID();
   const adminUserId = crypto.randomUUID();
@@ -71,8 +81,10 @@ describeDatabase("transactions and payments database invariants", () => {
   }
 
   beforeAll(async () => {
+    await warmNeonTestPool(pool);
     transactionService = await import("@/modules/transactions/server");
-    commissionLedger = await import("@/lib/commissions/ledger");
+    commissionLedger = await import("@/modules/commissions/server");
+    await warmApplicationDatabaseConnections();
     await pool.query(
       `INSERT INTO users (id, nom, email, password, telephone, role, created_at, updated_at)
        VALUES

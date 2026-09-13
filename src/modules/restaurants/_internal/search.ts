@@ -2,23 +2,24 @@ import "server-only";
 
 import { and, asc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/infrastructure/db";
-import { restaurants } from "@/lib/db/schema";
-import type { DiscoveryCandidate } from "@/modules/discovery/model";
+import { partnerIdentityVerifications, restaurants } from "@/infrastructure/db/schema";
 import type { SubscriptionPlanCode } from "@/modules/subscriptions/model";
-import type { RestaurantSearchInput, RestaurantSearchItemDTO } from "../contracts";
-
-export interface RestaurantDiscoveryRecord {
-  item: Omit<
-    RestaurantSearchItemDTO,
-    "placement" | "partnerBadgeEnabled" | "discoveryToken"
-  >;
-  candidate: DiscoveryCandidate;
-}
+import type {
+  RestaurantDiscoveryEligibleRecord,
+  RestaurantSearchInput,
+} from "../contracts";
 
 function buildSearchConditions(input: RestaurantSearchInput, serviceMarketId?: string) {
   const conditions: SQL[] = [
     eq(restaurants.actif, true),
     eq(restaurants.suspendu, false),
+    sql`EXISTS (
+      SELECT 1
+      FROM ${partnerIdentityVerifications} AS identity_verification
+      WHERE identity_verification.partner_account_id = ${restaurants.partnerAccountId}
+        AND identity_verification.status = 'verified'
+        AND identity_verification.verified_at IS NOT NULL
+    )`,
   ];
   if (serviceMarketId) conditions.unshift(eq(restaurants.serviceMarketId, serviceMarketId));
 
@@ -60,7 +61,7 @@ function buildSearchConditions(input: RestaurantSearchInput, serviceMarketId?: s
 async function searchVisibleRestaurantCandidates(
   input: RestaurantSearchInput,
   serviceMarketId?: string,
-): Promise<RestaurantDiscoveryRecord[]> {
+): Promise<RestaurantDiscoveryEligibleRecord[]> {
   const distanceMeters = sql<number>`ST_DistanceSphere(
     ST_SetSRID(ST_MakePoint(${restaurants.longitude}, ${restaurants.latitude}), 4326),
     ST_SetSRID(ST_MakePoint(${input.currentLocation.lng}, ${input.currentLocation.lat}), 4326)

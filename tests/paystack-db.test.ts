@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { sql } from "drizzle-orm";
+import {
+  warmApplicationDatabaseConnections,
+  warmNeonTestPool,
+} from "./support/neon-test-connection";
 
 const enabled = process.env.RUN_PAYSTACK_DB_TESTS === "true";
 const allowDevelopment = process.env.ALLOW_DEVELOPMENT_PAYSTACK_DB_TESTS === "true";
@@ -11,7 +15,13 @@ if (enabled && (!databaseUrl || !allowDevelopment)) {
 const describeDb = enabled ? describe : describe.skip;
 
 describeDb("Paystack Bloc 8 database and concurrency", () => {
-  const pool = new Pool({ connectionString: databaseUrl, max: 6 });
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    max: 2,
+    connectionTimeoutMillis: 30_000,
+    idleTimeoutMillis: 60_000,
+    keepAlive: true,
+  });
   const suffix = crypto.randomUUID();
   const phoneSuffix = suffix.replace(/\D/g, "").slice(0, 8).padEnd(8, "0");
   const partnerUserId = crypto.randomUUID();
@@ -22,10 +32,10 @@ describeDb("Paystack Bloc 8 database and concurrency", () => {
   const orderIds: string[] = [];
   let previousRecoveryBps = 5_000;
   let transactionService: typeof import("@/modules/transactions/server");
-  let paymentService: typeof import("@/modules/transactions/payment-service");
-  let ledger: typeof import("@/lib/commissions/ledger");
-  let transactionalDb: typeof import("@/lib/db/transaction").transactionalDb;
-  let orderMutations: typeof import("@/lib/db/commandes-mutations");
+  let paymentService: typeof import("@/modules/payments/server");
+  let ledger: typeof import("@/modules/commissions/server");
+  let transactionalDb: typeof import("@/infrastructure/db/transaction").transactionalDb;
+  let orderMutations: typeof import("@/modules/orders/server");
 
   async function insertOrder(status: "en_attente_paiement" | "servie", total = 20_000) {
     const id = crypto.randomUUID();
@@ -47,11 +57,13 @@ describeDb("Paystack Bloc 8 database and concurrency", () => {
   }
 
   beforeAll(async () => {
+    await warmNeonTestPool(pool);
     transactionService = await import("@/modules/transactions/server");
-    paymentService = await import("@/modules/transactions/payment-service");
-    ledger = await import("@/lib/commissions/ledger");
-    transactionalDb = (await import("@/lib/db/transaction")).transactionalDb;
-    orderMutations = await import("@/lib/db/commandes-mutations");
+    paymentService = await import("@/modules/payments/server");
+    ledger = await import("@/modules/commissions/server");
+    transactionalDb = (await import("@/infrastructure/db/transaction")).transactionalDb;
+    orderMutations = await import("@/modules/orders/server");
+    await warmApplicationDatabaseConnections();
     const policy = await pool.query("SELECT cash_debt_recovery_max_bps FROM commission_policy_settings WHERE id=1");
     previousRecoveryBps = policy.rows[0]?.cash_debt_recovery_max_bps ?? 5_000;
     await pool.query("UPDATE commission_policy_settings SET cash_debt_recovery_max_bps=5000 WHERE id=1");
@@ -64,8 +76,8 @@ describeDb("Paystack Bloc 8 database and concurrency", () => {
       VALUES ($1,$2,'Restaurant B8',$3,$4,'Test',0,0,NOW(),NOW())`, [restaurantId, partnerAccountId, `restaurant-${suffix}`, `+22533${phoneSuffix}`]);
     await pool.query("INSERT INTO clients (id,nom,telephone,password,actif,created_at,updated_at) VALUES ($1,'Client B8',$2,'x',true,NOW(),NOW())", [clientId, `+22544${phoneSuffix}`]);
     await pool.query(`INSERT INTO payment_provider_accounts (
-      id,partner_account_id,provider,provider_account_reference,status,verified_at,linked_by_admin_id,created_at,updated_at
-    ) VALUES ($1,$2,'paystack',$3,'active',NOW(),$4,NOW(),NOW())`, [crypto.randomUUID(), partnerAccountId, `ACCT${suffix.replaceAll("-", "")}`, adminUserId]);
+      id,partner_account_id,provider,provider_account_reference,status,provider_verified,verified_at,linked_by_admin_id,created_at,updated_at
+    ) VALUES ($1,$2,'paystack',$3,'active',true,NOW(),$4,NOW(),NOW())`, [crypto.randomUUID(), partnerAccountId, `ACCT${suffix.replaceAll("-", "")}`, adminUserId]);
   }, 60_000);
 
   afterAll(async () => {
@@ -99,7 +111,7 @@ describeDb("Paystack Bloc 8 database and concurrency", () => {
     expect(results.filter((result) => result.alreadyConfirmed)).toHaveLength(1);
     const state = await pool.query("SELECT c.statut,t.status,p.status AS payment_status FROM commandes c JOIN transactions t ON t.restaurant_order_id=c.id JOIN payments p ON p.transaction_id=t.id WHERE c.id=$1", [orderId]);
     expect(state.rows[0]).toMatchObject({ statut: "recue", status: "paid", payment_status: "confirmed" });
-    await expect(transactionalDb.transaction((tx) => orderMutations.applyRestaurantOrderTransition(tx, {
+    await expect(transactionalDb.transaction((tx) => orderMutations.applyLegacyRestaurantOrderTransition(tx, {
       id: orderId,
       targetStatus: "annulee",
       allowedPreviousStatuses: ["recue"],
@@ -159,7 +171,7 @@ describeDb("Paystack Bloc 8 database and concurrency", () => {
       providerReference: `cancel-payment-${suffix}`,
       recoverySettlementId: recovery!.id,
     });
-    await transactionalDb.transaction((tx) => orderMutations.applyRestaurantOrderTransition(tx, {
+    await transactionalDb.transaction((tx) => orderMutations.applyLegacyRestaurantOrderTransition(tx, {
       id: orderId,
       targetStatus: "annulee",
       allowedPreviousStatuses: ["en_attente_paiement"],
@@ -170,7 +182,7 @@ describeDb("Paystack Bloc 8 database and concurrency", () => {
 
   it("applique les unicités du provider account", async () => {
     await expect(pool.query(`INSERT INTO payment_provider_accounts (
-      id,partner_account_id,provider,provider_account_reference,status,verified_at,linked_by_admin_id,created_at,updated_at
-    ) VALUES ($1,$2,'paystack',$3,'active',NOW(),$4,NOW(),NOW())`, [crypto.randomUUID(), partnerAccountId, `ACCT_duplicate_${suffix}`, adminUserId])).rejects.toMatchObject({ code: "23505" });
+      id,partner_account_id,provider,provider_account_reference,status,provider_verified,verified_at,linked_by_admin_id,created_at,updated_at
+    ) VALUES ($1,$2,'paystack',$3,'active',true,NOW(),$4,NOW(),NOW())`, [crypto.randomUUID(), partnerAccountId, `ACCT_duplicate_${suffix}`, adminUserId])).rejects.toMatchObject({ code: "23505" });
   });
 });

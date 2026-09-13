@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 import { IdentityReviewPanel } from "@/components/admin/identity-review-panel";
 import { AdminPage } from "@/components/admin/ui/admin-page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
+import { getAdminSession } from "@/modules/auth/server";
 import { IdentityStatusBadge } from "@/modules/identity/presentation/identity-status-badge";
 import { getAdminIdentityVerification } from "@/modules/identity/server";
+import { IdentityDocumentViewer } from "@/modules/identity/presentation/identity-document-viewer";
 
 function formatDate(value: string | null) {
   return value ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: value.includes("T") ? "short" : undefined }).format(new Date(value)) : "—";
@@ -45,13 +46,11 @@ export default async function AdminIdentityVerificationDetailPage({ params }: { 
 
           <Card>
             <CardHeader><CardTitle>Justificatifs privés</CardTitle></CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              {verification.documents.map((document) => (
-                <a key={document.id} href={`/api/admin/identity/documents/${document.id}`} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border p-4 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40">
-                  <div><p className="font-medium">{document.side === "front" ? (verification.documentType === "passport" ? "Page d’identité" : "Recto") : "Verso"}</p><p className="mt-1 text-xs text-slate-500">{document.contentType} · {Math.ceil(document.sizeBytes / 1024)} Ko</p></div><ExternalLink className="size-4 text-slate-400" />
-                </a>
-              ))}
-              {verification.documents.length === 0 && <p className="text-sm text-slate-500">Aucun justificatif enregistré.</p>}
+            <CardContent>
+              <IdentityDocumentViewer
+                documents={verification.documents}
+                documentType={verification.documentType}
+              />
             </CardContent>
           </Card>
         </div>

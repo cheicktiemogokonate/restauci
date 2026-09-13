@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Building2, ChevronLeft, ChevronRight, SearchX } from "lucide-react";
 
-import { PublicResidenceCard } from "@/components/residences/public-residence-card";
-import { PublicResidenceHeader } from "@/components/residences/public-residence-header";
-import { PublicResidenceSearch } from "@/components/residences/public-residence-search";
+import { PublicResidenceCard } from "@/modules/residences/presentation/public-residence-card";
+import { PublicResidenceHeader } from "@/modules/residences/presentation/public-residence-header";
+import { PublicResidenceSearch } from "@/modules/residences/presentation/public-residence-search";
 import { Button } from "@/components/ui/button";
 import { publicResidenceSearchSchema } from "@/modules/residences/contracts";
 import { getTodayInAbidjan } from "@/modules/residences/model";
-import { searchPublicResidences } from "@/modules/residences/server";
+import { searchPublicResidences } from "@/modules/discovery/server";
 
 export const dynamic = "force-dynamic";
 
@@ -111,8 +111,12 @@ export default async function PublicResidencesPage({
             </div>
 
             <section aria-label="Logements disponibles" className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {result.items.map((residence) => (
-                <PublicResidenceCard key={residence.id} residence={residence} />
+              {result.items.map((residence, index) => (
+                <PublicResidenceCard
+                  key={residence.id}
+                  residence={residence}
+                  eager={index < 3}
+                />
               ))}
             </section>
 

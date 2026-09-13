@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requirePartnerAccount } from "@/lib/auth/partner-account";
+import { requirePartnerAccount } from "@/modules/partners/server";
 import { readPartnerIdentityDocument } from "@/modules/identity/server";
 
 export const runtime = "nodejs";
@@ -17,10 +17,12 @@ function privateDocumentResponse(
   return new Response(new Uint8Array(body), {
     headers: {
       "Content-Type": contentType,
-      "Content-Disposition": `attachment; filename="justificatif-identite.${extension}"`,
+      "Content-Disposition": `inline; filename="justificatif-identite.${extension}"`,
       "Cache-Control": "private, no-store, max-age=0",
       Pragma: "no-cache",
       "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "SAMEORIGIN",
+      "Cross-Origin-Resource-Policy": "same-origin",
       "Content-Security-Policy": "sandbox",
     },
   });

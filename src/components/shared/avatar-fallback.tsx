@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 
 interface CustomAvatarProps {
   src?: string | null;

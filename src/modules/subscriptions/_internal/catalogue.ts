@@ -1,8 +1,8 @@
 import "server-only";
 
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { persistAuditLog } from "@/lib/audit";
-import { db } from "@/lib/db";
+import { persistAuditLog } from "@/modules/audit/server";
+import { db } from "@/infrastructure/db";
 import {
   discoveryPolicySettings,
   subscriptionCatalogueDraft,
@@ -11,11 +11,11 @@ import {
   subscriptionPlanFeatureItems,
   subscriptionPlanLimits,
   subscriptionPlans,
-} from "@/lib/db/schema";
+} from "@/infrastructure/db/schema";
 import {
   transactionalDb,
   type DbExecutor,
-} from "@/lib/db/transaction";
+} from "@/infrastructure/db/transaction";
 import {
   subscriptionCataloguePayloadSchema,
   type SubscriptionCataloguePayload,

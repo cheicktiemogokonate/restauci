@@ -1,4 +1,4 @@
-import { getStatsDashboard } from "@/lib/db/queries";
+import { getRestaurantDashboardStats } from "@/modules/restaurants/server";
 import { StatsShell } from "./stats-shell";
 import type { StatsDashboard } from "@/types/dashboard";
 
@@ -11,7 +11,7 @@ interface StatsSectionProps {
  * Doit être enveloppé dans <Suspense fallback={<StatsCardsSkeleton />}>.
  */
 export async function StatsSection({ restaurantId }: StatsSectionProps) {
-  const dbStats = await getStatsDashboard(restaurantId);
+  const dbStats = await getRestaurantDashboardStats(restaurantId);
 
   const stats: StatsDashboard = {
     commandesAujourdhui: dbStats.commandesAujourdhui,

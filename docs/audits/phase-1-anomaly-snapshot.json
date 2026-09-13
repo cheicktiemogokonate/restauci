@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-04T19:52:40.312Z",
+  "environment": "configured-neon-development-test",
+  "aggregates": {
+    "users": 15,
+    "partnerAccounts": 12,
+    "restaurants": 6,
+    "residences": 2,
+    "restaurantOrders": 37,
+    "residenceReservations": 0,
+    "transactions": 36,
+    "payments": 36,
+    "notifications": 323
+  },
+  "anomalies": {
+    "partnersWithoutAccount": 2,
+    "adminPartnerAccounts": 1,
+    "restaurantAccountsWithoutRestaurant": 3,
+    "residenceAccountsWithoutResidence": 1,
+    "restaurantOrdersWithoutTransaction": 2,
+    "restaurantOrdersWithoutCommission": 34,
+    "paidTransactionsWithoutConfirmedPayment": 0,
+    "notificationsWithMissingKnownTarget": 235
+  }
+}

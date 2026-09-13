@@ -1,0 +1,217 @@
+"use client";
+
+import DeletePlatDialog from "./delete-plat-dialog";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/motion/switch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { formatPrix } from "@/shared/format";
+import type { MenuDishDTO } from "@/modules/menu/contracts";
+import {
+  Eye,
+  EyeOff,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useOptimistic, useState, useTransition } from "react";
+import { toast } from "sonner";
+import type { MenuDishActions } from "./action-types";
+
+interface MenuCardProps {
+  plat: MenuDishDTO;
+  actions: MenuDishActions;
+}
+
+export default function MenuCard({ plat, actions }: MenuCardProps) {
+  const [isPending, startTransition] = useTransition();
+  const [optimisticDispo, setOptimisticDispo] = useOptimistic(plat.disponible);
+  const [publicationIntent, setPublicationIntent] = useState(plat.publicationIntent);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const handleToggleDispo = () => {
+    const newDispo = !optimisticDispo;
+
+    startTransition(async () => {
+      setOptimisticDispo(newDispo);
+      const result = await actions.setAvailability(plat.id, newDispo);
+      if (result.error) {
+        setOptimisticDispo(!newDispo);
+        toast.error(result.error);
+        return;
+      }
+      toast.success(newDispo ? "Plat rendu disponible." : "Plat masqué du menu.");
+    });
+  };
+
+  const handlePublication = (next: boolean) => {
+    const previous = publicationIntent;
+    setPublicationIntent(next);
+    startTransition(async () => {
+      const result = await actions.setPublication(plat.id, next);
+      if (result.error) {
+        setPublicationIntent(previous);
+        toast.error(result.error);
+      } else {
+        toast.success(next ? "Plat marqué comme publié." : "Plat dépublié.");
+      }
+    });
+  };
+
+  const effectiveVisible = publicationIntent && optimisticDispo && plat.quotaEligible && plat.categoryQuotaEligible;
+
+  return (
+    <>
+      <div
+        className={`bg-white border border-border/60 rounded-[24px] overflow-hidden shadow-sm hover:shadow-md transition-shadow group flex flex-col relative ${
+          !optimisticDispo ? "opacity-70" : ""
+        }`}
+      >
+        <Link
+          href={`/restaurateur/menu/${plat.id}`}
+          className="flex-1 flex flex-col"
+        >
+          <div className="relative h-50 w-full overflow-hidden bg-muted">
+            {plat.photoUrl ? (
+              <Image
+                src={plat.photoUrl}
+                alt={plat.nom}
+                fill
+                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm bg-gray-100">
+                Sans image
+              </div>
+            )}
+
+            {!optimisticDispo && (
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                <span className="flex items-center gap-1.5 text-white text-sm font-semibold bg-black/60 px-3 py-1.5 rounded-lg">
+                  <EyeOff className="h-3.5 w-3.5" />
+                  Indisponible
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="p-5 flex flex-col flex-1">
+            <h3 className="font-bold text-[17px] text-foreground leading-tight line-clamp-2 mb-1">
+              {plat.nom}
+            </h3>
+            <p className="text-[13px] text-muted-foreground mb-6 font-medium">
+              {plat.categorie?.nom || "Non catégorisé"}
+            </p>
+            <div className="mt-auto flex items-center justify-end">
+              <span className="font-bold text-[16px] text-foreground">
+                {formatPrix(plat.prix)}
+              </span>
+            </div>
+          </div>
+        </Link>
+
+        <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full border border-white/50 bg-white/90 px-2.5 py-1.5 shadow-sm backdrop-blur-sm">
+          <Switch
+            checked={optimisticDispo}
+            onCheckedChange={handleToggleDispo}
+            onClick={(event) => event.stopPropagation()}
+            disabled={isPending}
+            ariaLabel={`Rendre ${plat.nom} ${optimisticDispo ? "indisponible" : "disponible"}`}
+            className="data-checked:bg-brand-green"
+          />
+          <span className="text-[11px] font-semibold text-foreground">
+            {optimisticDispo ? "En vente" : "Masqué"}
+          </span>
+        </div>
+
+        <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full border bg-white/95 px-2.5 py-1.5 text-[11px] font-semibold shadow-sm">
+          <Switch checked={publicationIntent} onCheckedChange={handlePublication} disabled={isPending} ariaLabel={`Publication de ${plat.nom}`} />
+          <span>{effectiveVisible ? "Visible publiquement" : !publicationIntent ? "Non publié" : !plat.categoryQuotaEligible ? "Catégorie hors quota" : !plat.quotaEligible ? "Hors quota" : "Indisponible"}</span>
+        </div>
+
+        <div className="absolute top-3 right-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-8 w-8 bg-white/90 backdrop-blur-sm hover:bg-white shadow-sm"
+                disabled={isPending}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {isPending ? (
+                  <svg
+                    className="animate-spin h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                ) : (
+                  <MoreHorizontal className="h-4 w-4" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem asChild>
+                <Link href={`/restaurateur/menu/${plat.id}`}>
+                  <Pencil className="w-4 h-4 mr-2" />
+                  Voir / Modifier
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleToggleDispo}>
+                {optimisticDispo ? (
+                  <>
+                    <EyeOff className="w-4 h-4 mr-2" />
+                    Rendre indisponible
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-4 h-4 mr-2" />
+                    Rendre disponible
+                  </>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-red-600 focus:text-red-600"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Supprimer
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <DeletePlatDialog
+        platId={plat.id}
+        platNom={plat.nom}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        action={actions.remove}
+      />
+    </>
+  );
+}

@@ -82,6 +82,7 @@ export class IdentityVerificationError extends Error {
       | "DOCUMENT_SCAN_PENDING"
       | "DOCUMENT_REJECTED"
       | "DOCUMENT_STORAGE_UNAVAILABLE"
+      | "DOCUMENT_SCAN_UNAVAILABLE"
       | "IDENTITY_NOT_VERIFIED",
     message: string,
   ) {

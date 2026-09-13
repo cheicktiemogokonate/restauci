@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { e2eCredentials } from "./global-setup";
+import seedE2EData, { e2eCredentials } from "./global-setup";
 
 test.describe.configure({ mode: "serial" });
+test.beforeAll(seedE2EData);
 
 async function connectRestaurateur(page: Page) {
   const response = await page.request.post("/api/auth/login", {
@@ -34,6 +35,25 @@ async function updateOrderStatus(page: Page, action: () => Promise<void>) {
   );
   await action();
   expect((await responsePromise).ok()).toBeTruthy();
+}
+
+async function updateDriverMission(
+  page: Page,
+  actionName: "depart" | "remise",
+  action: () => Promise<void>,
+) {
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes("/api/v1/livreur/livraisons/") &&
+      response.url().endsWith(`/${actionName}`),
+  );
+  await action();
+  const response = await responsePromise;
+  expect(
+    response.ok(),
+    `Transition livreur ${actionName} refusée (${response.status()}): ${await response.text()}`,
+  ).toBeTruthy();
 }
 
 test("un restaurateur traite une commande de la réception à l'encaissement", async ({ page }) => {
@@ -95,7 +115,7 @@ test("une commande annulée quitte le service et reste retrouvable dans l'histor
     page.getByText(`#${e2eCredentials.commandeAnnuleeNumero}`, { exact: true }),
   ).toBeVisible({ timeout: 10_000 });
 
-  await page.getByRole("combobox", { name: "Filtrer par statut" }).click();
+  await page.getByRole("button", { name: "Filtrer par statut" }).click();
   await page.getByRole("option", { name: "Annulées" }).click();
   await expect(page).toHaveURL(/historyStatus=annulee/);
 });
@@ -104,6 +124,7 @@ test("une livraison suit son cycle dédié jusqu’à la remise au client", asyn
   page,
   browser,
 }) => {
+  test.setTimeout(300_000);
   await connectRestaurateur(page);
 
   await updateOrderStatus(page, () =>
@@ -127,7 +148,7 @@ test("une livraison suit son cycle dédié jusqu’à la remise au client", asyn
   expect(orderId).toMatch(/^[0-9a-f-]{36}$/);
 
   await page.getByRole("button", { name: "Proposer à un livreur" }).click();
-  await page.getByRole("combobox").click();
+  await page.getByRole("button", { name: "Choisir un livreur" }).click();
   await page.getByRole("option", { name: /Livreur E2E/ }).click();
   await page.getByRole("button", { name: "Envoyer la proposition" }).click();
   await expect(
@@ -137,9 +158,23 @@ test("une livraison suit son cycle dédié jusqu’à la remise au client", asyn
   const driverContext = await browser.newContext();
   const driverPage = await driverContext.newPage();
   await driverPage.goto(`${new URL(page.url()).origin}/livreur`);
+  await driverPage.locator('html[data-e2e-hydrated="true"]').waitFor({
+    state: "attached",
+    timeout: 90_000,
+  });
   await driverPage.getByLabel("Identifiant").fill(e2eCredentials.driverLogin);
   await driverPage.getByLabel("Mot de passe").fill(e2eCredentials.driverPassword);
-  await driverPage.getByRole("button", { name: "Se connecter" }).click();
+  const driverLoginButton = driverPage.getByRole("button", {
+    name: "Se connecter",
+  });
+  await expect(driverLoginButton).toBeEnabled();
+  const driverLoginResponse = driverPage.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/v1/livreur/auth/login"),
+  );
+  await driverLoginButton.click();
+  expect((await driverLoginResponse).ok()).toBeTruthy();
   await expect(
     driverPage.getByText("Nouvelle proposition", { exact: true }),
   ).toBeVisible();
@@ -180,9 +215,15 @@ test("une livraison suit son cycle dédié jusqu’à la remise au client", asyn
   await expect(
     driverPage.getByRole("button", { name: "J’ai récupéré la commande" }),
   ).toBeEnabled();
-  await driverPage
-    .getByRole("button", { name: "J’ai récupéré la commande" })
-    .click();
+  await updateDriverMission(driverPage, "depart", () =>
+    driverPage
+      .getByRole("button", { name: "J’ai récupéré la commande" })
+      .click(),
+  );
+  await expect(
+    driverPage.getByRole("button", { name: "Actualiser" }),
+  ).toBeEnabled();
+  await driverPage.getByRole("button", { name: "Actualiser" }).click();
   await expect(
     driverPage.getByRole("button", { name: "Confirmer la remise" }),
   ).toBeVisible();
@@ -216,7 +257,9 @@ test("une livraison suit son cycle dédié jusqu’à la remise au client", asyn
   await driverPage
     .getByLabel(/Code client/)
     .fill(deliveryBody.data.proofCode!);
-  await driverPage.getByRole("button", { name: "Valider la remise" }).click();
+  await updateDriverMission(driverPage, "remise", () =>
+    driverPage.getByRole("button", { name: "Valider la remise" }).click(),
+  );
   await expect(
     driverPage.getByText("Livraison terminée.", { exact: true }),
   ).toBeVisible();

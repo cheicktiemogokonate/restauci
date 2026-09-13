@@ -36,6 +36,7 @@ const EMPTY_ITEM: Omit<MenuItem, "id"> = {
   category: "",
   description: "",
   photoUrl: null,
+  photoAssetId: null,
 };
 
 interface StepMenuProps {
@@ -96,15 +97,16 @@ export default function StepMenu({
       body,
     });
     const payload = (await response.json()) as {
+      assetId?: string;
       url?: string;
       error?: string;
     };
 
-    if (!response.ok || !payload.url) {
+    if (!response.ok || !payload.assetId || !payload.url) {
       throw new Error(payload.error || "Impossible d’envoyer cette image.");
     }
 
-    return payload.url;
+    return { assetId: payload.assetId, url: payload.url };
   };
 
   const selectImage = (file: File) => {
@@ -138,7 +140,7 @@ export default function StepMenu({
     setIsUploading(true);
 
     try {
-      const photoUrl = imageFile ? await uploadImage(imageFile) : null;
+      const uploaded = imageFile ? await uploadImage(imageFile) : null;
 
       updateMenu([
         ...menu,
@@ -148,7 +150,8 @@ export default function StepMenu({
           name: newItem.name.trim(),
           category: newItem.category.trim(),
           description: newItem.description.trim(),
-          photoUrl,
+          photoUrl: uploaded?.url ?? null,
+          photoAssetId: uploaded?.assetId ?? null,
         },
       ]);
       setNewItem(EMPTY_ITEM);
@@ -193,7 +196,7 @@ export default function StepMenu({
               <span>
                 {onboardingDish
                   ? "Premier plat ajouté"
-                  : "1 plat de démonstration"}
+                  : "1 plat de démarrage"}
               </span>
               <span aria-hidden="true">·</span>
               <span>{categories.length} catégories initiales</span>
@@ -488,7 +491,7 @@ export default function StepMenu({
                       id="added-dish-title"
                       className="mt-1 text-base font-bold text-gray-900"
                     >
-                      Votre démonstration est prête
+                      Votre premier plat est prêt
                     </h2>
                   </div>
 

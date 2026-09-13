@@ -1,22 +1,13 @@
 import "server-only";
 
 import { sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import type { DiscoveryCandidate } from "@/modules/discovery/model";
+import { db } from "@/infrastructure/db";
 import type { SubscriptionPlanCode } from "@/modules/subscriptions/model";
 import type {
-  PublicResidenceDTO,
   PublicResidenceSearchInput,
+  ResidenceDiscoveryEligibleRecord,
   ResidencePhotoDTO,
 } from "../contracts";
-
-export interface PublicResidenceDiscoveryRecord {
-  item: Omit<
-    PublicResidenceDTO,
-    "placement" | "partnerBadgeEnabled" | "discoveryToken"
-  >;
-  candidate: DiscoveryCandidate;
-}
 
 type SearchRow = {
   id: string;
@@ -58,7 +49,7 @@ function parsePhotos(value: SearchRow["photos"]): ResidencePhotoDTO[] {
 
 export async function searchPublicResidenceRecords(
   input: PublicResidenceSearchInput,
-): Promise<PublicResidenceDiscoveryRecord[]> {
+): Promise<ResidenceDiscoveryEligibleRecord[]> {
   const destination = input.destination?.trim() || null;
   const checkIn = input.checkIn ?? null;
   const checkOut = input.checkOut ?? null;

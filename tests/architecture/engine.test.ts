@@ -7,26 +7,26 @@ describe("architecture import engine", () => {
     const metadata = parseSourceImports(
       path.join(process.cwd(), "src/app/example.ts"),
       [
-        'import { db } from "@/lib/db";',
+        'import { db } from "@/infrastructure/db";',
         'export { value } from "../lib/value";',
         'const lazy = import("@/modules/orders/server");',
-        'type Database = typeof import("@/lib/db").db;',
-        'const legacy = require("@/lib/db/schema");',
+        'type Database = typeof import("@/infrastructure/db").db;',
+        'const legacy = require("@/infrastructure/db/schema");',
         "void lazy; void legacy;",
       ].join("\n"),
     );
 
     expect(metadata.imports.map(({ kind, target }) => [kind, target])).toEqual([
       ["export", "../lib/value"],
-      ["import", "@/lib/db"],
-      ["import-type", "@/lib/db"],
-      ["require", "@/lib/db/schema"],
+      ["import", "@/infrastructure/db"],
+      ["import-type", "@/infrastructure/db"],
+      ["require", "@/infrastructure/db/schema"],
       ["dynamic-import", "@/modules/orders/server"],
     ]);
     expect(
-      metadata.imports.find(({ target }) => target === "@/lib/db")
+      metadata.imports.find(({ target }) => target === "@/infrastructure/db")
         ?.resolvedFilePath,
-    ).toContain("/src/lib/db/index.ts");
+    ).toContain("/src/infrastructure/db/index.ts");
     expect(
       metadata.imports.find(({ target }) => target === "../lib/value")
         ?.resolvedFilePath,

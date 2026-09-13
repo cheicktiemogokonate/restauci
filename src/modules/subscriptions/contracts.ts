@@ -154,6 +154,23 @@ export const partnerSubscriptionRequestSchema = z.object({
   planCode: subscriptionPlanCodeSchema,
 });
 
+export const effectiveSubscriptionSummaryListSchema = z
+  .array(z.uuid())
+  .max(100);
+
+export interface EffectiveSubscriptionSummaryDTO {
+  partnerAccountId: string;
+  plan: {
+    code: z.infer<typeof subscriptionPlanCodeSchema>;
+    name: string;
+    rateBps: number;
+  };
+  period: {
+    status: string;
+    expiresAt: string | null;
+  } | null;
+}
+
 export const validateOfflineSubscriptionRequestSchema = z
   .object({
     requestId: z.uuid(),
@@ -188,9 +205,7 @@ export type UpdateSubscriptionCatalogueInput = z.infer<
   typeof updateSubscriptionCatalogueSchema
 >;
 
-export type SubscriptionCataloguePayload = z.infer<
-  typeof subscriptionCataloguePayloadSchema
->;
+export type { SubscriptionCataloguePayload } from "./model";
 
 export type PartnerSubscriptionRequestInput = z.infer<
   typeof partnerSubscriptionRequestSchema

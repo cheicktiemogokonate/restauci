@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
+import { getAdminSession } from "@/modules/auth/server";
 import {
   approveResidence,
   reactivateResidence,

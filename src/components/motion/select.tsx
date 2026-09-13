@@ -19,8 +19,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { EASE_OUT } from "@/lib/ease";
-import { cn } from "@/lib/utils";
+import { EASE_OUT } from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 
 const INSTANT_TRANSITION: Transition = { duration: 0 };
 
@@ -67,6 +67,11 @@ export interface SelectProps {
   value?: string;
   defaultValue?: string;
   onValueChange?: (value: string) => void;
+  /** Controlled open state for composite controls that coordinate several selects. */
+  open?: boolean;
+  /** Initial open state when the select is uncontrolled. */
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
   disabled?: boolean;
   className?: string;
   children: ReactNode;
@@ -76,6 +81,9 @@ export function Select({
   value,
   defaultValue,
   onValueChange,
+  open: openProp,
+  defaultOpen = false,
+  onOpenChange,
   disabled = false,
   className,
   children,
@@ -83,13 +91,23 @@ export function Select({
   const reduce = useReducedMotion() ?? false;
   const baseId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const [internal, setInternal] = useState(defaultValue);
   const [labels, setLabels] = useState<Map<string, string>>(new Map());
   const [placement, setPlacement] = useState<Placement>("bottom");
 
   const controlled = value !== undefined;
   const current = controlled ? value : internal;
+  const openControlled = openProp !== undefined;
+  const open = openControlled ? openProp : internalOpen;
+
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (!openControlled) setInternalOpen(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange, openControlled],
+  );
 
   const select = useCallback(
     (next: string) => {
@@ -97,7 +115,7 @@ export function Select({
       onValueChange?.(next);
       setOpen(false);
     },
-    [controlled, onValueChange],
+    [controlled, onValueChange, setOpen],
   );
 
   const register = useCallback((v: string, label: string) => {
@@ -126,7 +144,7 @@ export function Select({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPointer);
     };
-  }, [open]);
+  }, [open, setOpen]);
 
   const ctx = useMemo<SelectContextValue>(
     () => ({
@@ -147,6 +165,7 @@ export function Select({
     [
       current,
       open,
+      setOpen,
       select,
       register,
       unregister,
@@ -170,9 +189,14 @@ export function Select({
 export interface SelectTriggerProps {
   className?: string;
   children: ReactNode;
+  ariaLabel?: string;
 }
 
-export function SelectTrigger({ className, children }: SelectTriggerProps) {
+export function SelectTrigger({
+  className,
+  children,
+  ariaLabel,
+}: SelectTriggerProps) {
   const ctx = useSelectContext("SelectTrigger");
   const isTop = ctx.placement === "top";
   // edge facing the panel flattens then rounds; the far edge stays rounded.
@@ -189,6 +213,7 @@ export function SelectTrigger({ className, children }: SelectTriggerProps) {
       id={ctx.triggerId}
       disabled={ctx.disabled}
       aria-haspopup="listbox"
+      aria-label={ariaLabel}
       aria-expanded={ctx.open}
       aria-controls={ctx.listId}
       onClick={() => ctx.setOpen(!ctx.open)}
@@ -303,6 +328,7 @@ export function SelectContent({ className, children }: SelectContentProps) {
       role="listbox"
       aria-labelledby={ctx.triggerId}
       aria-hidden={!open}
+      inert={!open}
       initial={false}
       animate={
         ctx.reduce
@@ -356,7 +382,7 @@ export function SelectContent({ className, children }: SelectContentProps) {
         variants={ctx.reduce ? undefined : LIST_VARIANTS}
         initial={false}
         animate={open ? "show" : "hidden"}
-        className="p-1"
+        className="max-h-[min(20rem,calc(100vh-2rem))] overflow-y-auto p-1"
       >
         {children}
       </motion.div>

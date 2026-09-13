@@ -2,13 +2,13 @@ import { NextRequest } from "next/server";
 import {
   DRIVER_REFRESH_COOKIE,
   clearDriverRefreshCookie,
-} from "@/lib/api/driver-session-cookie";
+} from "@/app/api/_shared/driver-session-cookie";
 import {
   readOptionalDriverLogoutBody,
   resolveDriverRefreshToken,
-} from "@/lib/api/driver-token-transport";
-import { apiResponse } from "@/lib/api/response";
-import { createLogger } from "@/lib/logger";
+} from "@/app/api/_shared/driver-token-transport";
+import { apiResponse } from "@/app/api/_shared/response";
+import { createLogger } from "@/infrastructure/logger";
 import { revokeDriverSession } from "@/modules/deliveries/server";
 
 const log = createLogger("v1-driver-logout");

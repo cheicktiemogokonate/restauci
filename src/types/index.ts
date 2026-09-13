@@ -20,7 +20,7 @@ export type {
   StatutCommande,
   ModeCommande,
   Role,
-} from "@/lib/db/types";
+} from "@/infrastructure/db/types";
 
 // Types métier spécifiques à l'UI (non présents dans lib/db/types)
 

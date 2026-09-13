@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatPrix } from "@/lib/utils/format";
+import { formatPrix } from "@/shared/format";
 import { DASHBOARD_CHART_CONTAINER_PROPS } from "./chart-layout";
 import {
   Area,

@@ -1,11 +1,11 @@
-import { getMobileSession } from "@/lib/api/auth-mobile";
-import { blacklistToken, revokeSession } from "@/lib/api/token-blacklist";
-import { apiResponse } from "@/lib/api/response";
+import { getMobileSession } from "@/app/api/_shared/auth-mobile";
+import { blacklistToken, revokeSession } from "@/infrastructure/auth/revocation";
+import { apiResponse } from "@/app/api/_shared/response";
 import {
   verifyPartnerAccessToken,
   verifyPartnerRefreshToken,
-} from "@/lib/auth";
-import { createLogger } from "@/lib/logger";
+} from "@/modules/auth/server";
+import { createLogger } from "@/infrastructure/logger";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 

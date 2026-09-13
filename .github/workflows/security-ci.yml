@@ -25,10 +25,8 @@ jobs:
           node-version: 24.16.0
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
+      - run: npm run ci:quality
       - run: npm test
-      - run: npm run test:architecture
       - run: npm run api:openapi:export
       - name: Refuser une spécification OpenAPI non synchronisée
         run: git diff --exit-code -- docs/openapi-v1.json

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { withDatabaseReadRetry } from "../src/lib/db/read-retry";
+import { withDatabaseReadRetry } from "../src/infrastructure/db/read-retry";
 
 afterEach(() => {
   vi.useRealTimers();

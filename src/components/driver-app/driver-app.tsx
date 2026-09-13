@@ -52,12 +52,12 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { formatPrix } from "@/lib/utils/format";
+import { formatPrix } from "@/shared/format";
 import {
   driverApi,
   refreshDriverAccess,
   setDriverAccessToken,
-} from "@/lib/driver-app/api-client";
+} from "@/modules/deliveries/presentation/driver-app/api-client";
 
 type AuthState = "checking" | "signed_out" | "activation" | "authenticated";
 

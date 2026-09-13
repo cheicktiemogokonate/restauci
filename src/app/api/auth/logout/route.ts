@@ -3,10 +3,10 @@ import {
   AUTH_COOKIE_NAME,
   clearAuthCookie,
   verifyWebSessionToken,
-} from "@/lib/auth";
-import { blacklistToken } from "@/lib/api/token-blacklist";
-import { getClientIp } from "@/lib/api/client-ip";
-import { authLogger } from "@/lib/loggers";
+} from "@/modules/auth/server";
+import { blacklistToken } from "@/infrastructure/auth/revocation";
+import { getClientIp } from "@/shared/http/client-ip";
+import { authLogger } from "@/infrastructure/loggers";
 import { cookies } from "next/headers";
 
 // ============================================================================

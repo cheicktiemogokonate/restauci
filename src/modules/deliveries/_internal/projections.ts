@@ -23,7 +23,7 @@ import {
   livreurs,
   payments,
   restaurants,
-} from "@/lib/db/schema";
+} from "@/infrastructure/db/schema";
 import type {
   ClientDeliveryDTO,
   DeliveryOfferDTO,

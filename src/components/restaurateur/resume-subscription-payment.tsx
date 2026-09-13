@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { resumeSubscriptionPaymentAction } from "@/lib/actions/partner-subscriptions";
+import { resumeSubscriptionPaymentAction } from "@/app/_actions/partner-subscriptions";
 
 export function ResumeSubscriptionPayment({ requestId }: { requestId: string }) {
   const [pending, startTransition] = useTransition();

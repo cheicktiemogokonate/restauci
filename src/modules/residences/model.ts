@@ -1,10 +1,3 @@
-export const RESIDENCE_AUDIT_ACTIONS = [
-  "residence_validee",
-  "residence_rejetee",
-  "residence_suspendue",
-  "residence_reactivee",
-] as const;
-
 export type ResidenceModerationStatus =
   | "draft"
   | "pending"
@@ -84,6 +77,11 @@ export interface ResidenceVisibilityEvaluation {
   blockers: ResidenceVisibilityBlocker[];
 }
 
+export type ResidenceQuotaConsumptionInput = Omit<
+  ResidenceVisibilityInput,
+  "quotaEligible"
+>;
+
 export function evaluateResidenceVisibility(
   input: ResidenceVisibilityInput,
 ): ResidenceVisibilityEvaluation {
@@ -146,6 +144,19 @@ export function evaluateResidenceVisibility(
       input.quotaEligible === true,
     blockers,
   };
+}
+
+/**
+ * Source canonique du quota Résidence : seule une Résidence déjà publiée et
+ * réellement visible avant application du quota consomme une place.
+ */
+export function consumesResidencePublicationQuota(
+  input: ResidenceQuotaConsumptionInput,
+): boolean {
+  return evaluateResidenceVisibility({
+    ...input,
+    quotaEligible: true,
+  }).isPubliclyVisible;
 }
 
 export type ResidenceDomainErrorCode =

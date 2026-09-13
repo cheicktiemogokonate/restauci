@@ -1,4 +1,4 @@
-import { apiResponse } from "@/lib/api/response";
+import { apiResponse } from "@/app/api/_shared/response";
 import { getPublicResidenceAvailability } from "@/modules/residences/server";
 import { ResidenceDomainError } from "@/modules/residences/model";
 

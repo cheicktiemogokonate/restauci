@@ -1,8 +1,8 @@
 import { Expo } from "expo-server-sdk";
 import { NextRequest } from "next/server";
-import { getClientSession } from "@/lib/api/auth-client";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
+import { getClientSession } from "@/app/api/_shared/auth-client";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
 import { clientExpoSubscriptionSchema } from "@/modules/notifications/contracts";
 import {
   registerClientExpoSubscription,

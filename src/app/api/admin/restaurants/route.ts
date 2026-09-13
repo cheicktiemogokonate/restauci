@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/api/auth-admin";
-import { apiLogger } from "@/lib/loggers";
-import { getRestaurantsAdmin } from "@/lib/db/queries-admin";
+import { requireAdminSession } from "@/app/api/_shared/auth-admin";
+import { apiLogger } from "@/infrastructure/loggers";
+import { listAdminRestaurants } from "@/modules/restaurants/server";
+import { getEffectiveSubscriptionSummaries } from "@/modules/subscriptions/server";
 
 export async function GET(request: NextRequest) {
   const { error } = await requireAdminSession(request);
@@ -33,14 +34,38 @@ export async function GET(request: NextRequest) {
           | "tous")
       : "tous";
 
-    const result = await getRestaurantsAdmin({
+    const result = await listAdminRestaurants({
       statut,
       search: searchParams.get("search") ?? undefined,
       page,
       limit,
     });
 
-    return NextResponse.json(result);
+    const subscriptions = await getEffectiveSubscriptionSummaries(
+      result.items.map((restaurant) => restaurant.partnerAccountId),
+    );
+    const subscriptionByAccount = new Map(
+      subscriptions.map((subscription) => [
+        subscription.partnerAccountId,
+        subscription,
+      ]),
+    );
+    return NextResponse.json({
+      ...result,
+      items: result.items.map((restaurant) => {
+        const subscription = subscriptionByAccount.get(
+          restaurant.partnerAccountId,
+        )!;
+        return {
+          ...restaurant,
+          planCode: subscription.plan.code,
+          planNom: subscription.plan.name,
+          statutAbonnement: subscription.period?.status ?? null,
+          dateEcheance: subscription.period?.expiresAt ?? null,
+          tauxCommissionBpsFige: subscription.plan.rateBps,
+        };
+      }),
+    });
   } catch (error) {
     apiLogger.error(
       {

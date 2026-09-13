@@ -15,8 +15,8 @@ integration("abonnement d'un compte partenaire Résidence (base de développemen
   let requestId: string;
 
   beforeAll(async () => {
-    const { transactionalDb } = await import("@/lib/db/transaction");
-    const { partnerAccounts, users } = await import("@/lib/db/schema");
+    const { transactionalDb } = await import("@/infrastructure/db/transaction");
+    const { partnerAccounts, users } = await import("@/infrastructure/db/schema");
     partnerAccountId = await transactionalDb.transaction(async (tx) => {
       await tx.insert(users).values([
         {
@@ -49,7 +49,7 @@ integration("abonnement d'un compte partenaire Résidence (base de développemen
 
   afterAll(async () => {
     if (!partnerAccountId) return;
-    const { transactionalDb } = await import("@/lib/db/transaction");
+    const { transactionalDb } = await import("@/infrastructure/db/transaction");
     const {
       auditLog,
       financialTransactions,
@@ -60,7 +60,7 @@ integration("abonnement d'un compte partenaire Résidence (base de développemen
       subscriptionPeriods,
       subscriptionRequests,
       users,
-    } = await import("@/lib/db/schema");
+    } = await import("@/infrastructure/db/schema");
     await transactionalDb.transaction(async (tx) => {
       const transactions = await tx.query.financialTransactions.findMany({
         where: eq(financialTransactions.partnerAccountId, partnerAccountId),
@@ -107,11 +107,11 @@ integration("abonnement d'un compte partenaire Résidence (base de développemen
       createPartnerSubscriptionRequest,
       validateOfflineSubscriptionRequest,
     } = await import("./server");
-    const { transactionalDb } = await import("@/lib/db/transaction");
+    const { transactionalDb } = await import("@/infrastructure/db/transaction");
     const {
       subscriptionPeriods,
       subscriptionRequests,
-    } = await import("@/lib/db/schema");
+    } = await import("@/infrastructure/db/schema");
 
     const prepared = await createPartnerSubscriptionRequest({
       partnerAccountId,

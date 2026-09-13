@@ -6,13 +6,13 @@ import { RestaurantBottomSheet } from "@/components/client-app/restaurant-bottom
 import { type RestaurantMapPin } from "@/components/client-app/restaurant-map";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { useDebounce } from "@/lib/client-app/hooks/use-debounce";
-import { useGeolocation } from "@/lib/client-app/hooks/use-geolocation";
-import { useRestaurantDetail } from "@/lib/client-app/hooks/use-restaurant-detail";
+import { useDebounce } from "@/modules/clients/presentation/client-app/hooks/use-debounce";
+import { useGeolocation } from "@/modules/clients/presentation/client-app/hooks/use-geolocation";
+import { useRestaurantDetail } from "@/modules/clients/presentation/client-app/hooks/use-restaurant-detail";
 import {
   useRestaurantsProches,
   type RestaurantProche,
-} from "@/lib/client-app/hooks/use-restaurants-proches";
+} from "@/modules/clients/presentation/client-app/hooks/use-restaurants-proches";
 import dynamic from "next/dynamic";
 import { AlertCircle, LoaderCircle, LocateFixed, RefreshCw, SearchX } from "lucide-react";
 import { useState } from "react";

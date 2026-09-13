@@ -1,7 +1,8 @@
 "use client";
 
 import { Loader2, Locate, Maximize, Minus, Plus, X } from "lucide-react";
-import MapLibreGL, { type MarkerOptions, type PopupOptions } from "maplibre-gl";
+import * as MapLibreGL from "maplibre-gl";
+import type { MarkerOptions, PopupOptions } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   createContext,
@@ -18,8 +19,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 import { createInstanceLifecycleGuard } from "@/components/ui/map-lifecycle";
+
+MapLibreGL.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 const defaultStyles = {
   dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",

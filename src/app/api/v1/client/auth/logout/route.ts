@@ -1,19 +1,19 @@
 import {
   CLIENT_REFRESH_COOKIE,
   clearClientRefreshCookie,
-} from "@/lib/api/client-session-cookie";
-import { apiResponse } from "@/lib/api/response";
-import { blacklistToken, revokeSession } from "@/lib/api/token-blacklist";
+} from "@/app/api/_shared/client-session-cookie";
+import { apiResponse } from "@/app/api/_shared/response";
+import { blacklistToken, revokeSession } from "@/infrastructure/auth/revocation";
 import {
   verifyClientAccessToken,
   verifyClientRefreshToken,
-} from "@/lib/auth";
-import { createLogger } from "@/lib/logger";
+} from "@/modules/auth/server";
+import { createLogger } from "@/infrastructure/logger";
 import { NextRequest } from "next/server";
 import {
   readOptionalClientLogoutBody,
   resolveClientRefreshToken,
-} from "@/lib/api/client-token-transport";
+} from "@/app/api/_shared/client-token-transport";
 
 const log = createLogger("v1-client-auth-logout");
 

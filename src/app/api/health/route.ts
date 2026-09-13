@@ -1,18 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { redis } from "@/lib/cache/redis";
-import { sql } from "drizzle-orm";
-import { env } from "@/lib/env";
-import { hasValidCronAuthorization } from "@/lib/cron-auth";
-
-interface HealthStatus {
-  status: "healthy" | "degraded" | "unhealthy";
-  timestamp: string;
-  services: {
-    database: { status: "up" | "down"; latency?: number };
-    cache: { status: "up" | "down"; latency?: number };
-  };
-}
+import { env } from "@/infrastructure/env";
+import { hasValidCronAuthorization } from "@/infrastructure/auth/cron-auth";
+import { checkDependencyHealth } from "@/infrastructure/health";
 
 export async function GET(request: NextRequest) {
   const canReadDependencies =
@@ -32,57 +21,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const status: HealthStatus = {
-    status: "healthy",
-    timestamp: new Date().toISOString(),
-    // Pas d'information de version/commit ici : ce endpoint est public,
-    // exposer le SHA faciliterait le ciblage d'une vulnérabilité de version.
-    services: {
-      database: { status: "down" },
-      cache: { status: "down" },
-    },
-  };
-
-  // Vérifier la DB (timeout 3s)
-  try {
-    const dbStart = performance.now();
-    await Promise.race([
-      db.execute(sql`SELECT 1`),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("DB timeout")), 3000)
-      ),
-    ]);
-    status.services.database = {
-      status: "up",
-      latency: Math.round(performance.now() - dbStart),
-    };
-  } catch {
-    status.services.database = { status: "down" };
-    status.status = "degraded";
-  }
-
-  // Vérifier Redis (timeout 1s)
-  try {
-    const cacheStart = performance.now();
-    await Promise.race([
-      redis.ping(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Cache timeout")), 1000)
-      ),
-    ]);
-    status.services.cache = {
-      status: "up",
-      latency: Math.round(performance.now() - cacheStart),
-    };
-  } catch {
-    status.services.cache = { status: "down" };
-    if (status.status === "healthy") status.status = "degraded";
-  }
-
-  // Si DB est down → unhealthy
-  if (status.services.database.status === "down") {
-    status.status = "unhealthy";
-  }
+  // Pas d'information de version/commit ici : ce endpoint est public,
+  // exposer le SHA faciliterait le ciblage d'une vulnérabilité de version.
+  const status = await checkDependencyHealth();
 
   const httpStatus =
     status.status === "healthy"

@@ -3,7 +3,7 @@
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { StatusBadge } from "@/components/admin/ui/status-badge";
 import { Table, type TableColumn } from "@/components/motion/table";
-import { formatPrix } from "@/lib/utils/format";
+import { formatPrix } from "@/shared/format";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { History } from "lucide-react";

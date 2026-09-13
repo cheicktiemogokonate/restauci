@@ -1,5 +1,7 @@
 "use client";
 
+// Suivi client du domaine Deliveries.
+
 import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   Bike,
@@ -18,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { clientApi } from "@/lib/client-app/api-client";
+import { clientApi } from "@/modules/clients/presentation/client-app/api-client";
 
 const statusLabels: Record<ClientDeliveryDTO["status"], string> = {
   en_attente: "Recherche d’un livreur",

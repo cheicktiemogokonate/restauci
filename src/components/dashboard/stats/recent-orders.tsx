@@ -11,8 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import { formatDate, formatPrix } from "@/lib/utils/format";
+import { cn } from "@/shared/ui/cn";
+import { formatDate, formatPrix } from "@/shared/format";
 import type { CommandeResume, RecentOrdersProps } from "@/types/dashboard";
 import Link from "next/link";
 import { useEffect, useState } from "react";

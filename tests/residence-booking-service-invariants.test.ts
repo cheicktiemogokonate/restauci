@@ -8,7 +8,7 @@ describe("Bloc 9 residence booking service invariants", () => {
     "utf8",
   );
   const partnerPage = readFileSync(
-    "src/app/(dashboard)/partenaire/reservations/page.tsx",
+    "src/app/(dashboard)/(partenaire)/partenaire/reservations/page.tsx",
     "utf8",
   );
   const publicAvailabilityRoute = readFileSync(
@@ -16,11 +16,11 @@ describe("Bloc 9 residence booking service invariants", () => {
     "utf8",
   );
   const partnerReservationActions = readFileSync(
-    "src/app/(dashboard)/partenaire/reservations/actions.ts",
+    "src/app/(dashboard)/(partenaire)/partenaire/reservations/actions.ts",
     "utf8",
   );
   const partnerReservationWorkspace = readFileSync(
-    "src/components/partner/partner-reservations-workspace.tsx",
+    "src/modules/residences/presentation/partner-reservations-workspace.tsx",
     "utf8",
   );
 
@@ -133,7 +133,7 @@ describe("Bloc 9 residence booking service invariants", () => {
     );
   });
 
-  it("records owner cancellation provenance and flags paid refunds", () => {
+  it("records owner cancellation provenance and creates paid refund obligations", () => {
     const cancelStart = service.indexOf(
       "export async function cancelPartnerResidenceReservation",
     );
@@ -146,9 +146,11 @@ describe("Bloc 9 residence booking service invariants", () => {
     expect(cancellation).toContain(
       '{ source: "partner", reason: parsed.reason }',
     );
+    expect(cancellation).toContain("createRefundObligationInTransaction");
     expect(cancellation).toContain(
-      'const requiresManualRefund = transaction.status === "paid"',
+      "refundIdempotencyKey: `residence-cancellation:${reservation.id}`",
     );
+    expect(cancellation).not.toContain("requiresManualRefund");
     expect(cancellation).toContain("sendClientExpoPush");
   });
 });

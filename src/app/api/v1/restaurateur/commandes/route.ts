@@ -1,13 +1,13 @@
 import { NextRequest }                    from "next/server";
 import { z }                              from "zod";
-import { requireRestaurateurSession }     from "@/lib/api/auth-mobile";
-import { apiResponse }                    from "@/lib/api/response";
-import { validateSearchParams }           from "@/lib/api/validate";
-import { checkRateLimit, mobileApiLimiter } from "@/lib/rate-limit";
-import { getCommandes }                   from "@/lib/db/queries";
+import { requireRestaurateurSession }     from "@/app/api/_shared/auth-mobile";
+import { apiResponse }                    from "@/app/api/_shared/response";
+import { validateSearchParams }           from "@/app/api/_shared/validate";
+import { checkRateLimit, mobileApiLimiter } from "@/infrastructure/rate-limit";
+import { listRestaurantOrders } from "@/modules/orders/server";
 import { buildPaginationMeta, parsePage, parseLimit, PAGINATION }
-  from "@/lib/config/pagination";
-import { createLogger } from "@/lib/logger";
+  from "@/shared/pagination";
+import { createLogger } from "@/infrastructure/logger";
 
 const log = createLogger("v1-restaurateur-commandes");
 
@@ -36,8 +36,7 @@ export async function GET(
   const limit = parseLimit(query.limit, PAGINATION.COMMANDES_PAR_PAGE);
 
   try {
-    const result = await getCommandes({
-      restaurantId: session.restaurantId,
+    const result = await listRestaurantOrders(session.restaurantId, {
       statut:       query.statut,
       page,
       limit,

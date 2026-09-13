@@ -18,19 +18,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { batchRead, db } from "@/lib/db";
-import { withDatabaseReadRetry } from "@/lib/db/read-retry";
+import { getAdminSession } from "@/modules/auth/server";
+import { getAdminSubscriptionOperationsWorkspace } from "@/modules/subscriptions/server";
+import { getAdminFinancialJournal } from "@/modules/transactions/server";
+import { FinancialJournalTable } from "@/modules/transactions/presentation/financial-journal-table";
 import {
-  partnerAccounts,
-  restaurants,
-  subscriptionPeriods,
-  subscriptionPlans,
-  subscriptionRequests,
-  users,
-} from "@/lib/db/schema";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
-import { CalendarClock, ClipboardCheck, RefreshCcw, Users } from "lucide-react";
+  CalendarClock,
+  ClipboardCheck,
+  ReceiptText,
+  RefreshCcw,
+  Users,
+} from "lucide-react";
 import { redirect } from "next/navigation";
 
 export const metadata = {
@@ -49,130 +47,23 @@ export default async function AdminAbonnementsPage({
     "demandes",
     "abonnes",
     "historique",
+    "finances",
   ]);
   const activeSection = validSections.has(params.section ?? "")
     ? (params.section ?? "demandes")
     : "demandes";
 
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
-
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-  // Neon exécute ce batch en un seul aller-retour HTTP. La page faisait
-  // auparavant six lectures séquentielles, ce qui expliquait ses 3 secondes
-  // de chargement et augmentait le risque de panne intermédiaire.
-  const [
+  const now = new Date();
+  const [operations, financialJournal] = await Promise.all([
+    getAdminSubscriptionOperationsWorkspace(now),
+    getAdminFinancialJournal(),
+  ]);
+  const {
     pendingRequests,
-    summaryRows,
+    summary,
     activeSubscribers,
     recentPeriods,
-  ] = await withDatabaseReadRetry(() =>
-    batchRead([
-      db
-        .select({
-          id: subscriptionRequests.id,
-          restaurantId: restaurants.id,
-          partnerNom: sql<string>`COALESCE(${restaurants.nom}, ${users.nom})`,
-          activityType: partnerAccounts.activityType,
-          planCode: subscriptionRequests.planCode,
-          planNom: subscriptionPlans.nom,
-          prixFigeFcfa: subscriptionRequests.prixFigeFcfa,
-          statut: subscriptionRequests.statut,
-          createdAt: subscriptionRequests.createdAt,
-        })
-        .from(subscriptionRequests)
-        .innerJoin(
-          partnerAccounts,
-          eq(subscriptionRequests.partnerAccountId, partnerAccounts.id),
-        )
-        .innerJoin(users, eq(partnerAccounts.userId, users.id))
-        .leftJoin(
-          restaurants,
-          eq(partnerAccounts.id, restaurants.partnerAccountId),
-        )
-        .innerJoin(subscriptionPlans, eq(subscriptionRequests.planCode, subscriptionPlans.code))
-        .where(eq(subscriptionRequests.statut, "en_attente"))
-        .orderBy(desc(subscriptionRequests.createdAt)),
-      db
-        .select({
-          requestsThisMonth: sql<number>`(
-              SELECT COUNT(*) FROM ${subscriptionRequests}
-              WHERE ${subscriptionRequests.createdAt} >= ${startOfMonth}
-            )`,
-          recentDiscoveryReturns: sql<number>`(
-              SELECT COUNT(*) FROM ${subscriptionPeriods}
-              WHERE ${subscriptionPeriods.statut} = ${"expiree"}
-                AND ${subscriptionPeriods.planCode} <> ${"decouverte"}
-                AND ${subscriptionPeriods.endedAt} >= ${sevenDaysAgo}
-            )`,
-        })
-        .from(sql`(SELECT 1) AS subscription_summary_source`),
-      db
-        .select({
-          partnerAccountId: subscriptionPeriods.partnerAccountId,
-          restaurantId: restaurants.id,
-          partnerNom: sql<string>`COALESCE(${restaurants.nom}, ${users.nom})`,
-          activityType: partnerAccounts.activityType,
-          planCode: subscriptionPeriods.planCode,
-          planNom: subscriptionPlans.nom,
-          statut: subscriptionPeriods.statut,
-          dateDebut: subscriptionPeriods.dateDebut,
-          dateEcheance: subscriptionPeriods.dateEcheance,
-          tauxCommissionBpsFige: subscriptionPeriods.tauxCommissionBpsFige,
-        })
-        .from(subscriptionPeriods)
-        .innerJoin(
-          partnerAccounts,
-          eq(subscriptionPeriods.partnerAccountId, partnerAccounts.id),
-        )
-        .innerJoin(users, eq(partnerAccounts.userId, users.id))
-        .leftJoin(
-          restaurants,
-          eq(partnerAccounts.id, restaurants.partnerAccountId),
-        )
-        .innerJoin(subscriptionPlans, eq(subscriptionPeriods.planCode, subscriptionPlans.code))
-        .where(and(
-          inArray(subscriptionPeriods.statut, ["active", "suspendue"]),
-          ne(subscriptionPeriods.planCode, "decouverte"),
-          sql`${subscriptionPeriods.dateEcheance} > NOW()`,
-        ))
-        .orderBy(desc(subscriptionPeriods.dateEcheance)),
-      db
-        .select({
-          id: subscriptionPeriods.id,
-          partnerNom: sql<string>`COALESCE(${restaurants.nom}, ${users.nom})`,
-          activityType: partnerAccounts.activityType,
-          planCode: subscriptionPeriods.planCode,
-          planNom: subscriptionPlans.nom,
-          statut: subscriptionPeriods.statut,
-          dateDebut: subscriptionPeriods.dateDebut,
-          dateEcheance: subscriptionPeriods.dateEcheance,
-          prixPayeFcfa: subscriptionPeriods.prixPayeFcfa,
-          endedAt: subscriptionPeriods.endedAt,
-          endReason: subscriptionPeriods.endReason,
-        })
-        .from(subscriptionPeriods)
-        .innerJoin(
-          partnerAccounts,
-          eq(subscriptionPeriods.partnerAccountId, partnerAccounts.id),
-        )
-        .innerJoin(users, eq(partnerAccounts.userId, users.id))
-        .leftJoin(
-          restaurants,
-          eq(partnerAccounts.id, restaurants.partnerAccountId),
-        )
-        .innerJoin(subscriptionPlans, eq(subscriptionPeriods.planCode, subscriptionPlans.code))
-        .orderBy(desc(subscriptionPeriods.dateDebut))
-        .limit(20),
-    ]),
-  );
-
-  const summary = summaryRows[0];
-
-  const now = new Date();
+  } = operations;
   const inDays = (days: number) => {
     const deadline = new Date(now);
     deadline.setDate(deadline.getDate() + days);
@@ -228,6 +119,14 @@ export default async function AdminAbonnementsPage({
               indicatorClassName="h-0.5 bg-emerald-600"
             >
               Historique
+            </TabsTrigger>
+            <TabsTrigger
+              value="finances"
+              className="h-11 gap-1.5 px-3.5 text-sm"
+              indicatorClassName="h-0.5 bg-emerald-600"
+            >
+              <ReceiptText className="size-4" />
+              Finances
             </TabsTrigger>
           </TabsList>
         </div>
@@ -324,6 +223,21 @@ export default async function AdminAbonnementsPage({
             </CardHeader>
             <CardContent>
               <SubscriptionHistoryTable periods={recentPeriods} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="finances" className="space-y-4">
+          <Card className="shadow-none">
+            <CardHeader>
+              <CardTitle>Journal financier</CardTitle>
+              <CardDescription>
+                Montants, canaux, références, comptes sources et droits créés
+                par les flux unifiés depuis la Phase 6.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FinancialJournalTable entries={financialJournal} />
             </CardContent>
           </Card>
         </TabsContent>

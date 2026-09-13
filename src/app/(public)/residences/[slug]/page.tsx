@@ -5,10 +5,10 @@ import { headers } from "next/headers";
 import { ArrowLeft, MapPin, ShieldCheck, Users } from "lucide-react";
 import { notFound } from "next/navigation";
 import { cache } from "react";
-import { PublicResidenceHeader } from "@/components/residences/public-residence-header";
-import { ResidenceBookingCard } from "@/components/residences/residence-booking-card";
+import { PublicResidenceHeader } from "@/modules/residences/presentation/public-residence-header";
+import { ResidenceBookingCard } from "@/components/client-app/residence-booking-card";
 import { Button } from "@/components/ui/button";
-import { formatPrix } from "@/lib/utils/format";
+import { formatPrix } from "@/shared/format";
 import {
   getPublicResidenceAvailability,
   getPublicResidenceBySlug,

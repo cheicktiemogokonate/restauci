@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { notifications } from "@/lib/db/schema";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { getCurrentUser } from "@/modules/auth/server";
 import { z } from "zod";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/infrastructure/logger";
+import {
+  countUnreadUserNotifications,
+  listUserNotifications,
+  markUserNotificationsRead,
+} from "@/modules/notifications/server";
 
 const log = createLogger("notifications");
 
@@ -41,39 +43,14 @@ export async function GET(req: NextRequest) {
     
     const { limit, offset } = parsed.data;
 
-    // neon-http ne prend pas en charge db.transaction(callback). Ces deux
-    // lectures indépendantes peuvent être exécutées en parallèle.
     const [notifList, countRows] = await Promise.all([
-      db
-        .select({
-          id: notifications.id,
-          type: notifications.type,
-          titre: notifications.titre,
-          message: notifications.message,
-          lienType: notifications.lienType,
-          lienId: notifications.lienId,
-          lue: notifications.lue,
-          lueAt: notifications.lueAt,
-          createdAt: notifications.createdAt,
-        })
-        .from(notifications)
-        .where(eq(notifications.userId, session.userId))
-        .orderBy(desc(notifications.createdAt))
-        .limit(limit)
-        .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)` })
-        .from(notifications)
-        .where(and(
-          eq(notifications.userId, session.userId),
-          eq(notifications.lue, false)
-        )),
+      listUserNotifications(session.userId, { limit, offset }),
+      countUnreadUserNotifications(session.userId),
     ]);
-    const count = countRows[0]?.count ?? 0;
 
     return NextResponse.json({
       notifications: notifList,
-      unreadCount: Number(count)
+      unreadCount: countRows,
     });
   } catch (err) {
     log.error({ err }, "Erreur lors de la récupération des notifications");
@@ -102,19 +79,7 @@ export async function PATCH(req: NextRequest) {
 
     const { notificationIds } = result.data;
 
-    await db
-      .update(notifications)
-      .set({
-        lue: true,
-        lueAt: new Date(),
-      })
-      .where(
-        and(
-          eq(notifications.userId, session.userId),
-          eq(notifications.lue, false),
-          inArray(notifications.id, notificationIds)
-        )
-      );
+    await markUserNotificationsRead(session.userId, { notificationIds });
 
     return NextResponse.json({ success: true });
   } catch (err) {

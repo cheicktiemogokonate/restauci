@@ -4,8 +4,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { GeolocationStatus } from "@/lib/client-app/hooks/use-geolocation";
-import { useAuthStore } from "@/lib/client-app/stores/auth-store";
+import type { GeolocationStatus } from "@/modules/clients/presentation/client-app/hooks/use-geolocation";
+import { useAuthStore } from "@/modules/clients/presentation/client-app/stores/auth-store";
 import { LocateFixed, MapPin, Search, UserRound } from "lucide-react";
 import Link from "next/link";
 

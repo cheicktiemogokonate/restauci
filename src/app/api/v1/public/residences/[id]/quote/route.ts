@@ -1,5 +1,5 @@
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
 import { residenceStaySchema } from "@/modules/residences/contracts";
 import { ResidenceDomainError } from "@/modules/residences/model";
 import { getResidenceStayQuote } from "@/modules/residences/server";

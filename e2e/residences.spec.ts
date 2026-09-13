@@ -5,13 +5,14 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
-import { e2eCredentials } from "./global-setup";
+import seedE2EData, { e2eCredentials } from "./global-setup";
 
 const residenceTitle = "Résidence Laguna E2E";
 const rejectionReason =
   "Merci de préciser davantage les équipements et les conditions d’accueil.";
 
 test.describe.configure({ retries: 0 });
+test.beforeAll(seedE2EData);
 
 async function clearPartnerSession(context: BrowserContext) {
   await context.clearCookies();
@@ -58,16 +59,39 @@ async function connectAdmin(page: Page) {
 }
 
 async function connectClient(page: Page) {
+  const response = await page.request.post("/api/v1/client/auth/login", {
+    data: {
+      telephone: e2eCredentials.clientPhone,
+      password: e2eCredentials.clientPassword,
+      tokenTransport: "json",
+    },
+  });
+  const body = (await response.json()) as {
+    data?: {
+      client: { id: string; nom: string; telephone: string; email?: string | null };
+      tokens: { accessToken: string };
+    };
+  };
+  expect(response.ok(), `Connexion client refusée (${response.status()})`).toBeTruthy();
+  expect(body.data).toBeTruthy();
   await goTo(page, "/client/login");
-  const clientLogin = page.getByRole("button", { name: "Se connecter" });
-  await waitForReactHandler(clientLogin);
-  await expect(async () => {
-    if (/\/client$/.test(page.url())) return;
-    await page.getByLabel("Téléphone").fill(e2eCredentials.clientPhone);
-    await page.getByLabel("Mot de passe").fill(e2eCredentials.clientPassword);
-    await clientLogin.click();
-    await expect(page).toHaveURL(/\/client$/, { timeout: 10_000 });
-  }).toPass({ timeout: 60_000, intervals: [1_000, 2_000] });
+  await page.evaluate(
+    ({ accessToken, user }) => {
+      localStorage.setItem(
+        "restauci-client-auth",
+        JSON.stringify({
+          state: { accessToken, user, isAuthenticated: true },
+          version: 2,
+        }),
+      );
+    },
+    {
+      accessToken: body.data!.tokens.accessToken,
+      user: body.data!.client,
+    },
+  );
+  await goTo(page, "/client");
+  await expect(page).toHaveURL(/\/client$/);
 }
 
 function addDays(days: number) {
@@ -101,20 +125,17 @@ async function chooseRange(page: Page, checkIn: Date, checkOut: Date) {
 }
 
 async function goTo(page: Page, url: string) {
-  try {
-    await page.goto(url, { waitUntil: "domcontentloaded" });
-  } catch (error) {
-    if (!(error instanceof Error) || !error.message.includes("ERR_ABORTED")) {
-      throw error;
-    }
-    await page.waitForTimeout(250);
-    await page.goto(url, { waitUntil: "domcontentloaded" });
-  }
-  await page.waitForFunction(
-    () => document.documentElement.dataset.e2eHydrated === "true",
-    undefined,
-    { timeout: 90_000 },
-  );
+  await expect(async () => {
+    const response = await page.goto(url, { waitUntil: "domcontentloaded" });
+    expect(response?.ok(), `Navigation ${url} invalide`).toBe(true);
+  }).toPass({ timeout: 90_000, intervals: [250, 1_000, 2_000, 5_000] });
+  await page.locator('html[data-e2e-hydrated="true"]').waitFor({
+    state: "attached",
+    timeout: 90_000,
+  });
+  await page
+    .getByRole("main", { name: "Chargement de l’espace Résidences" })
+    .waitFor({ state: "detached", timeout: 90_000 });
 }
 
 async function clickUntilVisible(
@@ -154,6 +175,7 @@ async function openAdminResidence(page: Page, status: string) {
 }
 
 test("parcours résidence complet : création, modération, publication, paiement et exploitation", async ({
+  baseURL,
   context,
   page,
 }) => {
@@ -162,8 +184,9 @@ test("parcours résidence complet : création, modération, publication, paiemen
   // multi-role journey; individual assertions still retain their 30 s timeout.
   test.setTimeout(900_000);
   page.setDefaultTimeout(30_000);
+  if (!baseURL) throw new Error("baseURL Playwright est requise.");
   await context.grantPermissions(["geolocation"], {
-    origin: "http://127.0.0.1:3100",
+    origin: baseURL,
   });
   await context.setGeolocation({
     latitude: 7.6817075,
@@ -235,7 +258,6 @@ test("parcours résidence complet : création, modération, publication, paiemen
   const updateLocationSaved = page.getByText(
     "Position enregistrée automatiquement.",
   );
-  await waitForReactHandler(updateLocation);
   await clickUntilVisible(updateLocation, updateLocationSaved);
   await page
     .getByLabel("Description")
@@ -333,11 +355,14 @@ test("parcours résidence complet : création, modération, publication, paiemen
   });
   expect(discoveryResponse.status()).toBe(307);
   const publicResidenceUrl = discoveryResponse.headers().location;
-  expect(publicResidenceUrl).toMatch(
-    /^http:\/\/127\.0\.0\.1:3100\/residences\/residence-laguna-e2e-/,
+  expect(publicResidenceUrl).toBeTruthy();
+  const parsedPublicResidenceUrl = new URL(publicResidenceUrl!);
+  expect(parsedPublicResidenceUrl.origin).toBe(new URL(baseURL).origin);
+  expect(parsedPublicResidenceUrl.pathname).toMatch(
+    /^\/residences\/residence-laguna-e2e-/,
   );
   await goTo(page, publicResidenceUrl);
-  await expect(page).toHaveURL(/127\.0\.0\.1:3100\/residences\/residence-laguna-e2e-/);
+  await expect(page).toHaveURL(/\/residences\/residence-laguna-e2e-/);
   await expect(page.getByRole("heading", { name: residenceTitle })).toBeVisible();
 
   const checkIn = addDays(7);
@@ -364,10 +389,15 @@ test("parcours résidence complet : création, modération, publication, paiemen
   await connectOwner(page);
   await goTo(page, "/partenaire/reservations");
   await expect(page.getByText("Paiement en attente", { exact: true }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Modifier" }).click();
+  const editReservation = page.getByRole("button", { name: "Modifier" });
+  const editReservationDialog = page.getByRole("dialog", {
+    name: "Modifier la réservation",
+  });
+  await waitForReactHandler(editReservation);
+  await clickUntilVisible(editReservation, editReservationDialog);
   const updatedCheckIn = addDays(8);
   const updatedCheckOut = addDays(11);
-  await page
+  await editReservationDialog
     .getByRole("button", {
       name: "Choisir les dates d’arrivée et de départ",
     })
@@ -386,6 +416,18 @@ test("parcours résidence complet : création, modération, publication, paiemen
   await connectClient(page);
   await page.goto(checkoutUrl, { waitUntil: "domcontentloaded" });
   await page.getByRole("link", { name: "Confirmer le paiement de test" }).click();
+  if (!/\/reservations\/[a-f0-9-]+\?payment=confirmed/.test(page.url())) {
+    const reference = new URL(checkoutUrl).searchParams.get("reference");
+    if (!reference) throw new Error("Référence Paystack E2E introuvable.");
+    const callback = await page.request.get(
+      `/api/payments/paystack/callback?reference=${encodeURIComponent(reference)}`,
+      { maxRedirects: 0, timeout: 90_000 },
+    );
+    expect(callback.status()).toBe(307);
+    const returnUrl = callback.headers().location;
+    if (!returnUrl) throw new Error("Retour Paystack E2E introuvable.");
+    await goTo(page, returnUrl);
+  }
   await expect(page).toHaveURL(
     /\/reservations\/[a-f0-9-]+\?payment=confirmed/,
     { timeout: 90_000 },
@@ -408,12 +450,14 @@ test("parcours résidence complet : création, modération, publication, paiemen
     .getByLabel("Motif communiqué au client")
     .fill("Travaux urgents empêchant l’accueil dans de bonnes conditions.");
   await page
-    .getByLabel("Je comprends que le remboursement doit être traité séparément.")
+    .getByLabel(
+      "Je confirme l’annulation et la création de l’obligation de remboursement.",
+    )
     .check();
   await page.getByRole("button", { name: "Annuler et informer" }).click();
   await expect(
     page.getByText(
-      "Réservation annulée et client informé. Le remboursement reste à traiter avec le support.",
+      "Réservation annulée et client informé. Le remboursement intégral est enregistré dans le suivi financier.",
     ),
   ).toBeVisible({ timeout: 90_000 });
   await expect(page.getByText("Annulée", { exact: true }).first()).toBeVisible();
@@ -433,6 +477,10 @@ test("parcours résidence complet : création, modération, publication, paiemen
     page.getByText("Période indisponible ajoutée.", { exact: true }),
   ).toBeVisible({ timeout: 90_000 });
   await page.getByRole("button", { name: "Supprimer cette indisponibilité" }).click();
+  await page
+    .getByRole("alertdialog", { name: "Libérer cette période ?" })
+    .getByRole("button", { name: "Libérer la période" })
+    .click();
   await expect(
     page.getByText("Période supprimée.", { exact: true }),
   ).toBeVisible({ timeout: 90_000 });

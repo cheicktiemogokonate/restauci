@@ -2,7 +2,7 @@ import "server-only";
 
 import type { DbExecutor } from "@/infrastructure/db";
 import { createLogger } from "@/infrastructure/logger";
-import { env } from "@/lib/env";
+import { env } from "@/infrastructure/env";
 import {
   getServiceMarketCapability,
   resolveServiceMarketAtCoordinates,

@@ -2,29 +2,39 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Building2, CircleCheck, CircleX, MapPin, Users } from "lucide-react";
 import { notFound } from "next/navigation";
-import { ResidenceReviewPanel } from "@/components/admin/residence-review-panel";
+import { ResidenceReviewPanel } from "@/modules/residences/presentation/residence-review-panel";
 import { PaystackProviderAccountCard } from "@/components/admin/paystack-provider-account-card";
 import { AdminPage } from "@/components/admin/ui/admin-page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { formatPrix } from "@/lib/utils/format";
+import { getAdminSession } from "@/modules/auth/server";
+import { formatPrix } from "@/shared/format";
 import {
   getResidenceVisibilityBlockerMessage,
   ResidencePublicationStatusBadge,
 } from "@/modules/residences/presentation/residence-publication-status";
 import { ResidenceStatusBadge } from "@/modules/residences/presentation/residence-status-badge";
-import { getAdminResidenceWithPublication } from "@/modules/residences/server";
-import { getPaystackProviderAccount } from "@/modules/transactions/provider-accounts";
+import {
+  getAdminResidenceAccountSummary,
+  getAdminResidenceWithPublication,
+} from "@/modules/residences/server";
+import { getPaystackProviderAccount } from "@/modules/transactions/server";
+import {
+  approveResidenceAction,
+  reactivateResidenceAction,
+  rejectResidenceAction,
+  suspendResidenceAction,
+} from "../actions";
 
 export default async function AdminResidenceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await getAdminSession();
   const { id } = await params;
   const residence = await getAdminResidenceWithPublication(id);
   if (!residence) notFound();
-  const providerAccount = await getPaystackProviderAccount(
-    residence.partnerAccountId,
-  );
+  const [providerAccount, accountSummary] = await Promise.all([
+    getPaystackProviderAccount(residence.partnerAccountId),
+    getAdminResidenceAccountSummary(residence.partnerAccountId),
+  ]);
   return (
     <AdminPage className="max-w-6xl">
       <div><Button asChild variant="ghost" size="sm" className="-ml-3 mb-3"><Link href="/admin/residences"><ArrowLeft />Retour aux résidences</Link></Button><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><p className="text-sm font-semibold text-emerald-700">Logement partenaire</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">{residence.title}</h1><p className="mt-1 text-sm text-slate-500">{residence.accountName} · {residence.accountEmail}</p></div><ResidenceStatusBadge status={residence.moderationStatus} /></div></div>
@@ -34,7 +44,16 @@ export default async function AdminResidenceDetailPage({ params }: { params: Pro
           <Card><CardHeader><CardTitle>Photos publiques</CardTitle></CardHeader><CardContent>{residence.photos.length > 0 ? <div className="grid gap-3 sm:grid-cols-2">{residence.photos.map((photo) => <div key={photo.id} className="relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100"><Image src={photo.url} alt={photo.altText ?? residence.title} fill sizes="(max-width: 640px) 100vw, 50vw" className="object-cover" unoptimized /></div>)}</div> : <p className="text-sm text-slate-500">Aucune photo enregistrée.</p>}</CardContent></Card>
         </div>
         <div className="space-y-6">
-          <ResidenceReviewPanel residenceId={residence.id} status={residence.moderationStatus} />
+          <ResidenceReviewPanel
+            residenceId={residence.id}
+            status={residence.moderationStatus}
+            actions={{
+              approve: approveResidenceAction,
+              reject: rejectResidenceAction,
+              suspend: suspendResidenceAction,
+              reactivate: reactivateResidenceAction,
+            }}
+          />
           <PaystackProviderAccountCard
             resourceType="residence"
             resourceId={residence.id}
@@ -61,7 +80,7 @@ export default async function AdminResidenceDetailPage({ params }: { params: Pro
               <dl className="space-y-2 border-t pt-3 text-xs text-slate-600">
                 <div className="flex justify-between gap-3"><dt>Destination</dt><dd className="text-right font-medium text-slate-800">{residence.publication.serviceMarketName ?? "Non résolue"}</dd></div>
                 <div className="flex justify-between gap-3"><dt>Offre</dt><dd className="text-right font-medium text-slate-800">{residence.publication.quota.planCode}</dd></div>
-                <div className="flex justify-between gap-3"><dt>Limite publique</dt><dd className="text-right font-medium text-slate-800">{residence.publication.quota.maxPublicResidences ?? "Illimitée"}</dd></div>
+                <div className="flex justify-between gap-3"><dt>Résidences publiques du compte</dt><dd className="text-right font-medium text-slate-800">{accountSummary.visibleCount} / {accountSummary.quota.maxPublicResidences ?? "illimité"}</dd></div>
               </dl>
             </CardContent>
           </Card>

@@ -25,7 +25,7 @@ import {
   remitDriverCashAction,
   resetDriverCredentialsAction,
   updateDriverCompensationAction,
-} from "@/app/(dashboard)/restaurateur/livreurs/actions";
+} from "@/app/(dashboard)/(partenaire)/restaurateur/livreurs/actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -67,7 +67,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { formatPrix } from "@/lib/utils/format";
+import { formatPrix } from "@/shared/format";
 
 type CredentialReveal = {
   loginId: string;

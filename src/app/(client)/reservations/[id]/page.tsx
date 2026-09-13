@@ -3,15 +3,25 @@
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, MapPin, Users } from "lucide-react";
+import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, MapPin, TriangleAlert, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { clientApi } from "@/lib/client-app/api-client";
-import { useAuthStore } from "@/lib/client-app/stores/auth-store";
-import { formatPrix } from "@/lib/utils/format";
+import { clientApi } from "@/modules/clients/presentation/client-app/api-client";
+import { useAuthStore } from "@/modules/clients/presentation/client-app/stores/auth-store";
+import { formatPrix } from "@/shared/format";
 import type { ResidenceReservationDTO } from "@/modules/residences/contracts";
 import { getResidenceReservationStatusLabel } from "@/modules/residences/presentation";
 
@@ -27,6 +37,7 @@ export default function ClientReservationDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, startTransition] = useTransition();
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   const refreshReservation = async () => {
     const result = await clientApi.get<ResidenceReservationDTO>(`/reservations/${id}`);
@@ -70,7 +81,10 @@ export default function ClientReservationDetailPage() {
     setError(null);
     const result = await clientApi.post(`/reservations/${id}/cancel`);
     if (!result.success) setError(result.error ?? "Impossible d’annuler cette réservation.");
-    else await refreshReservation();
+    else {
+      setCancelOpen(false);
+      await refreshReservation();
+    }
   });
 
   return (
@@ -80,8 +94,41 @@ export default function ClientReservationDetailPage() {
         {reservation.residenceCoverUrl ? <div className="relative aspect-[16/8] overflow-hidden rounded-2xl bg-slate-100"><Image src={reservation.residenceCoverUrl} alt={reservation.residenceTitle} fill sizes="672px" className="object-cover" unoptimized /></div> : null}
         <section className="rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><Badge variant={reservation.status === "annulee" ? "destructive" : "secondary"}>{getResidenceReservationStatusLabel(reservation.status)}</Badge><h2 className="mt-3 text-xl font-semibold">{reservation.residenceTitle}</h2><p className="mt-1 flex items-center gap-1 text-sm text-slate-500"><MapPin className="size-4" />{reservation.residenceCity}</p></div>{reservation.status === "confirmee" ? <CheckCircle2 className="size-8 text-emerald-600" /> : null}</div><Separator className="my-5" /><div className="grid gap-4 sm:grid-cols-2"><div><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Arrivée</p><p className="mt-1 flex gap-2 text-sm font-semibold"><CalendarDays className="size-4 text-emerald-700" />{formatStayDate(reservation.checkIn)}</p></div><div><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Départ</p><p className="mt-1 flex gap-2 text-sm font-semibold"><CalendarDays className="size-4 text-emerald-700" />{formatStayDate(reservation.checkOut)}</p></div><div><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Voyageurs</p><p className="mt-1 flex gap-2 text-sm font-semibold"><Users className="size-4 text-emerald-700" />{reservation.guests}</p></div><div><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Total</p><p className="mt-1 font-semibold text-emerald-800">{formatPrix(reservation.totalFcfa)}</p></div></div></section>
         {error ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Action impossible</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
-        {reservation.status === "en_attente_paiement" ? <section className="space-y-3 rounded-2xl border bg-white p-5"><h2 className="font-semibold">Finaliser la réservation</h2><p className="text-sm leading-6 text-slate-600">Les dates restent réservées pendant que votre paiement est en attente.</p><Button className="w-full" disabled={pending} onClick={resumePayment}>{pending ? "Traitement…" : "Reprendre le paiement Paystack"}</Button><Button variant="outline" className="w-full text-red-700" disabled={pending} onClick={cancel}>Annuler et libérer les dates</Button></section> : reservation.status === "confirmee" && reservation.temporalStatus === "a_venir" ? <Button variant="outline" className="w-full text-red-700" disabled={pending} onClick={cancel}>{pending ? "Traitement…" : "Annuler le séjour"}</Button> : null}
+        {reservation.status === "en_attente_paiement" ? <section className="space-y-3 rounded-2xl border bg-white p-5"><h2 className="font-semibold">Finaliser la réservation</h2><p className="text-sm leading-6 text-slate-600">Les dates restent réservées pendant que votre paiement est en attente.</p><Button className="w-full" disabled={pending} onClick={resumePayment}>{pending ? "Traitement…" : "Reprendre le paiement Paystack"}</Button><Button variant="outline" className="w-full text-red-700" disabled={pending} onClick={() => setCancelOpen(true)}>Annuler et libérer les dates</Button></section> : reservation.status === "confirmee" && reservation.temporalStatus === "a_venir" ? <Button variant="outline" className="w-full text-red-700" disabled={pending} onClick={() => setCancelOpen(true)}>{pending ? "Traitement…" : "Annuler le séjour"}</Button> : null}
       </div>
+      <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Annuler ce séjour ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Les dates seront libérées immédiatement et le partenaire sera informé.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {reservation.paymentStatus === "confirmed" ? (
+            <Alert variant="destructive">
+              <TriangleAlert />
+              <AlertTitle>Paiement déjà encaissé</AlertTitle>
+              <AlertDescription>
+                Toutci enregistrera dans la même opération une obligation de
+                remboursement intégral, visible dans le suivi financier.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Conserver le séjour</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={pending}
+              onClick={(event) => {
+                event.preventDefault();
+                cancel();
+              }}
+            >
+              {pending ? "Annulation…" : "Confirmer l’annulation"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

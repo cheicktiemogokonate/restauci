@@ -2,8 +2,8 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useId } from "react";
-import { EASE_OUT, SPRING_PRESS } from "@/lib/ease";
-import { cn } from "@/lib/utils";
+import { EASE_OUT, SPRING_PRESS } from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 
 const CHECK_PATH = "M5 13l4 4L19 7";
 const INDETERMINATE_PATH = "M6 12h12";

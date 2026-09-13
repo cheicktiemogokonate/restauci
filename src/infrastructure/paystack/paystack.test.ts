@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/env", () => ({
+vi.mock("@/infrastructure/env", () => ({
   env: { PAYSTACK_SECRET_KEY: "sk_test_fixture", NEXT_PUBLIC_APP_URL: "http://localhost:3000" },
 }));
 
@@ -54,6 +54,68 @@ describe("Paystack adapter", () => {
       data: { status: "success", reference: "ref", amount: 750_000, currency: "XOF", channel: "mobile_money", authorization: { bank: "Orange Money" } },
     }), { status: 200 })) as typeof fetch);
     await expect(gateway.verify("ref")).resolves.toMatchObject({ status: "success", amountFcfa: 7_500, network: "orange" });
+  });
+
+  it("liste les destinations XOF et distingue Mobile Money des banques", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(url).toContain("/bank?currency=XOF&perPage=100");
+      return new Response(JSON.stringify({
+        status: true,
+        message: "Banks retrieved",
+        data: [
+          { name: "Wave Côte d’Ivoire", code: "WAVE_CI", type: "mobile_money", active: true, currency: "XOF" },
+          { name: "Djamo", code: "CI202", type: "bceao", active: true, currency: "XOF" },
+          { name: "Ancienne banque", code: "OLD", type: "bceao", active: false, currency: "XOF" },
+        ],
+      }), { status: 200 });
+    });
+    const gateway = new PaystackGateway("sk_test_fixture", fetchMock as typeof fetch);
+
+    await expect(gateway.listInstitutions("XOF")).resolves.toEqual([
+      { code: "WAVE_CI", name: "Wave Côte d’Ivoire", type: "mobile_money" },
+      { code: "CI202", name: "Djamo", type: "bank_account" },
+    ]);
+  });
+
+  it("crée un subaccount sans commission implicite et ne retourne pas le numéro complet", async () => {
+    const accountIdentifier = "0700000000";
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body))).toEqual({
+        business_name: "Résidence Toutci",
+        settlement_bank: "WAVE_CI",
+        account_number: accountIdentifier,
+        percentage_charge: 0,
+      });
+      return new Response(JSON.stringify({
+        status: true,
+        message: "Subaccount created",
+        data: {
+          subaccount_code: "ACCT_fixture",
+          business_name: "Résidence Toutci",
+          active: true,
+          is_verified: false,
+          currency: "XOF",
+          settlement_bank: "Wave Côte d’Ivoire",
+        },
+      }), { status: 200 });
+    });
+    const gateway = new PaystackGateway("sk_test_fixture", fetchMock as typeof fetch);
+
+    const result = await gateway.createSubaccount({
+      businessName: "Résidence Toutci",
+      institutionCode: "WAVE_CI",
+      accountIdentifier,
+      percentageCharge: 0,
+    });
+
+    expect(result).toMatchObject({
+      reference: "ACCT_fixture",
+      active: true,
+      verified: false,
+      environment: "test",
+      institutionCode: "WAVE_CI",
+    });
+    expect(JSON.stringify(result)).not.toContain(accountIdentifier);
   });
 
   it("refuse JSON invalide, erreur provider et timeout", async () => {

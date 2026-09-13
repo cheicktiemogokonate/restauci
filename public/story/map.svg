@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fond de carte statique de la séquence mobile (spec §7).
+  SVG vectoriel (~4 Ko) teinté dans la palette de la landing.
+  Les marqueurs ne sont PAS inclus : ce sont des éléments DOM animés.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 760" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Carte des environs">
+  <rect width="400" height="760" fill="#EDF3EE"/>
+
+  <!-- Ilots -->
+  <g fill="#E4EDE5">
+    <rect x="24" y="24" width="88" height="120" rx="8"/>
+    <rect x="132" y="24" width="70" height="180" rx="8"/>
+    <rect x="218" y="24" width="74" height="90" rx="8"/>
+    <rect x="306" y="24" width="70" height="140" rx="8"/>
+    <rect x="24" y="164" width="88" height="150" rx="8"/>
+    <rect x="218" y="132" width="74" height="120" rx="8"/>
+    <rect x="306" y="184" width="70" height="110" rx="8"/>
+    <rect x="24" y="334" width="88" height="130" rx="8"/>
+    <rect x="132" y="224" width="70" height="110" rx="8"/>
+    <rect x="218" y="270" width="74" height="90" rx="8"/>
+    <rect x="306" y="314" width="70" height="96" rx="8"/>
+    <rect x="132" y="354" width="70" height="120" rx="8"/>
+    <rect x="218" y="378" width="74" height="96" rx="8"/>
+    <rect x="306" y="430" width="70" height="110" rx="8"/>
+    <rect x="24" y="484" width="88" height="120" rx="8"/>
+    <rect x="132" y="494" width="70" height="110" rx="8"/>
+    <rect x="218" y="494" width="74" height="110" rx="8"/>
+    <rect x="306" y="560" width="70" height="120" rx="8"/>
+    <rect x="24" y="624" width="88" height="112" rx="8"/>
+    <rect x="132" y="624" width="70" height="112" rx="8"/>
+    <rect x="218" y="624" width="74" height="112" rx="8"/>
+  </g>
+
+  <!-- Parc -->
+  <g>
+    <rect x="132" y="224" width="70" height="110" rx="10" fill="#D8E9D4"/>
+    <circle cx="152" cy="248" r="9" fill="#C6DEC1"/>
+    <circle cx="178" cy="262" r="12" fill="#C6DEC1"/>
+    <circle cx="156" cy="292" r="10" fill="#C6DEC1"/>
+    <circle cx="184" cy="308" r="7" fill="#C6DEC1"/>
+  </g>
+
+  <!-- Rues secondaires (casing puis chaussue) -->
+  <g stroke="#DDE7DD" stroke-linecap="round" fill="none">
+    <path d="M120 10 V750" stroke-width="12"/>
+    <path d="M206 10 V750" stroke-width="12"/>
+    <path d="M292 10 V750" stroke-width="12"/>
+    <path d="M10 148 H390" stroke-width="12"/>
+    <path d="M10 318 H390" stroke-width="12"/>
+    <path d="M10 468 H390" stroke-width="12"/>
+    <path d="M10 608 H390" stroke-width="12"/>
+  </g>
+  <g stroke="#FFFFFF" stroke-linecap="round" fill="none">
+    <path d="M120 10 V750" stroke-width="8"/>
+    <path d="M206 10 V750" stroke-width="8"/>
+    <path d="M292 10 V750" stroke-width="8"/>
+    <path d="M10 148 H390" stroke-width="8"/>
+    <path d="M10 318 H390" stroke-width="8"/>
+    <path d="M10 468 H390" stroke-width="8"/>
+    <path d="M10 608 H390" stroke-width="8"/>
+  </g>
+
+  <!-- Avenue diagonale -->
+  <path d="M-20 640 L420 90" stroke="#DDE7DD" stroke-width="20" stroke-linecap="round" fill="none"/>
+  <path d="M-20 640 L420 90" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <path d="M-20 640 L420 90" stroke="#E8DFC8" stroke-width="1.5" stroke-dasharray="8 10" fill="none"/>
+
+  <!-- Petits chemins -->
+  <g stroke="#F6FAF6" stroke-width="4" stroke-linecap="round" fill="none">
+    <path d="M60 148 V318"/>
+    <path d="M256 318 V468"/>
+    <path d="M168 468 V608"/>
+    <path d="M348 148 V318"/>
+  </g>
+</svg>

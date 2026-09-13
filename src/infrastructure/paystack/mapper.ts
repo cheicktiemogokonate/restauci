@@ -50,7 +50,22 @@ export const subaccountResponseSchema = z.object({
     active: z.boolean(),
     is_verified: z.boolean(),
     currency: z.string().nullable().optional(),
+    settlement_bank: z.string().nullable().optional(),
+    account_name: z.string().nullable().optional(),
   }).passthrough(),
+});
+
+export const payoutInstitutionsResponseSchema = z.object({
+  status: z.literal(true),
+  message: z.string(),
+  data: z.array(z.object({
+    name: z.string().min(1),
+    code: z.string().min(1),
+    type: z.string().nullable().optional(),
+    active: z.boolean().optional().default(true),
+    currency: z.string().nullable().optional(),
+    country: z.string().nullable().optional(),
+  }).passthrough()),
 });
 
 export function mapPaystackStatus(status: string) {

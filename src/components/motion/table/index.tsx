@@ -4,7 +4,7 @@
 import { useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox } from "@/components/motion/checkbox";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 import { EditableCell } from "./editable-cell";
 import { RowHandle } from "./row-handle";
 import { SkeletonRows } from "./skeleton-rows";

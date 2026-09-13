@@ -1,14 +1,12 @@
-import { redis } from "@/lib/cache/redis";
-import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { partnerAccounts, restaurants } from "@/lib/db/schema";
-import { commandeLogger } from "@/lib/loggers";
-import { eq } from "drizzle-orm";
+import { redis } from "@/infrastructure/cache/redis";
+import { getCurrentUser } from "@/modules/auth/server";
+import { commandeLogger } from "@/infrastructure/loggers";
 import { NextRequest } from "next/server";
 import {
   acquireSseConnectionSlot,
   type SseConnectionSlot,
-} from "@/lib/api/sse-concurrency";
+} from "@/app/api/_shared/sse-concurrency";
+import { getRestaurantByOwnerUserId } from "@/modules/restaurants/server";
 
 // Durée max d'une connexion SSE (4 minutes pour Vercel Pro)
 const MAX_DURATION_MS = 4 * 60 * 1000;
@@ -33,21 +31,13 @@ export async function GET(request: NextRequest) {
       return new Response("Non autorise", { status: 401 });
     }
 
-    const [restaurant] = await db
-      .select()
-      .from(partnerAccounts)
-      .innerJoin(
-        restaurants,
-        eq(restaurants.partnerAccountId, partnerAccounts.id),
-      )
-      .where(eq(partnerAccounts.userId, session.userId))
-      .limit(1);
+    const restaurant = await getRestaurantByOwnerUserId(session.userId);
 
     if (!restaurant) {
       return new Response("Restaurant introuvable", { status: 404 });
     }
 
-    const restaurantId = restaurant.restaurants.id;
+    const restaurantId = restaurant.id;
     connectionSlot = await acquireSseConnectionSlot({
       scope: "partner-orders",
       ownerId: session.userId,

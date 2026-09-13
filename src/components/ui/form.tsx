@@ -11,7 +11,7 @@ import {
   type UseFormStateReturn,
   type UseFormReturn,
 } from "react-hook-form"
-import { cn } from "@/lib/utils"
+import { cn } from "@/shared/ui/cn"
 
 function Form<TFormValues extends FieldValues>(
   props: React.FormHTMLAttributes<HTMLFormElement> & {

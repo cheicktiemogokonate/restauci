@@ -20,7 +20,7 @@ import {
   driverCashCollections,
   livraisons,
   livreurs,
-} from "@/lib/db/schema";
+} from "@/infrastructure/db/schema";
 import type {
   CreateRestaurantDriverCommand,
   DriverFleetDTO,

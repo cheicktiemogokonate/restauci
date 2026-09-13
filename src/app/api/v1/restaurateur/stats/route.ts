@@ -1,9 +1,9 @@
 import { NextRequest }                    from "next/server";
-import { requireRestaurateurSession }     from "@/lib/api/auth-mobile";
-import { apiResponse }                    from "@/lib/api/response";
-import { checkRateLimit, mobileApiLimiter } from "@/lib/rate-limit";
-import { getStatsDashboard }              from "@/lib/db/queries";
-import { createLogger }                   from "@/lib/logger";
+import { requireRestaurateurSession }     from "@/app/api/_shared/auth-mobile";
+import { apiResponse }                    from "@/app/api/_shared/response";
+import { checkRateLimit, mobileApiLimiter } from "@/infrastructure/rate-limit";
+import { getRestaurantDashboardStats }    from "@/modules/restaurants/server";
+import { createLogger }                   from "@/infrastructure/logger";
 
 const log = createLogger("v1-restaurateur-stats");
 
@@ -17,7 +17,7 @@ export async function GET(
   if (rl) return rl;
 
   try {
-    const stats = await getStatsDashboard(session.restaurantId);
+    const stats = await getRestaurantDashboardStats(session.restaurantId);
     return apiResponse.success(stats);
   } catch (err) {
     log.error({ err, restaurantId: session.restaurantId }, "Erreur stats");

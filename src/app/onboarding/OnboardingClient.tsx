@@ -10,12 +10,12 @@ import {
   RestaurantConfig,
   SpecialHourException,
 } from "@/components/onboarding/types";
-import { finaliserOnboarding } from "@/lib/actions/onboarding";
+import { finaliserOnboarding } from "./finaliser-onboarding";
 import { AnimatePresence, motion } from "motion/react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-const ONBOARDING_DRAFT_VERSION = "3";
+const ONBOARDING_DRAFT_VERSION = "4";
 
 // Initial configuration default states
 const INITIAL_CONFIG: RestaurantConfig = {
@@ -23,8 +23,9 @@ const INITIAL_CONFIG: RestaurantConfig = {
     name: "",
     description: "",
     logoUrl: null,
+    logoAssetId: null,
     bannerUrl: null,
-    galleryUrls: [],
+    bannerAssetId: null,
   },
   address: {
     country: "Côte d'Ivoire",
@@ -50,21 +51,12 @@ const INITIAL_CONFIG: RestaurantConfig = {
     { day: "Dimanche", isOpen: false, openTime: "09:00", closeTime: "22:00" },
   ],
   exceptions: [],
-  socials: {
-    facebook: "",
-    instagram: "",
-    whatsapp: "",
-    website: "",
-    googleBusiness: "",
-    tripadvisor: "",
-  },
   settings: {
     establishmentType: "restaurant",
     category: "",
     currency: "XOF",
     serviceTypes: [],
     menuLanguage: "fr",
-    enableOnlineBooking: true,
   },
   menu: [],
 };
@@ -229,7 +221,9 @@ export default function OnboardingClient({
         cuisines: config.settings.category ? [config.settings.category] : [],
         description: config.general.description || undefined,
         logoUrl: config.general.logoUrl || undefined,
+        logoAssetId: config.general.logoAssetId || undefined,
         banniereUrl: config.general.bannerUrl || undefined,
+        banniereAssetId: config.general.bannerAssetId || undefined,
         pays: config.address.country || undefined,
         ville: config.address.city || undefined,
         email: config.address.email || undefined,

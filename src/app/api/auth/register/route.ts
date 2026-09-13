@@ -1,16 +1,13 @@
-import { getClientIp } from "@/lib/api/client-ip";
+import { getClientIp } from "@/shared/http/client-ip";
 import {
-  hashPassword,
+  registerPartnerCredentials,
   setAuthCookie,
   signWebSessionToken,
-} from "@/lib/auth";
-import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { authLogger } from "@/lib/loggers";
-import { authLimiter, checkRateLimit } from "@/lib/rate-limit";
-import { registerSchema } from "@/lib/validations/auth";
-import { securityIdentifier } from "@/lib/security/identifier";
-import { eq } from "drizzle-orm";
+} from "@/modules/auth/server";
+import { authLogger } from "@/infrastructure/loggers";
+import { authLimiter, checkRateLimit } from "@/infrastructure/rate-limit";
+import { registerSchema } from "@/modules/auth/contracts";
+import { securityIdentifier } from "@/infrastructure/security/identifier";
 import { NextRequest, NextResponse } from "next/server";
 
 // ============================================================================
@@ -63,17 +60,13 @@ export async function POST(request: NextRequest) {
     // Log tentative d'inscription (sans le mot de passe)
     authLogger.info({ ip, accountId }, "Registration attempt");
 
-    // Vérifier que l'email n'existe pas
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-
-    if (existingUser.length > 0) {
-      // Conserver un coût proche d'une création afin que le temps de réponse
-      // ne devienne pas un oracle fiable sur l'existence du compte.
-      await hashPassword(password);
+    const registration = await registerPartnerCredentials({
+      email,
+      password,
+      nom,
+      telephone,
+    });
+    if (registration.alreadyRegistered) {
       authLogger.warn(
         { ip, accountId, reason: "email already exists" },
         "Registration blocked (duplicate)",
@@ -88,25 +81,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Hasher le password
-    const hashedPassword = await hashPassword(password);
-
-    const userId = crypto.randomUUID();
-    await db.insert(users).values({
-      id: userId,
-      email,
-      password: hashedPassword,
-      nom,
-      telephone,
-      role: "partner",
-    });
-
-    const newUser = {
-      id: userId,
-      email,
-      nom,
-      role: "partner" as const,
-    };
+    const newUser = registration.user;
 
     // Signer le JWT token
     const token = await signWebSessionToken({

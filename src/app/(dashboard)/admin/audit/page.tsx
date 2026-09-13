@@ -3,9 +3,9 @@ import { AuditAdminTable } from "@/components/admin/audit-admin-table";
 import { AdminPage } from "@/components/admin/ui/admin-page";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { Button } from "@/components/ui/button";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { parsePage } from "@/lib/config/pagination";
-import { getAuditLogAdmin } from "@/lib/db/queries-admin";
+import { getAdminSession } from "@/modules/auth/server";
+import { parsePage } from "@/shared/pagination";
+import { listAdminAudit } from "@/modules/audit/server";
 import { ChevronLeft, ChevronRight, History } from "lucide-react";
 import Link from "next/link";
 
@@ -33,9 +33,9 @@ export default async function AdminAuditPage({
     ? params.type
     : undefined;
   const resourceId = params.ressource?.trim().slice(0, 100) || undefined;
-  const result = await getAuditLogAdmin({
-    ressourceType: resourceType,
-    ressourceId: resourceId,
+  const result = await listAdminAudit({
+    resourceType,
+    resourceId,
     page,
     limit: 25,
   });
@@ -52,7 +52,7 @@ export default async function AdminAuditPage({
     <AdminPage>
       <PageHeader
         title="Journal d’audit"
-        description="Historique traçable des validations, suspensions et modifications effectuées par l’administration."
+        description="Historique corrélé des actions critiques effectuées par l’administration, le système ou un fournisseur."
         action={
           <div className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2">
             <History className="size-4 text-muted-foreground" />

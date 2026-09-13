@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireDriverSession } from "@/lib/api/auth-driver";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { buildPaginationMeta } from "@/lib/config/pagination";
+import { requireDriverSession } from "@/app/api/_shared/auth-driver";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { buildPaginationMeta } from "@/shared/pagination";
 import {
   listDriverNotificationsSchema,
   markDriverNotificationsReadSchema,

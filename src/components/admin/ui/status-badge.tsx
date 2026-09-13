@@ -2,7 +2,7 @@ import {
   AnimatedBadge,
   type AnimatedBadgeStatus,
 } from "@/components/motion/animated-badge";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 import type { ComponentProps } from "react";
 
 type StatusBadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";

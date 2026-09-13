@@ -3,8 +3,8 @@
 import { motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { SPRING_PANEL } from "@/lib/ease";
-import { cn } from "@/lib/utils";
+import { SPRING_PANEL } from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 
 export type TableMenuItem = {
   label: string;

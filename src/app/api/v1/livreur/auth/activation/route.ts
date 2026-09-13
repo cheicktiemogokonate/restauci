@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
-import { applyDriverRefreshTransport } from "@/lib/api/driver-session-cookie";
-import { driverTokenTransportSchema } from "@/lib/api/driver-token-transport";
-import { deliveryErrorResponse } from "@/lib/api/delivery-response";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { createLogger } from "@/lib/logger";
+import { applyDriverRefreshTransport } from "@/app/api/_shared/driver-session-cookie";
+import { driverTokenTransportSchema } from "@/app/api/_shared/driver-token-transport";
+import { deliveryErrorResponse } from "@/app/api/_shared/delivery-response";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { createLogger } from "@/infrastructure/logger";
 import { activateDriverCredentialsSchema } from "@/modules/deliveries/contracts";
 import { activateDriverCredentials } from "@/modules/deliveries/server";
 

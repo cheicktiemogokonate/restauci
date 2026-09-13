@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { readFileSync } from "node:fs";
+import { warmNeonTestPool } from "./support/neon-test-connection";
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL_TEST;
 const runDatabaseTests = process.env.RUN_SUBSCRIPTION_DB_TESTS === "true";
+const allowDevelopmentDatabase =
+  process.env.ALLOW_DEVELOPMENT_DB_TESTS === "true";
 if (runDatabaseTests && !databaseUrl) {
   throw new Error("TEST_DATABASE_URL est obligatoire pour les tests DB");
 }
@@ -16,19 +19,30 @@ try {
 } catch {
   developmentUrl = process.env.TEST_DATABASE ? undefined : process.env.DATABASE_URL;
 }
-if (runDatabaseTests && databaseUrl === developmentUrl) {
+if (
+  runDatabaseTests &&
+  databaseUrl === developmentUrl &&
+  !allowDevelopmentDatabase
+) {
   throw new Error("La base de test doit être distincte de DATABASE_URL");
 }
 const describeDatabase = runDatabaseTests ? describe : describe.skip;
 
 describeDatabase("subscription database concurrency invariants", () => {
-  const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    max: 2,
+    connectionTimeoutMillis: 30_000,
+    idleTimeoutMillis: 60_000,
+    keepAlive: true,
+  });
   const suffix = crypto.randomUUID();
   const userId = crypto.randomUUID();
   const partnerAccountId = crypto.randomUUID();
   const restaurantId = crypto.randomUUID();
 
   beforeAll(async () => {
+    await warmNeonTestPool(pool);
     await pool.query(
       `INSERT INTO users (id, nom, email, password, telephone, role, created_at, updated_at)
        VALUES ($1, 'Test concurrence', $2, 'not-a-real-password', '+2250000000000', 'partner', NOW(), NOW())`,

@@ -9,7 +9,7 @@ import {
   MorphPopoverContent,
 } from "@/components/motion/popover-morph";
 import { Tooltip } from "@/components/motion/tooltip";
-import { SPRING_PRESS } from "@/lib/ease";
+import { SPRING_PRESS } from "@/shared/ui/motion";
 import { IconButton } from "./icon-button";
 import { type DayKey, WEEKDAYS } from "./types";
 

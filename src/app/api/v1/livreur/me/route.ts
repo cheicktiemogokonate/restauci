@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
-import { requireDriverSession } from "@/lib/api/auth-driver";
-import { apiResponse } from "@/lib/api/response";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, mobileApiLimiter } from "@/lib/rate-limit";
+import { requireDriverSession } from "@/app/api/_shared/auth-driver";
+import { apiResponse } from "@/app/api/_shared/response";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, mobileApiLimiter } from "@/infrastructure/rate-limit";
 import { getDriverMe } from "@/modules/deliveries/server";
 
 const log = createLogger("v1-driver-me");

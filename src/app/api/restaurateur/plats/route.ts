@@ -1,305 +1,90 @@
-import { getClientIp } from "@/lib/api/client-ip";
-import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { createCategorie, createPlat } from "@/lib/db/mutations";
-import { getMyRestaurant } from "@/lib/db/queries";
-import { categories, plats } from "@/lib/db/schema";
-import { menuLogger } from "@/lib/loggers";
-import { apiLimiter, checkRateLimit } from "@/lib/rate-limit";
-import { SubscriptionLimitError } from "@/lib/subscription-plans";
-import { and, asc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { getClientIp } from "@/shared/http/client-ip";
+import { getCurrentUser } from "@/modules/auth/server";
+import { menuLogger } from "@/infrastructure/loggers";
+import { apiLimiter, checkRateLimit } from "@/infrastructure/rate-limit";
+import { getPartnerAccountByUserId } from "@/modules/partners/server";
+import { getRestaurantByPartnerAccountId } from "@/modules/restaurants/server";
+import {
+  createMenuDish,
+  getMenuManagementWorkspace,
+} from "@/modules/menu/server";
+import { MenuDomainError } from "@/modules/menu/model";
+import { menuDishPayloadSchema } from "@/modules/menu/contracts";
 
-const createPlatSchema = z.object({
-  nom: z.string().min(2, "Le nom du plat est obligatoire"),
-  description: z.string().optional(),
-  prix: z.number().int().positive("Le prix doit être un entier positif"),
-  image: z.string().url("URL d'image invalide").optional(),
-  disponible: z.boolean().optional().default(true),
-  categorieId: z.string().uuid().optional(),
-  categorieName: z.string().min(2).optional(),
-  tags: z.array(z.string()).optional(),
-  allergenes: z.array(z.string()).optional(),
-});
+async function getRestaurantSession() {
+  const session = await getCurrentUser();
+  if (!session) return null;
+  const account = await getPartnerAccountByUserId(session.userId);
+  const restaurant = account
+    ? await getRestaurantByPartnerAccountId(account.id)
+    : null;
+  return restaurant ? { session, restaurant } : null;
+}
 
 export async function GET(request: NextRequest) {
   const ip = getClientIp(request);
   const rateLimitResponse = await checkRateLimit(apiLimiter, ip);
   if (rateLimitResponse) return rateLimitResponse;
-
-  const session = await getCurrentUser();
-  if (!session) {
-    menuLogger.warn(
-      { ip, reason: "unauthorized access attempt" },
-      "Unauthorized plats access attempt",
-    );
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-  }
-
-  const restaurant = await getMyRestaurant(session.userId);
-  if (!restaurant) {
-    menuLogger.warn(
-      {
-        ip,
-        userId: session?.userId ?? "unknown",
-        reason: "restaurant not found",
-      },
-      "Plats access failed",
-    );
-    return NextResponse.json(
-      { error: "Restaurant introuvable" },
-      { status: 404 },
-    );
-  }
-
-  menuLogger.info(
-    { ip, restaurantId: restaurant.id },
-    "Fetching plats for restaurant",
-  );
+  const context = await getRestaurantSession();
+  if (!context) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
   try {
-    const platsList = await db
-      .select({
-        id: plats.id,
-        nom: plats.nom,
-        prix: plats.prix,
-        disponible: plats.disponible,
-        photoUrl: plats.photoUrl,
-        nombreAvis: plats.nombreAvis,
-        noteMoyenne: plats.noteMoyenne,
-        nombreCommandes: plats.nombreCommandes,
-        categorieNom: categories.nom,
-      })
-      .from(plats)
-      .leftJoin(categories, eq(plats.categorieId, categories.id))
-      .where(eq(plats.restaurantId, restaurant.id))
-      .orderBy(asc(plats.ordre));
-
-    menuLogger.info(
-      { ip, restaurantId: restaurant.id, count: platsList.length },
-      "Plats fetched successfully",
-    );
-    return NextResponse.json({ plats: platsList });
+    const workspace = await getMenuManagementWorkspace({
+      restaurantId: context.restaurant.id,
+      page: 1,
+      limit: 100,
+    });
+    return NextResponse.json({
+      plats: workspace.dishes.map((dish) => ({
+        ...dish,
+        categorieNom: dish.categorie.nom,
+      })),
+    });
   } catch (error) {
-    menuLogger.error(
-      {
-        ip,
-        restaurantId: restaurant?.id ?? "unknown",
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack:
-          process.env.NODE_ENV === "development" && error instanceof Error
-            ? error.stack
-            : undefined,
-      },
-      "Failed to fetch plats",
-    );
-    return NextResponse.json(
-      { error: "Erreur interne du serveur" },
-      { status: 500 },
-    );
+    menuLogger.error({ error, restaurantId: context.restaurant.id }, "dish list failed");
+    return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-
   const rateLimitResponse = await checkRateLimit(apiLimiter, ip);
   if (rateLimitResponse) return rateLimitResponse;
+  const context = await getRestaurantSession();
+  if (!context) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+
+  const body = await request.json().catch(() => null);
+  const parsed = menuDishPayloadSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Données invalides", details: parsed.error.flatten().fieldErrors },
+      { status: 400 },
+    );
+  }
 
   try {
-    const session = await getCurrentUser();
-    if (!session) {
-      menuLogger.warn(
-        { ip, reason: "unauthorized access attempt" },
-        "Unauthorized plat creation attempt",
-      );
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-    }
-
-    const restaurant = await getMyRestaurant(session.userId);
-    if (!restaurant) {
-      menuLogger.warn(
-        {
-          ip,
-          userId: session?.userId ?? "unknown",
-          reason: "restaurant not found",
-        },
-        "Plat creation failed",
-      );
-      return NextResponse.json(
-        { error: "Restaurant introuvable" },
-        { status: 404 },
-      );
-    }
-
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      menuLogger.warn(
-        {
-          ip,
-          restaurantId: restaurant?.id ?? "unknown",
-          reason: "invalid json body",
-        },
-        "Plat creation request with invalid JSON",
-      );
-      return NextResponse.json(
-        { error: "Corps de requête invalide — JSON attendu." },
-        { status: 400 },
-      );
-    }
-
-    const validation = createPlatSchema.safeParse(body);
-
-    if (!validation.success) {
-      menuLogger.warn(
-        {
-          ip,
-          restaurantId: restaurant?.id ?? "unknown",
-          reason: "invalid plat data",
-          errors: validation.error.flatten().fieldErrors,
-        },
-        "Invalid plat creation data",
-      );
-      return NextResponse.json(
-        {
-          error: "Données invalides",
-          details: validation.error.flatten().fieldErrors,
-        },
-        { status: 400 },
-      );
-    }
-
-    const data = validation.data;
-    menuLogger.info(
-      { ip, restaurantId: restaurant.id, nom: data.nom },
-      "Creating new plat",
-    );
-
-    let categorieId = data.categorieId;
-
-    if (!categorieId) {
-      if (!data.categorieName) {
-        menuLogger.warn(
-          {
-            ip,
-            restaurantId: restaurant.id,
-            reason: "missing category name or id",
-          },
-          "Plat creation failed",
-        );
-        return NextResponse.json(
-          { error: "La catégorie du plat est requise." },
-          { status: 400 },
-        );
-      }
-
-      const [existingCategory] = await db
-        .select()
-        .from(categories)
-        .where(
-          and(
-            eq(categories.restaurantId, restaurant.id),
-            eq(categories.nom, data.categorieName),
-          ),
-        )
-        .limit(1);
-
-      if (existingCategory) {
-        categorieId = existingCategory.id;
-        menuLogger.debug(
-          { ip, restaurantId: restaurant.id, categoryId: existingCategory.id },
-          "Using existing category",
-        );
-      } else {
-        const createdCategory = await createCategorie({
-          restaurantId: restaurant.id,
-          nom: data.categorieName,
-          ordre: 0,
-        });
-
-        categorieId = createdCategory.id;
-        menuLogger.info(
-          {
-            ip,
-            restaurantId: restaurant.id,
-            categoryId: createdCategory.id,
-            categoryName: data.categorieName,
-          },
-          "Created new category",
-        );
-      }
-    } else {
-      const [category] = await db
-        .select()
-        .from(categories)
-        .where(
-          and(
-            eq(categories.id, categorieId),
-            eq(categories.restaurantId, restaurant.id),
-          ),
-        )
-        .limit(1);
-
-      if (!category) {
-        menuLogger.warn(
-          {
-            ip,
-            restaurantId: restaurant.id,
-            categoryId: categorieId,
-            reason: "invalid category",
-          },
-          "Plat creation failed",
-        );
-        return NextResponse.json(
-          { error: "Catégorie invalide." },
-          { status: 400 },
-        );
-      }
-      menuLogger.debug(
-        { ip, restaurantId: restaurant.id, categoryId: categorieId },
-        "Using provided category",
-      );
-    }
-
-    const plat = await createPlat({
-      restaurantId: restaurant.id,
-      categorieId,
-      nom: data.nom,
-      description: data.description,
-      prix: data.prix,
-      photoUrl: data.image ?? null,
-      disponible: data.disponible,
+    const dish = await createMenuDish({
+      restaurantId: context.restaurant.id,
+      ownerUserId: context.session.userId,
+      nom: parsed.data.nom,
+      description: parsed.data.description,
+      prix: parsed.data.prix,
+      photoUrl: parsed.data.image,
+      photoAssetId: parsed.data.imageAssetId,
+      categorieId: parsed.data.categorieId,
+      newCategorieName: parsed.data.categorieName,
+      disponible: parsed.data.disponible,
       ordre: 0,
-      tags: data.tags,
-      allergenes: data.allergenes,
+      tags: parsed.data.tags,
+      allergenes: parsed.data.allergenes,
     });
-
-    menuLogger.info(
-      { ip, platId: plat.id, nom: plat.nom, restaurantId: restaurant.id },
-      "Plat created successfully",
-    );
-    return NextResponse.json({ plat }, { status: 200 });
+    return NextResponse.json({ plat: dish }, { status: 201 });
   } catch (error) {
-    menuLogger.error(
-      {
-        ip,
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack:
-          process.env.NODE_ENV === "development" && error instanceof Error
-            ? error.stack
-            : undefined,
-      },
-      "Failed to create plat",
-    );
-    if (error instanceof SubscriptionLimitError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+    menuLogger.error({ error, restaurantId: context.restaurant.id }, "dish creation failed");
+    if (error instanceof MenuDomainError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    return NextResponse.json(
-      { error: "Une erreur interne est survenue." },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Une erreur interne est survenue." }, { status: 500 });
   }
 }

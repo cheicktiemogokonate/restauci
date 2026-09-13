@@ -1,4 +1,16 @@
-import type { StatutCommande, ModeCommande, Commande } from "@/lib/db/types";
+import type { Commande } from "@/infrastructure/db/types";
+import {
+  RESTAURANT_ORDER_MODE_LABELS,
+  RESTAURANT_ORDER_PREVIOUS_STATUSES,
+  RESTAURANT_ORDER_STATUS_LABELS,
+  RESTAURANT_ORDER_TRANSITIONS,
+  canRestaurantSetOrderStatus,
+  type RestaurantOrderMode,
+  type RestaurantOrderStatus,
+} from "@/modules/orders/model";
+
+type StatutCommande = RestaurantOrderStatus;
+type ModeCommande = RestaurantOrderMode;
 
 // Payload SSE pour un changement de statut (envoyé à l'app client)
 export interface SseStatutPayload {
@@ -31,10 +43,8 @@ export interface SseEventMap {
   livreur_assigne: SseDriverAssignmentPayload;
   commande_prete: SseNotificationPayload;
   commande_annulee: SseNotificationPayload;
-  nouveau_avis: SseNotificationPayload;
   restaurant_valide: SseNotificationPayload;
   restaurant_rejete: SseNotificationPayload;
-  promotion: SseNotificationPayload;
   systeme: SseNotificationPayload;
   message: unknown;
 }
@@ -44,14 +54,7 @@ export type SseEvent =
   { [K in keyof SseEventMap]: { type: K; data: SseEventMap[K] } }[keyof SseEventMap];
 
 // Labels affichés dans l'UI
-export const STATUT_LABELS: Record<StatutCommande, string> = {
-  en_attente_paiement: "En attente de paiement",
-  recue:           "Reçue",
-  en_preparation:  "En préparation",
-  prete:           "Prête",
-  servie:          "Servie",
-  annulee:         "Annulée",
-};
+export const STATUT_LABELS = RESTAURANT_ORDER_STATUS_LABELS;
 
 // Classes CSS Tailwind par statut
 export const STATUT_COLORS: Record<StatutCommande, string> = {
@@ -63,38 +66,20 @@ export const STATUT_COLORS: Record<StatutCommande, string> = {
   annulee:         "bg-red-100 text-red-600",
 };
 
-export const MODE_LABELS: Record<ModeCommande, string> = {
-  sur_place:  "Sur place",
-  livraison:  "Livraison",
-  emporter:   "À emporter",
-};
+export const MODE_LABELS = RESTAURANT_ORDER_MODE_LABELS;
 
 // Source unique de vérité pour les transitions de statut.
 // `prete` peut aller vers `annulee` : une commande prête mais non réclamée
 // peut légitimement être annulée (erreur client, doublon, etc.).
-export const STATUT_TRANSITIONS: Record<StatutCommande, StatutCommande[]> = {
-  en_attente_paiement: ["annulee"],
-  recue: ["en_preparation", "annulee"],
-  en_preparation: ["prete", "annulee"],
-  prete: ["servie", "annulee"],
-  servie: [],
-  annulee: [],
-};
+export const STATUT_TRANSITIONS = RESTAURANT_ORDER_TRANSITIONS;
 
 // Forme inverse utilisée par la mutation atomique côté serveur. Garder les
 // deux tables ici évite que l'UI et l'API divergent sur le workflow métier.
-export const STATUT_PREVIOUS_STATUSES: Record<StatutCommande, StatutCommande[]> = {
-  en_attente_paiement: [],
-  recue: ["en_attente_paiement"],
-  en_preparation: ["recue"],
-  prete: ["en_preparation"],
-  servie: ["prete"],
-  annulee: ["en_attente_paiement", "recue", "en_preparation", "prete"],
-};
+export const STATUT_PREVIOUS_STATUSES = RESTAURANT_ORDER_PREVIOUS_STATUSES;
 
 export function canRestaurateurSetCommandeStatus(
   modeCommande: ModeCommande,
   statut: StatutCommande,
 ) {
-  return !(modeCommande === "livraison" && statut === "servie");
+  return canRestaurantSetOrderStatus(modeCommande, statut);
 }

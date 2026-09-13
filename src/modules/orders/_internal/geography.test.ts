@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/env", () => ({
+vi.mock("@/infrastructure/env", () => ({
   env: { RESTAURANT_GEO_POLICY_MODE: "enforce" },
 }));
 

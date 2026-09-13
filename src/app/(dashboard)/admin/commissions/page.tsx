@@ -1,17 +1,21 @@
 import {
   CommissionDetailsTable,
   RestaurantSummaryTable,
-} from "@/components/admin/commissions-admin-tables";
-import { CommissionsAdminFilters } from "@/components/admin/commissions-admin-filters";
+} from "@/modules/commissions/presentation/commissions-admin-tables";
+import { CommissionsAdminFilters } from "@/modules/commissions/presentation/commissions-admin-filters";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { AdminPage } from "@/components/admin/ui/admin-page";
 import { StatCard } from "@/components/admin/ui/stat-card";
 import { Button } from "@/components/ui/button";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { parsePage } from "@/lib/config/pagination";
-import { getCommissionsAdmin, getCommissionsParRestaurantAdmin } from "@/lib/db/queries-admin";
+import { getAdminSession } from "@/modules/auth/server";
+import { parsePage } from "@/shared/pagination";
+import {
+  listAdminCommissions,
+  listAdminRestaurantCommissionDebts,
+} from "@/modules/commissions/server";
 import { ChevronLeft, ChevronRight, ShoppingBag, Store, Wallet } from "lucide-react";
 import Link from "next/link";
+import { createManualCommissionSettlementAction } from "@/app/_actions/admin-commissions";
 
 const statutsValides = new Set(["pending", "due", "void"]);
 
@@ -42,13 +46,13 @@ export default async function AdminCommissionsPage({
   const page = parsePage(params.page);
 
   const [parRestaurant, commissionsResult] = await Promise.all([
-    hasFilters ? Promise.resolve([]) : getCommissionsParRestaurantAdmin(),
+    hasFilters ? Promise.resolve([]) : listAdminRestaurantCommissionDebts(),
     hasFilters
-      ? getCommissionsAdmin({
+      ? listAdminCommissions({
           restaurantSearch: params.restaurant,
-          statut,
-          dateDebut: parseStartDate(params.dateDebut),
-          dateFin: parseEndDate(params.dateFin),
+          status: statut === "tous" ? "all" : statut,
+          startDate: parseStartDate(params.dateDebut),
+          endDate: parseEndDate(params.dateFin),
           page,
           limit: 25,
         })
@@ -87,7 +91,12 @@ export default async function AdminCommissionsPage({
       {hasFilters ? (
         <CommissionDetailsTable rows={commissions} total={commissionsResult?.total ?? 0} />
       ) : (
-        <RestaurantSummaryTable rows={parRestaurant} maxMontant={maxMontant} totalDu={totalDu} />
+        <RestaurantSummaryTable
+          rows={parRestaurant}
+          maxMontant={maxMontant}
+          totalDu={totalDu}
+          onCreateSettlement={createManualCommissionSettlementAction}
+        />
       )}
 
       {commissionsResult && commissionsResult.totalPages > 1 && (

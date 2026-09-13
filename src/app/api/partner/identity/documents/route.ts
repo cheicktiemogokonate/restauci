@@ -1,17 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePartnerAccount } from "@/lib/auth/partner-account";
-import { PartnerAuthorizationError } from "@/lib/auth/partner-account-policy";
-import { checkRateLimit, uploadLimiter } from "@/lib/rate-limit";
+import { requirePartnerAccount } from "@/modules/partners/server";
+import { PartnerAuthorizationError } from "@/modules/partners/model";
+import { checkRateLimit, uploadLimiter } from "@/infrastructure/rate-limit";
 import {
   IdentityVerificationError,
   MAX_IDENTITY_DOCUMENT_SIZE,
 } from "@/modules/identity/model";
-import { uploadPartnerIdentityDocument } from "@/modules/identity/server";
-import { enforceContentLength } from "@/lib/api/request-size";
+import {
+  ensurePartnerIdentityDocumentScansQueued,
+  getPartnerIdentityVerification,
+  uploadPartnerIdentityDocument,
+} from "@/modules/identity/server";
+import { enforceContentLength } from "@/app/api/_shared/request-size";
 
 const MAX_MULTIPART_OVERHEAD = 128 * 1024;
 
 export const runtime = "nodejs";
+
+export async function GET() {
+  try {
+    const partnerAccount = await requirePartnerAccount();
+    await ensurePartnerIdentityDocumentScansQueued(partnerAccount.id);
+    const verification = await getPartnerIdentityVerification(
+      partnerAccount.id,
+    );
+    return NextResponse.json({ verification });
+  } catch (error) {
+    if (error instanceof PartnerAuthorizationError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    console.error("[identity] rafraîchissement du statut KYC impossible", {
+      error,
+    });
+    return NextResponse.json(
+      { error: "Statut de vérification indisponible." },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,7 +90,8 @@ export async function POST(request: NextRequest) {
     }
     if (error instanceof IdentityVerificationError) {
       const status =
-        error.code === "DOCUMENT_STORAGE_UNAVAILABLE"
+        error.code === "DOCUMENT_STORAGE_UNAVAILABLE" ||
+        error.code === "DOCUMENT_SCAN_UNAVAILABLE"
           ? 503
           : error.code === "VERIFICATION_NOT_EDITABLE"
             ? 409

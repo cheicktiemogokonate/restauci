@@ -1,8 +1,10 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
-import { commissions } from "@/lib/db/schema";
-import type { TransactionExecutor } from "@/lib/db/transaction";
+import { commissions } from "@/infrastructure/db/schema";
+import type { DbExecutor } from "@/infrastructure/db";
+import { db } from "@/infrastructure/db";
+import type { TransactionExecutor } from "@/infrastructure/db/transaction";
 import type { CommissionSnapshot } from "../model";
 
 export async function createResidenceCommissionRecord(
@@ -47,4 +49,23 @@ export async function voidPendingResidenceCommissionRecord(
     )
     .returning();
   return commission ?? null;
+}
+
+export function getProviderSplitCommissionRecord(
+  source:
+    | { orderId: string; residenceReservationId?: never }
+    | { orderId?: never; residenceReservationId: string },
+  executor: DbExecutor = db,
+) {
+  return executor.query.commissions.findFirst({
+    where: source.orderId !== undefined
+      ? eq(commissions.commandeId, source.orderId)
+      : eq(commissions.residenceReservationId, source.residenceReservationId),
+    columns: {
+      id: true,
+      amountFcfa: true,
+      collectionMode: true,
+      partnerAccountId: true,
+    },
+  });
 }

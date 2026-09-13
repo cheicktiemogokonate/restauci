@@ -15,6 +15,10 @@ export const WEEKDAYS: { key: DayKey; label: string }[] = [
   { key: "sun", label: "Dimanche" },
 ];
 
+/** Stable id for one of the scheduler's time-select panels. */
+export const panelKey = (day: DayKey, rangeId: string, edge: "start" | "end") =>
+  `${day}:${rangeId}:${edge}`;
+
 // ─── time helpers ────────────────────────────────────────────────────────────
 
 export const toMinutes = (v: string) => {

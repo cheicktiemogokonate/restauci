@@ -1,3 +1,7 @@
+import type { LocationSample } from "@/shared/geo";
+
+export type { LocationSample } from "@/shared/geo";
+
 export const SERVICE_MARKET_STATUSES = [
   "draft",
   "published",
@@ -49,13 +53,6 @@ export const LOCATION_POLICIES = {
   LocationPolicyUse,
   { maxAgeMs: number; maxAccuracyMeters: number }
 >;
-
-export interface LocationSample {
-  lat: number;
-  lng: number;
-  accuracyMeters: number;
-  capturedAt: string;
-}
 
 export interface ResolvedServiceMarket {
   id: string;

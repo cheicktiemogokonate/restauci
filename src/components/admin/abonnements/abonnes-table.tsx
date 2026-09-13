@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   reactiverAbonnementAction,
   suspendreAbonnementAction,
-} from "@/lib/actions/admin-subscriptions";
+} from "@/app/_actions/admin-subscriptions";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { CalendarClock } from "lucide-react";

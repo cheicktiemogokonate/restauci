@@ -1,7 +1,5 @@
-import {
-  getCategoriesRestaurant,
-  getCommandesParMode,
-} from "@/lib/db/queries";
+import { getRestaurantOrdersByMode } from "@/modules/restaurants/server";
+import { getMenuCategoryOrderStats } from "@/modules/menu/server";
 import { getDashboardDailyData } from "./dashboard-data";
 import { OrderTypes } from "./order-types";
 import { OrdersOverview } from "./orders-overview";
@@ -47,7 +45,7 @@ export async function OrdersOverviewSection({
 export async function OrderTypesSection({
   restaurantId,
 }: DashboardSectionProps) {
-  const commandesParMode = await getCommandesParMode(restaurantId);
+  const commandesParMode = await getRestaurantOrdersByMode(restaurantId);
   const total = commandesParMode.reduce((sum, item) => sum + item.count, 0);
 
   const data = [
@@ -90,14 +88,11 @@ export async function OrderTypesSection({
 export async function TopCategoriesSection({
   restaurantId,
 }: DashboardSectionProps) {
-  const categories = await getCategoriesRestaurant(restaurantId);
+  const categories = await getMenuCategoryOrderStats(restaurantId);
   const categoryStats = categories
     .map((category) => ({
-      name: category.nom,
-      value: (category.plats ?? []).reduce(
-        (sum, plat) => sum + (plat.nombreCommandes ?? 0),
-        0,
-      ),
+      name: category.name,
+      value: category.orderCount,
     }))
     .filter((item) => item.value > 0)
     .sort((a, b) => b.value - a.value)

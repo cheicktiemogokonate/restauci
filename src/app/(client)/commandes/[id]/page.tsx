@@ -16,11 +16,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCommandeTracking } from "@/lib/client-app/hooks/use-commande-tracking";
+import { useCommandeTracking } from "@/modules/clients/presentation/client-app/hooks/use-commande-tracking";
 import { ClientDeliveryPanel } from "@/components/client-app/client-delivery-panel";
-import { clientApi } from "@/lib/client-app/api-client";
-import { useAuthStore } from "@/lib/client-app/stores/auth-store";
-import { formatPrix } from "@/lib/utils/format";
+import { clientApi } from "@/modules/clients/presentation/client-app/api-client";
+import { useAuthStore } from "@/modules/clients/presentation/client-app/stores/auth-store";
+import { formatPrix } from "@/shared/format";
 import { AlertCircle, ArrowLeft, Check, Circle, Clock3, MapPin, ReceiptText, Store, UtensilsCrossed } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useParams, useRouter } from "next/navigation";

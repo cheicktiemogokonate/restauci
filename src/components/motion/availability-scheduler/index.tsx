@@ -3,7 +3,7 @@
 
 import { LayoutGroup, useReducedMotion } from "motion/react";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 import { DayRow } from "./day-row";
 import {
   type DayAvailability,
@@ -46,11 +46,16 @@ export function AvailabilityScheduler({
   const [internal, setInternal] = useState<WeekAvailability>(
     () => defaultValue ?? defaultWeek(),
   );
+  const [openDay, setOpenDay] = useState<DayKey | null>(null);
+  const [openPanel, setOpenPanel] = useState<string | null>(null);
   const controlled = value !== undefined;
   const week = controlled ? value : internal;
 
   const commit = useCallback(
     (next: WeekAvailability) => {
+      // A value change can remove the field that owns the open panel. Closing
+      // here prevents a stale panel id from reopening if that field returns.
+      setOpenPanel(null);
       if (!controlled) setInternal(next);
       onChange?.(next);
     },
@@ -62,6 +67,14 @@ export function AvailabilityScheduler({
       commit({ ...week, [day]: next });
     },
     [commit, week],
+  );
+
+  const panelOpenChange = useCallback(
+    (day: DayKey, id: string, open: boolean) => {
+      setOpenPanel((current) => (open ? id : current === id ? null : current));
+      if (open) setOpenDay(day);
+    },
+    [],
   );
 
   const copyDay = useCallback(
@@ -85,7 +98,7 @@ export function AvailabilityScheduler({
   return (
     <LayoutGroup id={groupId}>
       <div className={cn("w-full max-w-xl divide-y divide-border", className)}>
-        {WEEKDAYS.map(({ key, label }, i) => (
+        {WEEKDAYS.map(({ key, label }) => (
           <DayRow
             key={key}
             day={key}
@@ -93,9 +106,11 @@ export function AvailabilityScheduler({
             state={week[key]}
             options={options}
             reduce={reduce}
-            depth={WEEKDAYS.length - i}
+            elevated={openDay === key}
+            openPanel={openPanel}
             onChange={(next) => setDay(key, next)}
             onCopy={(targets) => copyDay(key, targets)}
+            onPanelOpenChange={(id, open) => panelOpenChange(key, id, open)}
           />
         ))}
       </div>

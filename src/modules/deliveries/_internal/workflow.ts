@@ -20,15 +20,16 @@ import {
   driverCashRemittances,
   livraisons,
   livreurs,
-} from "@/lib/db/schema";
+} from "@/infrastructure/db/schema";
 import {
-  persistNotification,
   scheduleClientNotification,
   scheduleDriverNotification,
-} from "@/lib/notifications";
+} from "@/modules/notifications/server";
+import { persistNotification } from "@/modules/notifications/server";
 import {
   cancelDeliveryOrderInTransaction,
   completeDeliveryOrderInTransaction,
+  getDeliveryOrderContextInTransaction,
   scheduleCancelledDeliveryOrderEffects,
   scheduleCompletedDeliveryOrderEffects,
 } from "@/modules/orders/server";
@@ -205,22 +206,9 @@ export async function proposeDeliveryPersistence(input: {
 }) {
   try {
     const result = await transactionalDb.transaction(async (tx) => {
-    const order = await tx.query.commandes.findFirst({
-      where: and(
-        eq(commandes.id, input.orderId),
-        eq(commandes.restaurantId, input.actor.restaurantId),
-      ),
-      columns: {
-        id: true,
-        numero: true,
-        restaurantId: true,
-        modeCommande: true,
-        statut: true,
-        adresseLivraison: true,
-        latitudeLivraison: true,
-        longitudeLivraison: true,
-        distanceKm: true,
-      },
+    const order = await getDeliveryOrderContextInTransaction(tx, {
+      orderId: input.orderId,
+      restaurantId: input.actor.restaurantId,
     });
     if (!order || order.modeCommande !== "livraison") {
       throw new DeliveryDomainError(
@@ -744,12 +732,9 @@ export async function cancelRestaurantDeliveryOrderPersistence(input: {
   now: Date;
 }) {
   const result = await transactionalDb.transaction(async (tx) => {
-    const order = await tx.query.commandes.findFirst({
-      where: and(
-        eq(commandes.id, input.orderId),
-        eq(commandes.restaurantId, input.actor.restaurantId),
-      ),
-      columns: { id: true, modeCommande: true },
+    const order = await getDeliveryOrderContextInTransaction(tx, {
+      orderId: input.orderId,
+      restaurantId: input.actor.restaurantId,
     });
     if (!order || order.modeCommande !== "livraison") {
       throw new DeliveryDomainError(

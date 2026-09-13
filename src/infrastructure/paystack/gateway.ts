@@ -1,11 +1,12 @@
 import "server-only";
 
-import { env } from "@/lib/env";
+import { env } from "@/infrastructure/env";
 import {
   fromPaystackSubunit,
   initializeResponseSchema,
   mapPaystackStatus,
   mapReliablePaystackNetwork,
+  payoutInstitutionsResponseSchema,
   subaccountResponseSchema,
   toPaystackSubunit,
   verifyResponseSchema,
@@ -52,6 +53,10 @@ export class PaystackGateway {
       throw new PaystackGatewayError("NOT_CONFIGURED", "Paystack n’est pas configuré.", true);
     }
     return { Authorization: `Bearer ${this.secretKey}`, "Content-Type": "application/json" };
+  }
+
+  private get environment(): "test" | "live" {
+    return this.secretKey?.startsWith("sk_test_") ? "test" : "live";
   }
 
   private async request(path: string, init: RequestInit) {
@@ -141,6 +146,69 @@ export class PaystackGateway {
       active: parsed.data.data.active,
       verified: parsed.data.data.is_verified,
       currency: parsed.data.data.currency ?? null,
+      environment: this.environment,
+      institutionCode: null,
+      institutionName: parsed.data.data.settlement_bank ?? null,
+    };
+  }
+
+  async listInstitutions(currency: "XOF") {
+    const parsed = payoutInstitutionsResponseSchema.safeParse(
+      await this.request(`/bank?currency=${currency}&perPage=100`, { method: "GET" }),
+    );
+    if (!parsed.success) {
+      throw new PaystackGatewayError(
+        "INVALID_RESPONSE",
+        "Réponse établissements Paystack invalide.",
+      );
+    }
+    return parsed.data.data
+      .filter((institution) => institution.active)
+      .map((institution) => ({
+        code: institution.code,
+        name: institution.name,
+        type: institution.type === "mobile_money"
+          ? ("mobile_money" as const)
+          : ("bank_account" as const),
+      }))
+      .sort((left, right) => {
+        if (left.type !== right.type) return left.type === "mobile_money" ? -1 : 1;
+        return left.name.localeCompare(right.name, "fr");
+      });
+  }
+
+  async createSubaccount(input: {
+    businessName: string;
+    institutionCode: string;
+    accountIdentifier: string;
+    percentageCharge: number;
+  }) {
+    const parsed = subaccountResponseSchema.safeParse(
+      await this.request("/subaccount", {
+        method: "POST",
+        body: JSON.stringify({
+          business_name: input.businessName,
+          settlement_bank: input.institutionCode,
+          account_number: input.accountIdentifier,
+          percentage_charge: input.percentageCharge,
+        }),
+      }),
+    );
+    if (!parsed.success) {
+      throw new PaystackGatewayError(
+        "INVALID_RESPONSE",
+        "Réponse création subaccount Paystack invalide.",
+      );
+    }
+    return {
+      reference: parsed.data.data.subaccount_code,
+      businessName: parsed.data.data.business_name,
+      active: parsed.data.data.active,
+      verified: parsed.data.data.is_verified,
+      currency: parsed.data.data.currency ?? null,
+      environment: this.environment,
+      institutionCode: input.institutionCode,
+      institutionName: parsed.data.data.settlement_bank ?? null,
     };
   }
 }

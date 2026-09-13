@@ -3,9 +3,9 @@ import { EmptyState } from "@/components/admin/ui/empty-state";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { StatusBadge } from "@/components/admin/ui/status-badge";
 import { Card } from "@/components/ui/card";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { getAdminActionCenterSummary } from "@/lib/db/queries-admin";
-import { formatPrix } from "@/lib/utils/format";
+import { getAdminSession } from "@/modules/auth/server";
+import { getAdminActionCenter } from "@/modules/admin-projections/server";
+import { formatPrix } from "@/shared/format";
 import {
   ArrowRight,
   CalendarClock,
@@ -70,7 +70,7 @@ function ActionItem({
 
 export default async function AdminActionCenterPage() {
   await getAdminSession();
-  const summary = await getAdminActionCenterSummary();
+  const summary = await getAdminActionCenter();
   const hasRequiredActions = summary.requiredActions > 0;
 
   return (

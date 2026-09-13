@@ -1,21 +1,21 @@
-import { getClientIp } from "@/lib/api/client-ip";
+import { getClientIp } from "@/shared/http/client-ip";
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { apiResponse } from "@/lib/api/response";
-import { validateSearchParams } from "@/lib/api/validate";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateSearchParams } from "@/app/api/_shared/validate";
 import {
   buildPaginationMeta,
   parseLimit,
   parsePage,
-} from "@/lib/config/pagination";
-import { createLogger } from "@/lib/logger";
+} from "@/shared/pagination";
+import { createLogger } from "@/infrastructure/logger";
 import {
   checkRateLimit,
   clientApiLimiter,
   geoSearchLimiter,
-} from "@/lib/rate-limit";
+} from "@/infrastructure/rate-limit";
 import { RestaurantMarketError } from "@/modules/restaurants/model";
-import { searchRestaurantsInCurrentMarket } from "@/modules/restaurants/server";
+import { searchRestaurantsInCurrentMarket } from "@/modules/discovery/server";
 import { restaurantMarketErrorResponse } from "./http";
 
 const log = createLogger("v1-client-restaurants-compat");

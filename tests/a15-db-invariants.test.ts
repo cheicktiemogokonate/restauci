@@ -1,5 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
+import {
+  warmApplicationDatabaseConnections,
+  warmNeonTestPool,
+} from "./support/neon-test-connection";
 
 const enabled = process.env.RUN_A15_DB_TESTS === "true";
 const databaseUrl =
@@ -12,7 +16,13 @@ if (enabled && !databaseUrl) throw new Error("TEST_DATABASE_URL est obligatoire"
 const describeDatabase = enabled ? describe : describe.skip;
 
 describeDatabase("A1.5 database invariants", () => {
-  const pool = new Pool({ connectionString: databaseUrl!, max: 6 });
+  const pool = new Pool({
+    connectionString: databaseUrl!,
+    max: 2,
+    connectionTimeoutMillis: 30_000,
+    idleTimeoutMillis: 60_000,
+    keepAlive: true,
+  });
   const suffix = crypto.randomUUID();
   const userId = crypto.randomUUID();
   const partnerAccountId = crypto.randomUUID();
@@ -25,6 +35,8 @@ describeDatabase("A1.5 database invariants", () => {
   const orderIds: string[] = [];
 
   beforeAll(async () => {
+    await warmNeonTestPool(pool);
+    await warmApplicationDatabaseConnections();
     await pool.query(
       `INSERT INTO users (id, email, password, nom, telephone, role, created_at, updated_at)
        VALUES ($1, $2, 'test-only', 'A15 Partner', '+2250000000015', 'partner', NOW(), NOW())`,
@@ -151,12 +163,12 @@ describeDatabase("A1.5 database invariants", () => {
   }
 
   it("cancels an order and voids its commission atomically and idempotently", async () => {
-    const { transactionalDb } = await import("@/lib/db/transaction");
-    const { applyRestaurantOrderTransition } = await import("@/lib/db/commandes-mutations");
+    const { transactionalDb } = await import("@/infrastructure/db/transaction");
+    const { applyLegacyRestaurantOrderTransition } = await import("@/modules/orders/server");
     const orderId = await createPendingOrder("recue");
 
     const first = await transactionalDb.transaction((tx) =>
-      applyRestaurantOrderTransition(tx, {
+      applyLegacyRestaurantOrderTransition(tx, {
         id: orderId,
         clientId,
         targetStatus: "annulee",
@@ -164,7 +176,7 @@ describeDatabase("A1.5 database invariants", () => {
       }),
     );
     const replay = await transactionalDb.transaction((tx) =>
-      applyRestaurantOrderTransition(tx, {
+      applyLegacyRestaurantOrderTransition(tx, {
         id: orderId,
         clientId,
         targetStatus: "annulee",
@@ -178,14 +190,14 @@ describeDatabase("A1.5 database invariants", () => {
   });
 
   it("serves once, rejects an impossible replay, and leaves commission due", async () => {
-    const { transactionalDb } = await import("@/lib/db/transaction");
-    const { applyRestaurantOrderTransition } = await import("@/lib/db/commandes-mutations");
+    const { transactionalDb } = await import("@/infrastructure/db/transaction");
+    const { applyLegacyRestaurantOrderTransition } = await import("@/modules/orders/server");
     const orderId = await createPendingOrder("prete");
     await transactionalDb.transaction((tx) =>
-      applyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus: "servie" }),
+      applyLegacyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus: "servie" }),
     );
     const impossible = await transactionalDb.transaction((tx) =>
-      applyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus: "annulee" }),
+      applyLegacyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus: "annulee" }),
     );
     expect(impossible).toBeUndefined();
     expect(await state(orderId)).toEqual({ statut: "servie", commercial_status: "due" });
@@ -197,15 +209,15 @@ describeDatabase("A1.5 database invariants", () => {
   ] as const)(
     "serializes two simultaneous transitions to %s",
     async (targetStatus, initialStatus, commissionStatus) => {
-      const { transactionalDb } = await import("@/lib/db/transaction");
-      const { applyRestaurantOrderTransition } = await import("@/lib/db/commandes-mutations");
+      const { transactionalDb } = await import("@/infrastructure/db/transaction");
+      const { applyLegacyRestaurantOrderTransition } = await import("@/modules/orders/server");
       const orderId = await createPendingOrder(initialStatus);
       const results = await Promise.all([
         transactionalDb.transaction((tx) =>
-          applyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus }),
+          applyLegacyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus }),
         ),
         transactionalDb.transaction((tx) =>
-          applyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus }),
+          applyLegacyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus }),
         ),
       ]);
       expect(results.filter(Boolean)).toHaveLength(1);
@@ -217,12 +229,12 @@ describeDatabase("A1.5 database invariants", () => {
   );
 
   it("rolls the order status back if the financial transition cannot complete", async () => {
-    const { transactionalDb } = await import("@/lib/db/transaction");
-    const { applyRestaurantOrderTransition } = await import("@/lib/db/commandes-mutations");
+    const { transactionalDb } = await import("@/infrastructure/db/transaction");
+    const { applyLegacyRestaurantOrderTransition } = await import("@/modules/orders/server");
     const orderId = await createOrderWithoutCommission("recue");
     await expect(
       transactionalDb.transaction((tx) =>
-        applyRestaurantOrderTransition(tx, {
+        applyLegacyRestaurantOrderTransition(tx, {
           id: orderId,
           clientId,
           targetStatus: "annulee",
@@ -238,15 +250,15 @@ describeDatabase("A1.5 database invariants", () => {
   });
 
   it("serializes concurrent cancellation and service into one coherent result", async () => {
-    const { transactionalDb } = await import("@/lib/db/transaction");
-    const { applyRestaurantOrderTransition } = await import("@/lib/db/commandes-mutations");
+    const { transactionalDb } = await import("@/infrastructure/db/transaction");
+    const { applyLegacyRestaurantOrderTransition } = await import("@/modules/orders/server");
     const orderId = await createPendingOrder("prete");
     await Promise.all([
       transactionalDb.transaction((tx) =>
-        applyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus: "annulee" }),
+        applyLegacyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus: "annulee" }),
       ),
       transactionalDb.transaction((tx) =>
-        applyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus: "servie" }),
+        applyLegacyRestaurantOrderTransition(tx, { id: orderId, restaurantId, targetStatus: "servie" }),
       ),
     ]);
     expect([
@@ -256,20 +268,20 @@ describeDatabase("A1.5 database invariants", () => {
   });
 
   it("enforces dish schedules in the server-authoritative eligibility check", async () => {
-    const { assertDishesCommerciallyEligible } = await import("@/lib/quota-entitlements");
+    const { assertRestaurantDishesOrderable } = await import("@/modules/menu/server");
     await expect(
-      assertDishesCommerciallyEligible(restaurantId, [dishId], {
+      assertRestaurantDishesOrderable(restaurantId, [dishId], {
         now: new Date("2026-08-13T14:00:00Z"),
       }),
     ).resolves.toHaveLength(1);
     await expect(
-      assertDishesCommerciallyEligible(restaurantId, [dishId], {
+      assertRestaurantDishesOrderable(restaurantId, [dishId], {
         now: new Date("2026-08-13T18:00:00Z"),
       }),
     ).rejects.toThrow("commandables");
-  });
+  }, 60_000);
 
-  it("keeps audit_log.admin_id non-null with ON DELETE RESTRICT", async () => {
+  it("supports causal actors while keeping admin references restricted", async () => {
     const constraint = await pool.query<{ delete_action: string; nullable: string }>(
       `SELECT rc.delete_rule AS delete_action, c.is_nullable AS nullable
        FROM information_schema.referential_constraints rc
@@ -283,13 +295,25 @@ describeDatabase("A1.5 database invariants", () => {
        WHERE kcu.table_name = 'audit_log'
          AND kcu.column_name = 'admin_id'`,
     );
-    expect(constraint.rows[0]).toEqual({ delete_action: "RESTRICT", nullable: "NO" });
+    expect(constraint.rows[0]).toEqual({ delete_action: "RESTRICT", nullable: "YES" });
+
+    const actorColumns = await pool.query<{ column_name: string; is_nullable: string }>(
+      `SELECT column_name, is_nullable
+       FROM information_schema.columns
+       WHERE table_name = 'audit_log'
+         AND column_name IN ('actor_type', 'actor_id')
+       ORDER BY column_name`,
+    );
+    expect(actorColumns.rows).toEqual([
+      { column_name: "actor_id", is_nullable: "NO" },
+      { column_name: "actor_type", is_nullable: "NO" },
+    ]);
   });
 
   it("returns the same effective plan with db and tx, then falls back after expiry", async () => {
-    const { db } = await import("@/lib/db");
-    const { transactionalDb } = await import("@/lib/db/transaction");
-    const { getEffectivePlan } = await import("@/lib/subscription-plans");
+    const { db } = await import("@/infrastructure/db");
+    const { transactionalDb } = await import("@/infrastructure/db/transaction");
+    const { getEffectivePlan } = await import("@/modules/subscriptions/server");
     const direct = await getEffectivePlan(partnerAccountId, { executor: db });
     const transactional = await transactionalDb.transaction((tx) =>
       getEffectivePlan(partnerAccountId, { executor: tx }),

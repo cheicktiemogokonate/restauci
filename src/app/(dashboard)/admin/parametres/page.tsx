@@ -1,25 +1,21 @@
 import { CatalogueEditor } from "@/components/admin/abonnements/catalogue-editor";
 import { AdminPage } from "@/components/admin/ui/admin-page";
 import { PageHeader } from "@/components/admin/ui/page-header";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { db } from "@/lib/db";
-import { withDatabaseReadRetry } from "@/lib/db/read-retry";
-import { CommissionPolicyForm } from "@/components/admin/commission-policy-form";
+import { getAdminSession } from "@/modules/auth/server";
+import { CommissionPolicyForm } from "@/modules/commissions/presentation/commission-policy-form";
+import { getCommissionPolicy } from "@/modules/commissions/server";
 import { getAdminSubscriptionCatalogueWorkspace } from "@/modules/subscriptions/server";
 import { DiscoveryPerformance } from "@/components/admin/abonnements/discovery-performance";
 import { getDiscoveryPerformanceRows } from "@/modules/discovery/server";
+import { updateCommissionPolicyAction } from "@/app/_actions/admin-commissions";
 
 export default async function AdminSettingsPage() {
   await getAdminSession();
   const [catalogueWorkspace, commissionPolicy, discoveryPerformance] = await Promise.all([
     getAdminSubscriptionCatalogueWorkspace(),
-    withDatabaseReadRetry(() => db.query.commissionPolicySettings.findFirst({
-      where: (row, { eq }) => eq(row.id, 1),
-    })),
+    getCommissionPolicy(),
     getDiscoveryPerformanceRows(),
   ]);
-  if (!commissionPolicy) throw new Error("Politique de commissions absente");
-
   return (
     <AdminPage>
       <PageHeader
@@ -27,7 +23,10 @@ export default async function AdminSettingsPage() {
         description="Configuration globale des offres et des règles commerciales de la plateforme."
       />
 
-      <CommissionPolicyForm initial={commissionPolicy} />
+      <CommissionPolicyForm
+        initial={commissionPolicy}
+        onUpdate={updateCommissionPolicyAction}
+      />
 
       <DiscoveryPerformance rows={discoveryPerformance} />
 

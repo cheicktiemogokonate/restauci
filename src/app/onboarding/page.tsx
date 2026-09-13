@@ -1,10 +1,10 @@
-import { getCurrentUser } from "@/lib/auth";
-import { getRestaurantByPartnerAccountId } from "@/lib/db/queries";
-import { getInitialMenuCategories } from "@/lib/menu/default-categories";
+import { getCurrentUser } from "@/modules/auth/server";
+import { getRestaurantByPartnerAccountId } from "@/modules/restaurants/server";
+import { getInitialMenuCategories } from "@/modules/menu/model";
 import { redirect } from "next/navigation";
 import OnboardingClient from "./OnboardingClient";
-import { getEffectiveLimits } from "@/lib/quota-entitlements";
-import { getPartnerAccountByUserId } from "@/modules/partners/server";
+import { getEffectiveRestaurantQuota } from "@/modules/quotas/server";
+import { getOptionalCurrentPartnerAccount } from "@/modules/partners/server";
 import ActivityChoice from "./ActivityChoice";
 
 export default async function OnboardingPage() {
@@ -12,7 +12,7 @@ export default async function OnboardingPage() {
   if (!session) redirect("/login");
 
   if (session.role !== "partner") redirect("/admin");
-  const partnerAccount = await getPartnerAccountByUserId(session.userId);
+  const partnerAccount = await getOptionalCurrentPartnerAccount();
   if (!partnerAccount) return <ActivityChoice />;
   if (partnerAccount.activityType === "residence") {
     redirect("/partenaire/onboarding");
@@ -20,7 +20,7 @@ export default async function OnboardingPage() {
 
   const [restaurant, entitlement] = await Promise.all([
     getRestaurantByPartnerAccountId(partnerAccount.id),
-    getEffectiveLimits(partnerAccount.id),
+    getEffectiveRestaurantQuota(partnerAccount.id),
   ]);
 
   if (restaurant) {
@@ -33,7 +33,7 @@ export default async function OnboardingPage() {
     <OnboardingClient
       userId={partnerAccount.userId}
       plan={{
-        name: entitlement.plan.nom,
+        name: entitlement.planCode,
         maxDishes: entitlement.limits.dish,
         categories: getInitialMenuCategories(entitlement.limits.category),
       }}

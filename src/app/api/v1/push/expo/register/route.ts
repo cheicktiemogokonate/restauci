@@ -1,13 +1,11 @@
 import { NextRequest }             from "next/server";
 import { z }                       from "zod";
 import { Expo }                    from "expo-server-sdk";
-import { getMobileSession }        from "@/lib/api/auth-mobile";
-import { apiResponse }             from "@/lib/api/response";
-import { validateBody }            from "@/lib/api/validate";
-import { db }                      from "@/lib/db";
-import { pushSubscriptions }       from "@/lib/db/schema";
-import { eq }                      from "drizzle-orm";
-import { createLogger }            from "@/lib/logger";
+import { getMobileSession }        from "@/app/api/_shared/auth-mobile";
+import { apiResponse }             from "@/app/api/_shared/response";
+import { validateBody }            from "@/app/api/_shared/validate";
+import { createLogger }            from "@/infrastructure/logger";
+import { registerUserExpoSubscription } from "@/modules/notifications/server";
 
 const log = createLogger("expo-register");
 
@@ -28,30 +26,7 @@ export async function POST(req: NextRequest) {
   try {
     const { expoToken } = data;
 
-    const existing = await db
-      .select({ id: pushSubscriptions.id })
-      .from(pushSubscriptions)
-      .where(eq(pushSubscriptions.expoToken, expoToken))
-      .limit(1);
-
-    if (existing.length > 0) {
-      await db
-        .update(pushSubscriptions)
-        .set({
-          userId: session.userId,
-          clientId: null,
-          driverId: null,
-          type: "expo",
-          lastUsedAt: new Date(),
-        })
-        .where(eq(pushSubscriptions.id, existing[0].id));
-    } else {
-      await db.insert(pushSubscriptions).values({
-        userId:    session.userId,
-        type:      "expo",
-        expoToken,
-      });
-    }
+    await registerUserExpoSubscription({ userId: session.userId, expoToken });
 
     log.info({ userId: session.userId }, "Token Expo enregistre");
     return apiResponse.success({ message: "Token enregistre" });

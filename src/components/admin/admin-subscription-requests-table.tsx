@@ -20,8 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   rejectSubscriptionRequest,
   validateSubscriptionRequest,
-} from "@/lib/actions/admin-subscriptions";
-import { formatPrix } from "@/lib/utils/format";
+} from "@/app/_actions/admin-subscriptions";
+import { formatPrix } from "@/shared/format";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ClipboardCheck } from "lucide-react";

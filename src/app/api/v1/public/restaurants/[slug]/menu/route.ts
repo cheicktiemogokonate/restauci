@@ -1,10 +1,10 @@
-import { getClientIp } from "@/lib/api/client-ip";
-import { apiResponse } from "@/lib/api/response";
-import { TTL, cacheKey, withCache } from "@/lib/cache";
-import { getRestaurantBySlug } from "@/lib/db/queries";
-import { getPublicRestaurantMenu } from "@/lib/quota-entitlements";
-import { createLogger } from "@/lib/logger";
-import { apiLimiter, checkRateLimit } from "@/lib/rate-limit";
+import { getClientIp } from "@/shared/http/client-ip";
+import { apiResponse } from "@/app/api/_shared/response";
+import { TTL, cacheKey, withCache } from "@/infrastructure/cache";
+import { getPublicRestaurantBySlug } from "@/modules/restaurants/server";
+import { getPublicRestaurantMenu } from "@/modules/menu/server";
+import { createLogger } from "@/infrastructure/logger";
+import { apiLimiter, checkRateLimit } from "@/infrastructure/rate-limit";
 import { NextRequest } from "next/server";
 
 const log = createLogger("v1-public-menu");
@@ -25,7 +25,7 @@ export async function GET(
       TTL.PLATS,
       async () => {
         // Trouver le restaurant
-        const restaurant = await getRestaurantBySlug(slug);
+        const restaurant = await getPublicRestaurantBySlug(slug);
 
         if (!restaurant) return null;
 

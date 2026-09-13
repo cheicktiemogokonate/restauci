@@ -1,11 +1,11 @@
 import "server-only";
 
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import {
   financialTransactions,
   payments,
-} from "@/lib/db/schema";
-import type { TransactionExecutor } from "@/lib/db/transaction";
+} from "@/infrastructure/db/schema";
+import type { TransactionExecutor } from "@/infrastructure/db/transaction";
 import type {
   ConfirmPaymentInput,
   CreateFinancialTransactionInput,
@@ -15,6 +15,7 @@ import type {
 import {
   assertPaymentDetails,
   assertPositiveFcfa,
+  assertRefundCapacity,
   FinancialTransactionError,
 } from "../model";
 
@@ -47,6 +48,78 @@ export async function createFinancialTransactionRecord(
   input: CreateFinancialTransactionInput,
 ) {
   assertPositiveFcfa(input.amountFcfa);
+  if (input.type === "remboursement") {
+    const refundIdempotencyKey = normalizeOptionalText(
+      input.refundIdempotencyKey,
+      128,
+    );
+    if (!refundIdempotencyKey) {
+      throw new FinancialTransactionError(
+        "REFUND_NOT_ALLOWED",
+        "Une clé d’idempotence est obligatoire pour un remboursement.",
+      );
+    }
+    await tx.execute(
+      sql`SELECT id FROM ${payments} WHERE id = ${input.originalPaymentId} FOR UPDATE`,
+    );
+    const originalPayment = await tx.query.payments.findFirst({
+      where: eq(payments.id, input.originalPaymentId),
+      with: { transaction: true },
+    });
+    if (
+      !originalPayment ||
+      originalPayment.status !== "confirmed" ||
+      originalPayment.transaction.type === "remboursement"
+    ) {
+      throw new FinancialTransactionError(
+        "REFUND_NOT_ALLOWED",
+        "Seul un paiement confirmé d’origine peut être remboursé.",
+      );
+    }
+    if (originalPayment.transaction.partnerAccountId !== input.partnerAccountId) {
+      throw new FinancialTransactionError(
+        "REFUND_NOT_ALLOWED",
+        "Le remboursement doit rester rattaché au compte partenaire d’origine.",
+      );
+    }
+
+    const existing = await tx.query.financialTransactions.findFirst({
+      where: and(
+        eq(financialTransactions.originalPaymentId, input.originalPaymentId),
+        eq(financialTransactions.refundIdempotencyKey, refundIdempotencyKey),
+      ),
+    });
+    if (existing) {
+      if (
+        existing.partnerAccountId !== input.partnerAccountId ||
+        existing.amountFcfa !== input.amountFcfa
+      ) {
+        throw new FinancialTransactionError(
+          "PAYMENT_CONFLICT",
+          "Cette clé d’idempotence correspond à un autre remboursement.",
+        );
+      }
+      return existing;
+    }
+
+    const [refundTotal] = await tx
+      .select({
+        amountFcfa: sql<number>`COALESCE(SUM(${financialTransactions.amountFcfa}), 0)::int`,
+      })
+      .from(financialTransactions)
+      .where(
+        and(
+          eq(financialTransactions.type, "remboursement"),
+          eq(financialTransactions.originalPaymentId, input.originalPaymentId),
+          sql`${financialTransactions.status} <> 'cancelled'`,
+        ),
+      );
+    assertRefundCapacity({
+      originalAmountFcfa: originalPayment.amountFcfa,
+      alreadyRefundedFcfa: Number(refundTotal?.amountFcfa ?? 0),
+      requestedAmountFcfa: input.amountFcfa,
+    });
+  }
   const source =
     input.type === "commande_restaurant"
       ? { restaurantOrderId: input.restaurantOrderId }
@@ -54,7 +127,12 @@ export async function createFinancialTransactionRecord(
         ? { subscriptionRequestId: input.subscriptionRequestId }
         : input.type === "commission_settlement"
           ? { commissionSettlementId: input.commissionSettlementId }
-          : { residenceReservationId: input.residenceReservationId };
+          : input.type === "reservation_residence"
+            ? { residenceReservationId: input.residenceReservationId }
+            : {
+                originalPaymentId: input.originalPaymentId,
+                refundIdempotencyKey: input.refundIdempotencyKey.trim(),
+              };
 
   try {
     const [created] = await tx
@@ -89,6 +167,7 @@ export async function createPaymentAttemptRecord(
   assertPositiveFcfa(input.amountFcfa);
   const provider = normalizeOptionalText(input.provider, 50);
   const providerReference = normalizeOptionalText(input.providerReference, 255);
+  const recordedReference = normalizeOptionalText(input.recordedReference, 255);
   const idempotencyKey = normalizeOptionalText(input.idempotencyKey, 128);
   assertPaymentDetails({
     method: input.method,
@@ -141,7 +220,8 @@ export async function createPaymentAttemptRecord(
         existing.method !== input.method ||
         existing.network !== (input.network ?? null) ||
         existing.provider !== provider ||
-        existing.providerReference !== providerReference
+        existing.providerReference !== providerReference ||
+        existing.recordedReference !== recordedReference
       ) {
         throw new FinancialTransactionError(
           "PAYMENT_CONFLICT",
@@ -163,6 +243,7 @@ export async function createPaymentAttemptRecord(
         status: "pending",
         amountFcfa: input.amountFcfa,
         providerReference,
+        recordedReference,
         idempotencyKey,
         recoverySettlementId: input.recoverySettlementId ?? null,
       })
@@ -279,6 +360,16 @@ export async function confirmPaymentRecord(
       "La confirmation concurrente n'a pas pu être résolue.",
     );
   }
+  await tx
+    .update(payments)
+    .set({ status: "cancelled", cancelledAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(payments.transactionId, transaction.id),
+        eq(payments.status, "pending"),
+        ne(payments.id, payment.id),
+      ),
+    );
   return {
     paymentId: confirmed.id,
     transactionId: paid.id,

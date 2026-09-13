@@ -1,19 +1,26 @@
 import "server-only";
 
+export {
+  confirmResidenceReservationPaymentInTransaction,
+  sendConfirmedResidenceReservationPush,
+} from "./_internal/payment-lifecycle";
+
 import { and, eq, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  persistNotification,
-  sendClientExpoPush,
-} from "@/lib/notifications";
-import { clients, partnerAccounts, residenceReservations } from "@/lib/db/schema";
-import { transactionalDb } from "@/lib/db/transaction";
+import { db } from "@/infrastructure/db";
+import { sendClientExpoPush } from "@/modules/notifications/server";
+import { persistNotification } from "@/modules/notifications/server";
+import { partnerAccounts, residenceReservations } from "@/infrastructure/db/schema";
+import { transactionalDb } from "@/infrastructure/db/transaction";
 import { getPartnerIdentityVerification } from "@/modules/identity/server";
-import { getResidenceQuotaEligibility } from "@/modules/quotas/server";
+import {
+  getEffectiveResidenceQuota,
+  getResidenceQuotaEligibility,
+} from "@/modules/quotas/server";
 import {
   getServiceMarketCapability,
   resolveServiceMarketAtCoordinates,
 } from "@/modules/service-markets/server";
+import { getClientOrderIdentity } from "@/modules/clients/server";
 
 import {
   cancelPartnerResidenceReservationSchema,
@@ -29,11 +36,11 @@ import {
   type CancelPartnerResidenceReservationInput,
   type CreateResidenceReservationInput,
   type ListAdminResidencesInput,
+  type AdminResidenceListItemWithPublicationDTO,
   type PartnerResidenceDTO,
   type PartnerResidenceWithPublicationDTO,
   type PublicResidenceDTO,
   type PublicResidenceSearchInput,
-  type PublicResidenceSearchResultDTO,
   type ResidenceStayInput,
   type ResidenceUnavailablePeriodInput,
   type SaveResidenceInput,
@@ -60,7 +67,6 @@ import {
 } from "./_internal/persistence";
 import {
   searchPublicResidenceRecords,
-  type PublicResidenceDiscoveryRecord,
 } from "./_internal/search";
 import {
   cancelResidenceReservationRecord,
@@ -78,6 +84,7 @@ import {
   updateResidenceReservationStayRecord,
 } from "./_internal/bookings";
 import {
+  consumesResidencePublicationQuota,
   evaluateResidenceVisibility,
   getTodayInAbidjan,
   validateResidenceStay,
@@ -85,9 +92,10 @@ import {
   type ResidenceDestinationStatus,
   type ResidenceOwnerIdentityStatus,
 } from "./model";
-import type { DbExecutor } from "@/lib/db/transaction";
+import type { DbExecutor } from "@/infrastructure/db/transaction";
 import {
   cancelTransactionInTransaction,
+  createRefundObligationInTransaction,
   createPaymentAttemptInTransaction,
   createTransactionInTransaction,
   getActivePaystackProviderAccount,
@@ -97,18 +105,13 @@ import {
 import {
   initializePreparedPaystackPayment,
   retryResidencePaystackPayment,
-} from "@/modules/transactions/payment-service";
+} from "@/modules/payments/server";
 import {
   createResidenceCommissionInTransaction,
   voidPendingResidenceCommissionInTransaction,
 } from "@/modules/commissions/server";
-import {
-  getDiscoveryRankingConfiguration,
-  issueDiscoveryAttributions,
-  recordDiscoveryConversion,
-} from "@/modules/discovery/server";
-import { rankDiscoveryPage } from "@/modules/discovery/ranking";
-import { isManagedPublicMediaUrl } from "@/lib/r2";
+import { isManagedPublicMediaUrl } from "@/infrastructure/storage/r2";
+import { persistResidenceEvent } from "./_internal/events";
 
 type DestinationEvaluation = {
   status: ResidenceDestinationStatus;
@@ -194,8 +197,13 @@ async function composePartnerResidencePublication(
   const quotaCandidates = partnerResidences
     .filter(
       (residence, index) =>
-        baseEvaluations[index]!.blockers.length === 0 &&
-        residence.publicationEnabledAt !== null,
+        consumesResidencePublicationQuota({
+          publicationIntent: residence.publicationIntent,
+          publicationEnabled: residence.publicationEnabledAt !== null,
+          moderationStatus: residence.moderationStatus,
+          ownerIdentityStatus,
+          destinationStatus: destinations[index]!.status,
+        }),
     )
     .map((residence) => ({
       id: residence.id,
@@ -321,83 +329,69 @@ export function listPartnerResidences(partnerAccountId: string) {
 
 export async function listPartnerResidencesWithPublication(
   partnerAccountId: string,
+  options: { persistFirstPublished?: boolean } = {},
 ) {
   const residenceRecords = await listPartnerResidenceRecords(partnerAccountId);
-  return composePartnerResidencePublication(partnerAccountId, residenceRecords);
-}
-
-export async function listPublicResidences() {
-  return (await searchPublicResidences({ page: 1, limit: 48 })).items;
-}
-
-async function rankPublicResidenceRecords(
-  records: PublicResidenceDiscoveryRecord[],
-  input: PublicResidenceSearchInput,
-  configuration: Awaited<ReturnType<typeof getDiscoveryRankingConfiguration>>,
-): Promise<PublicResidenceSearchResultDTO> {
-  const ranking = rankDiscoveryPage({
-    candidates: records.map((record) => record.candidate),
-    ...configuration,
-    context: {
-      contextKey: [
-        "residence",
-        input.destination?.toLocaleLowerCase("fr") ?? "all",
-        input.checkIn ?? "any-date",
-        input.checkOut ?? "any-date",
-        input.guests ?? "any-guests",
-      ].join(":"),
-      page: input.page,
-      pageSize: input.limit,
-      at: new Date(),
-    },
+  return composePartnerResidencePublication(partnerAccountId, residenceRecords, {
+    persistFirstPublished: options.persistFirstPublished,
   });
-  const recordById = new Map(records.map((record) => [record.item.id, record]));
-  const contextKey = [
-    "residence",
-    input.destination?.toLocaleLowerCase("fr") ?? "all",
-    input.checkIn ?? "any-date",
-    input.checkOut ?? "any-date",
-    input.guests ?? "any-guests",
-  ].join(":");
-  const tokens = await issueDiscoveryAttributions(
-    ranking.items.map((ranked) => {
-      const record = recordById.get(ranked.resourceId);
-      if (!record) {
-        throw new Error(`Résidence classée introuvable : ${ranked.resourceId}`);
-      }
-      return {
-        ...ranked,
-        contextKey,
-        destinationPath: `/residences/${record.item.slug}`,
-      };
-    }),
-  );
+}
+
+export async function getPartnerResidenceManagementWorkspace(
+  partnerAccountId: string,
+) {
+  const residences = await listPartnerResidencesWithPublication(partnerAccountId);
+  const effectiveQuota = residences[0]?.publication.quota ??
+    (await getEffectiveResidenceQuota(partnerAccountId));
+  const visibleCount = residences.filter(
+    (residence) => residence.publication.isPubliclyVisible,
+  ).length;
   return {
-    items: ranking.items.map((ranked) => {
-      const record = recordById.get(ranked.resourceId);
-      if (!record) throw new Error(`Résidence classée introuvable : ${ranked.resourceId}`);
-      return {
-        ...record.item,
-        placement: ranked.placement,
-        partnerBadgeEnabled:
-          configuration.benefitsByPlan[ranked.planCode].partnerBadgeEnabled,
-        discoveryToken: tokens.get(ranked.resourceId) ?? "",
-      };
-    }),
-    total: ranking.total,
-    page: input.page,
-    limit: input.limit,
-    totalPages: ranking.totalPages,
+    residences,
+    visibleCount,
+    quota: {
+      planCode: effectiveQuota.planCode,
+      maxPublicResidences: effectiveQuota.maxPublicResidences,
+      used: visibleCount,
+      available:
+        effectiveQuota.maxPublicResidences === null ||
+        visibleCount < effectiveQuota.maxPublicResidences,
+    },
   };
 }
 
-export async function searchPublicResidences(input: PublicResidenceSearchInput) {
-  const parsed = publicResidenceSearchSchema.parse(input);
-  const [records, configuration] = await Promise.all([
-    searchPublicResidenceRecords(parsed),
-    getDiscoveryRankingConfiguration("residence"),
+export async function getAdminResidenceAccountSummary(
+  partnerAccountId: string,
+) {
+  const residenceRecords = await listPartnerResidenceRecords(partnerAccountId);
+  const [composed, quota] = await Promise.all([
+    composePartnerResidencePublication(partnerAccountId, residenceRecords, {
+      persistFirstPublished: false,
+    }),
+    getEffectiveResidenceQuota(partnerAccountId),
   ]);
-  return rankPublicResidenceRecords(records, parsed, configuration);
+  return {
+    residences: composed.map((residence) => ({
+      id: residence.id,
+      title: residence.title,
+      moderationStatus: residence.moderationStatus,
+      isPubliclyVisible: residence.publication.isPubliclyVisible,
+    })),
+    visibleCount: composed.filter(
+      (residence) => residence.publication.isPubliclyVisible,
+    ).length,
+    quota: {
+      planCode: quota.planCode,
+      maxPublicResidences: quota.maxPublicResidences,
+    },
+  };
+}
+
+export async function getResidenceDiscoveryEligibility(
+  input: PublicResidenceSearchInput,
+) {
+  const parsed = publicResidenceSearchSchema.parse(input);
+  return searchPublicResidenceRecords(parsed);
 }
 
 export async function getPublicResidenceBySlug(slug: string) {
@@ -451,10 +445,7 @@ async function getPublicResidenceById(
 }
 
 async function assertActiveResident(clientId: string, executor: DbExecutor = db) {
-  const client = await executor.query.clients.findFirst({
-    where: and(eq(clients.id, clientId), eq(clients.actif, true)),
-    columns: { id: true },
-  });
+  const client = await getClientOrderIdentity(clientId, { executor });
   if (!client) {
     throw new ResidenceDomainError(
       "RESIDENCE_NOT_BOOKABLE",
@@ -616,13 +607,23 @@ export async function createResidenceReservation(
         lienId: reservation.id,
       });
     }
+    await persistResidenceEvent(tx, {
+      type: "residence.reservation.created.v1",
+      action: "residence_reservation_created",
+      actor: { type: "client", id: clientId },
+      partnerAccountId: reservation.partnerAccountId,
+      target: { type: "residence_reservation", id: reservation.id },
+      payload: {
+        residenceId: reservation.residenceId,
+        checkIn: reservation.checkIn,
+        checkOut: reservation.checkOut,
+        nights: reservation.nights,
+        guests: reservation.guests,
+        amountFcfa: reservation.totalFcfa,
+      },
+      occurredAt: now,
+    });
     return { reservationId: reservation.id, paymentId: payment.id };
-  });
-  await recordDiscoveryConversion({
-    token: parsed.discoveryToken,
-    activityType: "residence",
-    resourceId: parsed.residenceId,
-    conversionReferenceId: prepared.reservationId,
   });
   const initialized = await initializePreparedPaystackPayment({
     paymentId: prepared.paymentId,
@@ -785,6 +786,21 @@ export async function updatePartnerResidenceReservation(
       lienType: "reservation_residence",
       lienId: reservation.id,
     });
+    await persistResidenceEvent(tx, {
+      type: "residence.reservation.updated.v1",
+      action: "residence_reservation_updated",
+      actor: { type: "partner", id: partnerAccountId },
+      partnerAccountId,
+      target: { type: "residence_reservation", id: reservation.id },
+      payload: {
+        residenceId: reservation.residenceId,
+        checkIn: parsed.checkIn,
+        checkOut: parsed.checkOut,
+        nights,
+        guests: parsed.guests,
+      },
+      occurredAt: now,
+    });
     return {
       reservationId: reservation.id,
       clientId: reservation.clientId,
@@ -842,7 +858,7 @@ export async function cancelPartnerResidenceReservation(
         reservationId: reservation.id,
         clientId: reservation.clientId,
         changed: false,
-        requiresManualRefund: false,
+        refundObligationId: null,
       };
     }
     if (today >= reservation.checkIn) {
@@ -881,28 +897,58 @@ export async function cancelPartnerResidenceReservation(
         "La réservation ne peut plus être annulée.",
       );
     }
-    const requiresManualRefund = transaction.status === "paid";
+    const confirmedPayment = transaction.payments.find(
+      (payment) => payment.status === "confirmed",
+    );
+    if (transaction.status === "paid" && !confirmedPayment) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_CANCELLABLE",
+        "Le paiement confirmé de cette réservation est introuvable.",
+      );
+    }
+    const refundObligation = confirmedPayment
+      ? await createRefundObligationInTransaction(tx, {
+          originalPaymentId: confirmedPayment.id,
+          amountFcfa: reservation.totalFcfa,
+          refundIdempotencyKey: `residence-cancellation:${reservation.id}`,
+          actor: { type: "partner", id: partnerAccountId },
+          now,
+        })
+      : null;
     await persistNotification(tx, {
       clientId: reservation.clientId,
       type: "systeme",
       titre: "Réservation annulée par le propriétaire",
-      message: `Motif : ${parsed.reason}.${requiresManualRefund ? " Le remboursement n’est pas automatique ; contactez le support pour son traitement." : ""}`,
+      message: `Motif : ${parsed.reason}.${refundObligation ? " Une obligation de remboursement intégral a été enregistrée pour suivi." : ""}`,
       lienType: "reservation_residence",
       lienId: reservation.id,
+    });
+    await persistResidenceEvent(tx, {
+      type: "residence.reservation.cancelled.v1",
+      action: "residence_reservation_cancelled",
+      actor: { type: "partner", id: partnerAccountId },
+      partnerAccountId,
+      target: { type: "residence_reservation", id: reservation.id },
+      payload: {
+        residenceId: reservation.residenceId,
+        paid: transaction.status === "paid",
+        refundObligationId: refundObligation?.transaction.id ?? null,
+      },
+      occurredAt: now,
     });
     return {
       reservationId: reservation.id,
       clientId: reservation.clientId,
       changed: true,
-      requiresManualRefund,
+      refundObligationId: refundObligation?.transaction.id ?? null,
     };
   });
 
   if (outcome.changed) {
     await sendClientExpoPush(outcome.clientId, {
       titre: "Réservation annulée par le propriétaire",
-      message: outcome.requiresManualRefund
-        ? "Votre séjour a été annulé. Contactez le support pour le remboursement."
+      message: outcome.refundObligationId
+        ? "Votre séjour a été annulé et son remboursement intégral est désormais suivi par Toutci."
         : "Votre séjour a été annulé et les dates ont été libérées.",
       data: {
         type: "systeme",
@@ -921,7 +967,10 @@ export async function cancelPartnerResidenceReservation(
       "Réservation introuvable après son annulation.",
     );
   }
-  return { reservation, requiresManualRefund: outcome.requiresManualRefund };
+  return {
+    reservation,
+    refundObligationId: outcome.refundObligationId,
+  };
 }
 
 export async function getClientResidenceReservation(
@@ -963,7 +1012,9 @@ export async function cancelClientResidenceReservation(
         "Réservation introuvable.",
       );
     }
-    if (reservation.status === "annulee") return reservation;
+    if (reservation.status === "annulee") {
+      return { reservation, refundObligationId: null };
+    }
     if (getTodayInAbidjan(now) >= reservation.checkIn) {
       throw new ResidenceDomainError(
         "RESIDENCE_RESERVATION_NOT_CANCELLABLE",
@@ -984,12 +1035,36 @@ export async function cancelClientResidenceReservation(
       await cancelTransactionInTransaction(tx, transaction.id, now);
       await voidPendingResidenceCommissionInTransaction(tx, parsedId, now);
     }
+    const confirmedPayment = transaction.payments.find(
+      (payment) => payment.status === "confirmed",
+    );
+    if (transaction.status === "paid" && !confirmedPayment) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_CANCELLABLE",
+        "Le paiement confirmé de cette réservation est introuvable.",
+      );
+    }
     const cancelledReservation = await cancelResidenceReservationRecord(
       tx,
       parsedId,
       now,
       { source: "client", reason: null },
     );
+    if (!cancelledReservation) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_RESERVATION_NOT_CANCELLABLE",
+        "La réservation ne peut plus être annulée.",
+      );
+    }
+    const refundObligation = confirmedPayment
+      ? await createRefundObligationInTransaction(tx, {
+          originalPaymentId: confirmedPayment.id,
+          amountFcfa: reservation.totalFcfa,
+          refundIdempotencyKey: `residence-cancellation:${reservation.id}`,
+          actor: { type: "client", id: clientId },
+          now,
+        })
+      : null;
     const partner = await tx.query.partnerAccounts.findFirst({
       where: eq(partnerAccounts.id, reservation.partnerAccountId),
       columns: { userId: true },
@@ -998,7 +1073,9 @@ export async function cancelClientResidenceReservation(
       clientId,
       type: "systeme",
       titre: "Réservation annulée",
-      message: "Votre réservation de résidence a été annulée.",
+      message: refundObligation
+        ? "Votre réservation a été annulée et une obligation de remboursement intégral a été enregistrée."
+        : "Votre réservation de résidence a été annulée.",
       lienType: "reservation_residence",
       lienId: parsedId,
     });
@@ -1007,12 +1084,28 @@ export async function cancelClientResidenceReservation(
         userId: partner.userId,
         type: "systeme",
         titre: "Réservation annulée",
-        message: `Le séjour du ${reservation.checkIn} au ${reservation.checkOut} a été annulé.`,
+        message: `Le séjour du ${reservation.checkIn} au ${reservation.checkOut} a été annulé.${refundObligation ? " Le remboursement intégral est enregistré dans le suivi financier." : ""}`,
         lienType: "reservation_residence",
         lienId: parsedId,
       });
     }
-    return cancelledReservation;
+    await persistResidenceEvent(tx, {
+      type: "residence.reservation.cancelled.v1",
+      action: "residence_reservation_cancelled",
+      actor: { type: "client", id: clientId },
+      partnerAccountId: reservation.partnerAccountId,
+      target: { type: "residence_reservation", id: reservation.id },
+      payload: {
+        residenceId: reservation.residenceId,
+        paid: transaction.status === "paid",
+        refundObligationId: refundObligation?.transaction.id ?? null,
+      },
+      occurredAt: now,
+    });
+    return {
+      reservation: cancelledReservation,
+      refundObligationId: refundObligation?.transaction.id ?? null,
+    };
   });
   await sendClientExpoPush(clientId, {
     titre: "Réservation annulée",
@@ -1057,7 +1150,24 @@ export async function createResidenceUnavailablePeriod(
         "Cette période chevauche déjà une réservation ou une indisponibilité.",
       );
     }
-    return createResidenceUnavailablePeriodRecord(tx, { ...parsed, now });
+    const period = await createResidenceUnavailablePeriodRecord(tx, {
+      ...parsed,
+      now,
+    });
+    await persistResidenceEvent(tx, {
+      type: "residence.calendar.blocked.v1",
+      action: "residence_calendar_blocked",
+      actor: { type: "partner", id: partnerAccountId },
+      partnerAccountId,
+      target: { type: "residence_unavailable_period", id: period.id },
+      payload: {
+        residenceId: residence.id,
+        checkIn: period.checkIn,
+        checkOut: period.checkOut,
+      },
+      occurredAt: now,
+    });
+    return period;
   });
 }
 
@@ -1091,10 +1201,24 @@ export async function deleteResidenceUnavailablePeriod(
     if (!residence) {
       throw new ResidenceDomainError("RESIDENCE_NOT_FOUND", "Résidence introuvable.");
     }
-    return deleteResidenceUnavailablePeriodRecord(tx, {
+    const deleted = await deleteResidenceUnavailablePeriodRecord(tx, {
       periodId: parsedPeriodId,
       residenceId: parsedResidenceId,
     });
+    if (deleted) {
+      await persistResidenceEvent(tx, {
+        type: "residence.calendar.unblocked.v1",
+        action: "residence_calendar_unblocked",
+        actor: { type: "partner", id: partnerAccountId },
+        partnerAccountId,
+        target: {
+          type: "residence_unavailable_period",
+          id: parsedPeriodId,
+        },
+        payload: { residenceId: parsedResidenceId },
+      });
+    }
+    return deleted;
   });
 }
 
@@ -1177,6 +1301,18 @@ export async function publishResidence(
         publishedAt,
         current.firstPublishedAt ? undefined : publishedAt,
       );
+      await persistResidenceEvent(executor, {
+        type: "residence.publication.enabled.v1",
+        action: "residence_published",
+        actor: { type: "partner", id: partnerAccountId },
+        partnerAccountId,
+        target: { type: "residence", id: current.id },
+        payload: {
+          planCode: target.publication.quota.planCode,
+          quotaLimit: target.publication.quota.maxPublicResidences,
+        },
+        occurredAt: publishedAt,
+      });
       return { ...current, publicationEnabledAt: publishedAt.toISOString() };
     },
   );
@@ -1203,6 +1339,13 @@ export async function withdrawResidence(
         current.id,
         null,
       );
+      await persistResidenceEvent(executor, {
+        type: "residence.publication.withdrawn.v1",
+        action: "residence_withdrawn",
+        actor: { type: "partner", id: partnerAccountId },
+        partnerAccountId,
+        target: { type: "residence", id: current.id },
+      });
       return { ...current, publicationEnabledAt: null };
     },
   );
@@ -1210,6 +1353,39 @@ export async function withdrawResidence(
 
 export function listAdminResidences(input: ListAdminResidencesInput) {
   return listAdminResidenceRecords(listAdminResidencesSchema.parse(input));
+}
+
+export async function listAdminResidencesWithPublication(
+  input: ListAdminResidencesInput,
+) {
+  const result = await listAdminResidenceRecords(
+    listAdminResidencesSchema.parse(input),
+  );
+  const partnerIds = [...new Set(result.items.map((item) => item.partnerAccountId))];
+  const publicationsByResidence = new Map<
+    string,
+    AdminResidenceListItemWithPublicationDTO["publication"]
+  >();
+  await Promise.all(
+    partnerIds.map(async (partnerAccountId) => {
+      const records = await listPartnerResidenceRecords(partnerAccountId);
+      const composed = await composePartnerResidencePublication(
+        partnerAccountId,
+        records,
+        { persistFirstPublished: false },
+      );
+      for (const residence of composed) {
+        publicationsByResidence.set(residence.id, residence.publication);
+      }
+    }),
+  );
+  return {
+    ...result,
+    items: result.items.flatMap((item) => {
+      const publication = publicationsByResidence.get(item.id);
+      return publication ? [{ ...item, publication }] : [];
+    }),
+  };
 }
 
 export function getAdminResidence(residenceId: string) {

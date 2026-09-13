@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Pool, type PoolClient } from "pg";
+import { warmNeonTestPool } from "./support/neon-test-connection";
 
 const enabled = process.env.RUN_DELIVERY_DB_TESTS === "true";
 const databaseUrl =
@@ -25,7 +26,14 @@ async function expectRejectedAtSavepoint(
 
 describeDatabase("delivery driver database invariants", () => {
   it("enforces active work, offers, append-only events, owners and exact cash", async () => {
-    const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+    const pool = new Pool({
+      connectionString: databaseUrl,
+      max: 1,
+      connectionTimeoutMillis: 30_000,
+      idleTimeoutMillis: 60_000,
+      keepAlive: true,
+    });
+    await warmNeonTestPool(pool);
     const client = await pool.connect();
     const userId = crypto.randomUUID();
     const partnerAccountId = crypto.randomUUID();

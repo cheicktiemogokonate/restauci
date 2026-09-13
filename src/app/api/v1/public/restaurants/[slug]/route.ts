@@ -1,10 +1,9 @@
-import { getClientIp } from "@/lib/api/client-ip";
-import { apiResponse } from "@/lib/api/response";
-import { getRestaurantBySlug } from "@/lib/db/queries";
-import { createLogger } from "@/lib/logger";
-import { apiLimiter, checkRateLimit } from "@/lib/rate-limit";
+import { getClientIp } from "@/shared/http/client-ip";
+import { apiResponse } from "@/app/api/_shared/response";
+import { getPublicRestaurantBySlug } from "@/modules/restaurants/server";
+import { createLogger } from "@/infrastructure/logger";
+import { apiLimiter, checkRateLimit } from "@/infrastructure/rate-limit";
 import { NextRequest } from "next/server";
-import { toPublicRestaurantDTO } from "@/lib/restaurants/public-dto";
 
 const log = createLogger("v1-public-restaurant");
 
@@ -18,12 +17,12 @@ export async function GET(
   if (rl) return rl;
 
   try {
-    const restaurant = await getRestaurantBySlug(slug);
-    if (!restaurant || !restaurant.actif) {
+    const restaurant = await getPublicRestaurantBySlug(slug);
+    if (!restaurant) {
       return apiResponse.notFound("Restaurant");
     }
 
-    return apiResponse.success(toPublicRestaurantDTO(restaurant));
+    return apiResponse.success(restaurant);
   } catch (err) {
     log.error({ err, slug }, "Erreur page publique restaurant");
     return apiResponse.internalError();

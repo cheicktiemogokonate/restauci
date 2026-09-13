@@ -1,6 +1,6 @@
-import { getClientSession } from "@/lib/api/auth-client";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
+import { getClientSession } from "@/app/api/_shared/auth-client";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
 import { createResidenceReservationSchema } from "@/modules/residences/contracts";
 import { ResidenceDomainError } from "@/modules/residences/model";
 import {
@@ -10,6 +10,7 @@ import {
 import { PaystackGatewayError } from "@/infrastructure/paystack/gateway";
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { recordDiscoveryConversion } from "@/modules/discovery/server";
 
 const createClientResidenceReservationSchema =
   createResidenceReservationSchema.extend({
@@ -34,11 +35,18 @@ export async function POST(request: NextRequest) {
   if (bodyError) return bodyError;
   try {
     const { paymentReturnChannel, ...reservationInput } = data;
-    return apiResponse.created(
-      await createResidenceReservation(session.clientId, reservationInput, {
-        returnChannel: paymentReturnChannel,
-      }),
+    const reservation = await createResidenceReservation(
+      session.clientId,
+      reservationInput,
+      { returnChannel: paymentReturnChannel },
     );
+    await recordDiscoveryConversion({
+      token: reservationInput.discoveryToken,
+      activityType: "residence",
+      resourceId: reservationInput.residenceId,
+      conversionReferenceId: reservation.reservationId,
+    });
+    return apiResponse.created(reservation);
   } catch (caught) {
     if (caught instanceof ResidenceDomainError) {
       return apiResponse.error(caught.message, "CONFLICT", { status: 409 });

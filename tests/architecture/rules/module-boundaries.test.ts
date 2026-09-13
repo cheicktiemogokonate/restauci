@@ -82,5 +82,13 @@ describe("Architecture: module boundaries", () => {
 
   it("forbids module root barrels", () => {
     expect(findRootBarrelViolations(allFiles)).toEqual([]);
+
+    const fixture = createSyntheticFile("src/modules/orders/index.mts", []);
+    expect(findRootBarrelViolations([fixture])).toEqual([
+      {
+        file: "src/modules/orders/index.mts",
+        target: "root module barrel",
+      },
+    ]);
   });
 });

@@ -1,10 +1,10 @@
 "use client";
 
-import { useNotificationsContext } from "@/components/dashboard/notifications/notifications-provider";
+import { useNotificationsContext } from "@/modules/notifications/presentation/notifications-provider";
 import { LogoutConfirmationDialog } from "@/components/shared/logout-confirmation-dialog";
 import { Button } from "@/components/ui/button";
 import { useWebPush } from "@/hooks/use-web-push";
-import { getRouteConfig } from "@/lib/config/dashboard-routes";
+import { getRouteConfig } from "@/components/dashboard/layout/dashboard-routes";
 import { ArrowLeft, Bell, LogOut } from "lucide-react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";

@@ -1,4 +1,4 @@
-import { getTopPlats } from "@/lib/db/queries";
+import { getTopMenuDishes } from "@/modules/menu/server";
 import { TrendingMenus } from "./trending-menus";
 
 interface TrendingSectionProps {
@@ -10,6 +10,6 @@ interface TrendingSectionProps {
  * Doit être enveloppé dans <Suspense fallback={<WidgetSkeleton />}>.
  */
 export async function TrendingSection({ restaurantId }: TrendingSectionProps) {
-  const menus = await getTopPlats(restaurantId, 3);
+  const menus = await getTopMenuDishes(restaurantId, 3);
   return <TrendingMenus menus={menus} />;
 }

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
+import { warmNeonTestPool } from "./support/neon-test-connection";
 
 const enabled = process.env.RUN_SERVICE_MARKETS_DB_TESTS === "true";
 const databaseUrl =
@@ -12,7 +13,13 @@ if (enabled && !databaseUrl) {
 const describeDb = enabled ? describe : describe.skip;
 
 describeDb("service markets PostGIS invariants", () => {
-  const pool = new Pool({ connectionString: databaseUrl, max: 3 });
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    max: 1,
+    connectionTimeoutMillis: 30_000,
+    idleTimeoutMillis: 60_000,
+    keepAlive: true,
+  });
   const adminId = crypto.randomUUID();
   const marketId = crypto.randomUUID();
   const versionId = crypto.randomUUID();
@@ -20,6 +27,7 @@ describeDb("service markets PostGIS invariants", () => {
   const overlapVersionId = crypto.randomUUID();
 
   beforeAll(async () => {
+    await warmNeonTestPool(pool);
     await pool.query(
       `INSERT INTO users (id, nom, email, password, telephone, role, created_at, updated_at)
        VALUES ($1, 'Admin Geo Test', $2, 'x', $3, 'admin', NOW(), NOW())`,

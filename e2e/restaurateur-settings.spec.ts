@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { e2eCredentials } from "./global-setup";
+import seedE2EData, { e2eCredentials } from "./global-setup";
 
 test.describe.configure({ mode: "serial" });
+test.beforeAll(seedE2EData);
 
 const dishName = "Plat de validation E2E";
 

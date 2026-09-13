@@ -1,5 +1,5 @@
-import { getClientSession } from "@/lib/api/auth-client";
-import { apiResponse } from "@/lib/api/response";
+import { getClientSession } from "@/app/api/_shared/auth-client";
+import { apiResponse } from "@/app/api/_shared/response";
 import { getClientResidenceReservation } from "@/modules/residences/server";
 import { NextRequest } from "next/server";
 

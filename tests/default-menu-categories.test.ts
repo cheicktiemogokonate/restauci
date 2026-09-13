@@ -1,7 +1,7 @@
 import {
   DEFAULT_MENU_CATEGORIES,
   getInitialMenuCategories,
-} from "../src/lib/menu/default-categories";
+} from "../src/modules/menu/model";
 import { describe, expect, it } from "vitest";
 
 describe("getInitialMenuCategories", () => {

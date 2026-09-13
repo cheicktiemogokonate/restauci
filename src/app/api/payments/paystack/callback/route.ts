@@ -2,19 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getPaymentCallbackContext,
   verifyAndFinalizePaystackPayment,
-} from "@/modules/transactions/payment-service";
-import { schedulePaidRestaurantOrderEffects } from "@/lib/orders/restaurant-order-effects";
+} from "@/modules/payments/server";
+import { schedulePaidRestaurantOrderEffects } from "@/modules/orders/server";
 import {
   confirmResidenceReservationPaymentInTransaction,
   sendConfirmedResidenceReservationPush,
-} from "@/modules/residences/payment-lifecycle";
-import { env } from "@/lib/env";
+} from "@/modules/residences/server";
+import { env } from "@/infrastructure/env";
 import {
   buildMobilePaymentReturnUrl,
   buildWebPaymentReturnUrl,
-} from "@/modules/transactions/payment-return";
-import { checkRateLimit, paymentCallbackLimiter } from "@/lib/rate-limit";
-import { securityIdentifier } from "@/lib/security/identifier";
+} from "@/modules/payments/server";
+import { checkRateLimit, paymentCallbackLimiter } from "@/infrastructure/rate-limit";
+import { securityIdentifier } from "@/infrastructure/security/identifier";
 
 export const runtime = "nodejs";
 

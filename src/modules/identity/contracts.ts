@@ -54,6 +54,13 @@ export const rejectIdentityVerificationSchema = reviewIdentityVerificationSchema
   })
   .strict();
 
+export const identityDocumentScanMessageSchema = z
+  .object({
+    documentId: z.string().uuid(),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict();
+
 export const listIdentityVerificationsSchema = z
   .object({
     status: identityVerificationStatusSchema.optional(),
@@ -76,6 +83,9 @@ export type RejectIdentityVerificationInput = z.infer<
 export type ListIdentityVerificationsInput = z.infer<
   typeof listIdentityVerificationsSchema
 >;
+export type IdentityDocumentScanMessage = z.infer<
+  typeof identityDocumentScanMessageSchema
+>;
 
 export interface IdentityDocumentDTO {
   id: string;
@@ -83,6 +93,8 @@ export interface IdentityDocumentDTO {
   contentType: "image/jpeg" | "image/png" | "application/pdf";
   sizeBytes: number;
   scanStatus: "pending" | "processing" | "clean" | "rejected" | "error";
+  scanAttempts: number;
+  scanRetryable: boolean;
   uploadedAt: string;
 }
 

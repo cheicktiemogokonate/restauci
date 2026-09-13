@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { rankDiscoveryPage } from "@/modules/discovery/ranking";
-import type { DiscoveryCandidate, DiscoveryPlanBenefits, DiscoveryPolicy } from "@/modules/discovery/model";
+import {
+  rankDiscoveryPage,
+  type DiscoveryCandidate,
+  type DiscoveryPlanBenefits,
+  type DiscoveryPolicy,
+} from "@/modules/discovery/model";
 
 const policy: DiscoveryPolicy = {
   enabled: true,

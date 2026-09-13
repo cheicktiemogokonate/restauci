@@ -1,4 +1,4 @@
-import { apiResponse } from "@/lib/api/response";
+import { apiResponse } from "@/app/api/_shared/response";
 import {
   RestaurantOrderError,
   type RestaurantOrderErrorCode,

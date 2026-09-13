@@ -11,10 +11,10 @@ import {
 } from "motion/react";
 import { useEffect } from "react";
 
-import { SPRING_GLIDE } from "@/lib/ease";
-import { type SliderOptions, useSlider } from "@/lib/hooks/use-slider";
-import { TOUCH_GESTURE_CLASS } from "@/lib/touch";
-import { cn } from "@/lib/utils";
+import { SPRING_GLIDE } from "@/shared/ui/motion";
+import { type SliderOptions, useSlider } from "@/shared/ui/use-slider";
+import { TOUCH_GESTURE_CLASS } from "@/shared/ui/touch";
+import { cn } from "@/shared/ui/cn";
 
 // Bouncy grab feedback for the thumb scale only.
 const SPRING_BOUNCY = { type: "spring", stiffness: 500, damping: 14, mass: 0.7 } as const;

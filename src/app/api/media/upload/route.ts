@@ -1,15 +1,18 @@
-import { getClientIp } from "@/lib/api/client-ip";
+import { getClientIp } from "@/shared/http/client-ip";
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { checkRateLimit, uploadLimiter } from "@/lib/rate-limit";
-import { apiLogger } from "@/lib/loggers";
+import { getCurrentUser } from "@/modules/auth/server";
+import { checkRateLimit, uploadLimiter } from "@/infrastructure/rate-limit";
+import { apiLogger } from "@/infrastructure/loggers";
 import {
   ACCEPTED_IMAGE_TYPES,
   MAX_IMAGE_SIZE,
   sanitizeImage,
-} from "@/lib/media/image";
-import { isR2Configured, uploadImageToR2 } from "@/lib/r2";
-import { enforceContentLength } from "@/lib/api/request-size";
+} from "@/modules/media/server";
+import {
+  createTemporaryPublicMediaAsset,
+  isR2Configured,
+} from "@/modules/media/server";
+import { enforceContentLength } from "@/app/api/_shared/request-size";
 
 const MAX_MULTIPART_OVERHEAD = 128 * 1024;
 
@@ -97,15 +100,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await uploadImageToR2({
+    const result = await createTemporaryPublicMediaAsset({
       body: validatedImage.body,
       contentType: validatedImage.contentType,
       extension: validatedImage.extension,
-      ownerId: session.userId,
+      ownerUserId: session.userId,
     });
 
-    apiLogger.info({ ip, key: result.key }, "Media uploaded successfully");
-    return NextResponse.json({ url: result.url });
+    apiLogger.info({ ip, assetId: result.id }, "Media uploaded successfully");
+    return NextResponse.json({
+      assetId: result.id,
+      url: result.url,
+      expiresAt: result.expiresAt,
+    });
   } catch (error) {
     apiLogger.error({ 
       ip, 

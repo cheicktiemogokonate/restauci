@@ -1,22 +1,19 @@
-import { getClientIp } from "@/lib/api/client-ip";
+import { getClientIp } from "@/shared/http/client-ip";
 import {
-  comparePassword,
+  authenticatePartnerCredentials,
   setAuthCookie,
   signWebSessionToken,
-} from "@/lib/auth";
-import { db } from "@/lib/db";
-import { partnerAccounts, users } from "@/lib/db/schema";
-import { authLogger } from "@/lib/loggers";
+} from "@/modules/auth/server";
+import { authLogger } from "@/infrastructure/loggers";
 import {
   authAccountLimiter,
   authLimiter,
   checkRateLimit,
-} from "@/lib/rate-limit";
-import { securityIdentifier } from "@/lib/security/identifier";
-import { loginSchema } from "@/lib/validations/auth";
-import { verifyAdminMfa } from "@/lib/auth/admin-mfa";
-import { eq } from "drizzle-orm";
+} from "@/infrastructure/rate-limit";
+import { securityIdentifier } from "@/infrastructure/security/identifier";
+import { loginSchema } from "@/modules/auth/contracts";
 import { NextRequest, NextResponse } from "next/server";
+import { getPartnerAccountByUserId } from "@/modules/partners/server";
 
 // ============================================================================
 // HANDLER
@@ -78,28 +75,13 @@ export async function POST(request: NextRequest) {
     // Log tentative de connexion (sans le mot de passe)
     authLogger.info({ ip, accountId }, "Login attempt");
 
-    // Chercher l'utilisateur par email (exclure password)
-    const user = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        nom: users.nom,
-        role: users.role,
-        password: users.password,
-        suspendu: users.suspendu,
-      })
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-
-    if (user.length === 0) {
-      // Email inexistant → message générique pour sécurité
-      await comparePassword(
-        password,
-        "$2b$12$uTgttD2C7DC66CkZOWNP..p1.dVZb72d./VYmD08jia4VsjYPs3O2",
-      );
+    const authentication = await authenticatePartnerCredentials(
+      { email, password, otp },
+      { enforceAdminMfa: !bypassRateLimit },
+    );
+    if (authentication.status === "invalid_credentials") {
       authLogger.warn(
-        { ip, accountId, reason: "user not found" },
+        { ip, accountId, reason: "invalid credentials" },
         "Login failed",
       );
       return NextResponse.json(
@@ -108,24 +90,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Comparer les passwords
-    const passwordValid = await comparePassword(password, user[0].password);
-
-    if (!passwordValid) {
-      // Password faux → message générique pour sécurité
+    if (authentication.status === "suspended") {
       authLogger.warn(
-        { ip, accountId, userId: user[0].id, reason: "invalid password" },
-        "Login failed",
-      );
-      return NextResponse.json(
-        { error: "Identifiants incorrects" },
-        { status: 401 },
-      );
-    }
-
-    if (user[0].suspendu) {
-      authLogger.warn(
-        { ip, accountId, userId: user[0].id, reason: "suspended account" },
+        { ip, accountId, userId: authentication.userId, reason: "suspended account" },
         "Login denied for suspended user",
       );
       return NextResponse.json(
@@ -134,16 +101,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (user[0].role === "admin" && !bypassRateLimit) {
-      const mfaResult = await verifyAdminMfa(user[0].id, otp);
-      if (mfaResult === "disabled") {
-        authLogger.warn(
-          { userId: user[0].id },
-          "Connexion admin sans MFA : exception de déploiement explicitement activée",
-        );
-      } else if (mfaResult === "not-configured") {
+    if (authentication.status !== "authenticated") {
+      if (authentication.status === "mfa_not_configured") {
         authLogger.error(
-          { userId: user[0].id },
+          { userId: authentication.userId },
           "Connexion admin bloquée : TOTP non configuré",
         );
         return NextResponse.json(
@@ -153,7 +114,7 @@ export async function POST(request: NextRequest) {
           },
           { status: 503 },
         );
-      } else if (mfaResult === "unavailable") {
+      } else if (authentication.status === "mfa_unavailable") {
         return NextResponse.json(
           {
             error: "Vérification du second facteur temporairement indisponible.",
@@ -161,7 +122,7 @@ export async function POST(request: NextRequest) {
           },
           { status: 503 },
         );
-      } else if (mfaResult !== "ok") {
+      } else {
         return NextResponse.json(
           {
             error: "Code de sécurité requis ou invalide.",
@@ -173,26 +134,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Signer le JWT token
+    const user = authentication.user;
     const token = await signWebSessionToken({
-      userId: user[0].id,
-      email: user[0].email,
-      role: user[0].role,
+      userId: user.id,
+      email: user.email,
+      role: user.role,
     });
 
-    const partnerAccount = user[0].role === "partner"
-      ? await db.query.partnerAccounts.findFirst({
-          where: eq(partnerAccounts.userId, user[0].id),
-          columns: { id: true },
-        })
+    const partnerAccount = user.role === "partner"
+      ? await getPartnerAccountByUserId(user.id)
       : null;
 
     // Poser le cookie
     const response = NextResponse.json(
       {
-        id: user[0].id,
-        email: user[0].email,
-        nom: user[0].nom,
-        role: user[0].role,
+        id: user.id,
+        email: user.email,
+        nom: user.nom,
+        role: user.role,
         hasPartnerAccount: Boolean(partnerAccount),
       },
       { status: 200 },
@@ -200,7 +159,7 @@ export async function POST(request: NextRequest) {
 
     await setAuthCookie(token);
 
-    authLogger.info({ ip, accountId, userId: user[0].id }, "Login successful");
+    authLogger.info({ ip, accountId, userId: user.id }, "Login successful");
     return response;
   } catch (error) {
     authLogger.error(

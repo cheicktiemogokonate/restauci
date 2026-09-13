@@ -9,9 +9,10 @@ describe("recherche publique Résidences", () => {
     "utf8",
   );
   const service = readFileSync("src/modules/residences/server.ts", "utf8");
+  const discovery = readFileSync("src/modules/discovery/server.ts", "utf8");
   const page = readFileSync("src/app/(public)/residences/page.tsx", "utf8");
   const card = readFileSync(
-    "src/components/residences/public-residence-card.tsx",
+    "src/modules/residences/presentation/public-residence-card.tsx",
     "utf8",
   );
 
@@ -42,7 +43,9 @@ describe("recherche publique Résidences", () => {
     expect(persistence).toContain("identity.status = 'verified'");
     expect(persistence).toContain(") = 1");
     expect(persistence).toContain("capability.status = 'active'");
-    expect(service).toContain("rankDiscoveryPage");
+    expect(service).toContain("getResidenceDiscoveryEligibility");
+    expect(service).not.toContain("rankDiscoveryPage");
+    expect(discovery).toContain("rankDiscoveryPage");
   });
 
   it("respecte le quota snapshoté d’une période payante", () => {

@@ -1,31 +1,22 @@
-import { getClientIp } from "@/lib/api/client-ip";
+import { getClientIp } from "@/shared/http/client-ip";
 import { NextRequest }              from "next/server";
-import { z }                        from "zod";
-import { hash }                     from "bcryptjs";
-import { apiResponse }              from "@/lib/api/response";
-import { validateBody }             from "@/lib/api/validate";
-import { checkRateLimit, clientAuthLimiter } from "@/lib/rate-limit";
-import { db }                       from "@/lib/db";
-import { clients }                  from "@/lib/db/schema";
-import { eq, or }                   from "drizzle-orm";
+import { apiResponse }              from "@/app/api/_shared/response";
+import { validateBody }             from "@/app/api/_shared/validate";
+import { checkRateLimit, clientAuthLimiter } from "@/infrastructure/rate-limit";
 import {
   createSessionId,
   signClientAccessToken,
   signClientRefreshToken,
-} from "@/lib/auth";
-import { createLogger }             from "@/lib/logger";
-import { applyClientRefreshTransport } from "@/lib/api/client-session-cookie";
-import { clientTokenTransportSchema } from "@/lib/api/client-token-transport";
-import { emailSchema, strongPasswordSchema } from "@/lib/validations/auth";
+} from "@/modules/auth/server";
+import { createLogger }             from "@/infrastructure/logger";
+import { applyClientRefreshTransport } from "@/app/api/_shared/client-session-cookie";
+import { clientTokenTransportSchema } from "@/app/api/_shared/client-token-transport";
+import { registerClientSchema } from "@/modules/clients/contracts";
+import { ClientDomainError, registerClient } from "@/modules/clients/server";
 
 const log = createLogger("v1-client-register");
 
-const registerSchema = z.object({
-  nom:       z.string().min(2, "Nom trop court").max(255),
-  telephone: z.string()
-    .regex(/^\+?[0-9\s]{8,20}$/, "Numéro de téléphone invalide"),
-  email:    emailSchema.optional(),
-  password: strongPasswordSchema,
+const registerSchema = registerClientSchema.extend({
   tokenTransport: clientTokenTransportSchema,
 });
 
@@ -38,40 +29,7 @@ export async function POST(req: NextRequest) {
   if (error) return error;
 
   try {
-    // Vérifier unicité téléphone (et email si fourni)
-    const conditions = [eq(clients.telephone, data.telephone)];
-    if (data.email) conditions.push(eq(clients.email, data.email));
-
-    const existing = await db
-      .select({ id: clients.id, telephone: clients.telephone })
-      .from(clients)
-      .where(or(...conditions))
-      .limit(1);
-
-    if (existing.length > 0) {
-      return apiResponse.error(
-        "Un compte existe déjà avec ce numéro de téléphone",
-        "CONFLICT",
-        { status: 409 },
-      );
-    }
-
-    const passwordHash = await hash(data.password, 12);
-
-    const [client] = await db
-      .insert(clients)
-      .values({
-        nom:       data.nom,
-        telephone: data.telephone,
-        email:     data.email ?? null,
-        password:  passwordHash,
-      })
-      .returning({
-        id:        clients.id,
-        nom:       clients.nom,
-        telephone: clients.telephone,
-        email:     clients.email,
-      });
+    const client = await registerClient(data);
 
     const sessionId = createSessionId();
     const sessionExpiresAt = Math.floor(Date.now() / 1_000) + 7 * 24 * 3600;
@@ -105,6 +63,9 @@ export async function POST(req: NextRequest) {
     });
     return response;
   } catch (err) {
+    if (err instanceof ClientDomainError && err.code === "CLIENT_ALREADY_EXISTS") {
+      return apiResponse.error(err.message, "CONFLICT", { status: 409 });
+    }
     log.error({ err }, "Erreur inscription client");
     return apiResponse.internalError();
   }

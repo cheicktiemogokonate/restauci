@@ -1,18 +1,18 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { getClientIp } from "@/lib/api/client-ip";
-import { applyDriverRefreshTransport } from "@/lib/api/driver-session-cookie";
-import { driverTokenTransportSchema } from "@/lib/api/driver-token-transport";
-import { deliveryErrorResponse } from "@/lib/api/delivery-response";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { createLogger } from "@/lib/logger";
+import { getClientIp } from "@/shared/http/client-ip";
+import { applyDriverRefreshTransport } from "@/app/api/_shared/driver-session-cookie";
+import { driverTokenTransportSchema } from "@/app/api/_shared/driver-token-transport";
+import { deliveryErrorResponse } from "@/app/api/_shared/delivery-response";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { createLogger } from "@/infrastructure/logger";
 import {
   authAccountLimiter,
   checkRateLimit,
   mobileAuthLimiter,
-} from "@/lib/rate-limit";
-import { securityIdentifier } from "@/lib/security/identifier";
+} from "@/infrastructure/rate-limit";
+import { securityIdentifier } from "@/infrastructure/security/identifier";
 import { driverLoginSchema } from "@/modules/deliveries/contracts";
 import { authenticateDriver } from "@/modules/deliveries/server";
 

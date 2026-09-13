@@ -18,9 +18,9 @@ import {
   reactiverUserAction,
   suspendreClientAction,
   suspendreUserAction,
-} from "@/lib/actions/admin-users";
-import { cn } from "@/lib/utils";
-import { formatDate, formatPrix } from "@/lib/utils/format";
+} from "@/app/_actions/admin-users";
+import { cn } from "@/shared/ui/cn";
+import { formatDate, formatPrix } from "@/shared/format";
 import {
   AlertTriangle,
   ChevronLeft,
@@ -33,11 +33,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState, useTransition } from "react";
 import { toast } from "sonner";
+import type { AdminPartnerAccessDTO } from "@/modules/partners/contracts";
 
 interface UsersAdminTableProps {
   type: string;
   data: {
-    items: UserAdminRow[];
+    items: Array<UserAdminRow>;
     total: number;
     page: number;
     totalPages: number;
@@ -45,20 +46,43 @@ interface UsersAdminTableProps {
   search?: string;
 }
 
-interface UserAdminRow {
+interface ClientAdminRow {
   id: string;
   nom: string;
   telephone: string;
   email: string | null;
   createdAt: Date;
-  actif?: boolean;
-  suspendu?: boolean;
-  totalDepense?: number;
-  restaurantId?: string | null;
-  restaurantNom?: string | null;
-  planNom?: string | null;
-  statutAbonnement?: string | null;
-  dateEcheance?: Date | null;
+  actif: boolean;
+  totalDepense: number;
+}
+
+type UserAdminRow = ClientAdminRow | AdminPartnerAccessDTO;
+
+function isClientRow(item: UserAdminRow): item is ClientAdminRow {
+  return "actif" in item;
+}
+
+function getRowIdentity(item: UserAdminRow) {
+  return isClientRow(item)
+    ? { id: item.id, name: item.nom, phone: item.telephone }
+    : { id: item.userId, name: item.name, phone: item.phone };
+}
+
+function residenceStatusLabel(status: string) {
+  switch (status) {
+    case "draft":
+      return "Brouillon";
+    case "pending":
+      return "En revue";
+    case "approved":
+      return "Validée";
+    case "rejected":
+      return "À corriger";
+    case "suspended":
+      return "Suspendue";
+    default:
+      return status;
+  }
 }
 
 export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
@@ -137,12 +161,13 @@ export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
       sortable: true,
       width: "220px",
       cell: (item) => {
-        const suspendu = isClient ? !item.actif : item.suspendu;
+        const identity = getRowIdentity(item);
+        const suspendu = isClientRow(item) ? !item.actif : item.suspended;
         return (
           <div className="flex items-center gap-3">
             <CustomAvatar
-              fallbackText={item.nom}
-              alt={item.nom}
+              fallbackText={identity.name}
+              alt={identity.name}
               size="sm"
               className="shrink-0"
               fallbackClassName={cn(
@@ -153,7 +178,7 @@ export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
               )}
             />
             <span className="truncate font-semibold text-gray-900">
-              {item.nom}
+              {identity.name}
             </span>
           </div>
         );
@@ -163,57 +188,116 @@ export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
       key: "contact",
       header: "Contact",
       width: "220px",
-      sortValue: (item) => item.email ?? item.telephone ?? "",
-      cell: (item) => (
-        <div>
-          <p className="truncate text-gray-700">{item.telephone}</p>
+      sortValue: (item) => item.email ?? getRowIdentity(item).phone,
+      cell: (item) => {
+        const identity = getRowIdentity(item);
+        return (
+          <div>
+          <p className="truncate text-gray-700">{identity.phone}</p>
           {item.email ? (
             <p className="mt-0.5 truncate text-xs text-gray-400">
               {item.email}
             </p>
           ) : null}
-        </div>
-      ),
+          </div>
+        );
+      },
     },
     {
-      key: isClient ? "totalDepense" : "restaurantNom",
-      header: isClient ? "Total dépensé" : "Restaurant & offre",
+      key: isClient ? "totalDepense" : "activityType",
+      header: isClient ? "Total dépensé" : "Activité & offre",
       sortable: true,
       width: isClient ? "150px" : "280px",
       align: isClient ? "right" : "left",
-      cell: (item) =>
-        isClient ? (
+      cell: (item) => {
+        if (isClientRow(item)) {
+          return (
           <span className="font-semibold text-gray-900">
-            {formatPrix(item.totalDepense ?? 0)}
+            {formatPrix(item.totalDepense)}
           </span>
-        ) : item.restaurantId ? (
-          <div className="space-y-1">
-            <Link
-              href={`/admin/restaurants/${item.restaurantId}`}
-              className="block truncate font-semibold text-gray-900 hover:text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-              title={`Voir ${item.restaurantNom}`}
-            >
-              {item.restaurantNom}
-            </Link>
-            <div className="flex items-center gap-1.5 overflow-hidden">
-              <StatusBadge variant={item.planNom ? "info" : "neutral"}>
-                {item.planNom ?? "Aucune offre active"}
-              </StatusBadge>
-              {item.statutAbonnement ? (
-                <StatusBadge variant="success">Abonnement actif</StatusBadge>
-              ) : null}
-            </div>
-            {item.dateEcheance ? (
-              <p className="truncate text-xs text-gray-400">
-                Échéance : {formatDate(item.dateEcheance)}
-              </p>
+          );
+        }
+        const subscription = (
+          <div className="flex items-center gap-1.5 overflow-hidden">
+            <StatusBadge variant={item.subscription ? "info" : "neutral"}>
+              {item.subscription?.planName ?? "Offre Découverte"}
+            </StatusBadge>
+            {item.subscription ? (
+              <StatusBadge variant="success">Abonnement actif</StatusBadge>
             ) : null}
           </div>
-        ) : (
-          <span className="text-xs text-gray-400">
-            Aucun restaurant associé
-          </span>
-        ),
+        );
+        const expiration = item.subscription?.expiresAt ? (
+          <p className="truncate text-xs text-gray-400">
+            Échéance : {formatDate(item.subscription.expiresAt)}
+          </p>
+        ) : null;
+        if (item.activityType === null) {
+          return (
+            <div className="space-y-1">
+              <span className="text-sm font-medium text-amber-700">
+                Activité non encore choisie
+              </span>
+              <StatusBadge variant="warning">Onboarding en cours</StatusBadge>
+            </div>
+          );
+        }
+        if (item.activityType === "restaurant") {
+          return item.restaurant ? (
+          <div className="space-y-1">
+            <Link
+              href={`/admin/restaurants/${item.restaurant.id}`}
+              className="block truncate font-semibold text-gray-900 hover:text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              title={`Voir ${item.restaurant.name}`}
+            >
+              Restaurant · {item.restaurant.name}
+            </Link>
+            {subscription}
+            {expiration}
+          </div>
+          ) : (
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500">Restaurant non encore créé</p>
+              {subscription}
+              {expiration}
+            </div>
+          );
+        }
+        const { residenceAccount } = item;
+        return (
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-semibold text-gray-900">Résidences</span>
+              <StatusBadge variant="neutral">
+                {residenceAccount.visibleCount}/
+                {residenceAccount.quota.maxPublicResidences ?? "∞"} visibles
+              </StatusBadge>
+            </div>
+            {residenceAccount.residences.length === 0 ? (
+              <p className="text-xs text-gray-400">Aucune résidence créée</p>
+            ) : (
+              <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs">
+                {residenceAccount.residences.slice(0, 3).map((residence) => (
+                  <Link
+                    key={residence.id}
+                    href={`/admin/residences/${residence.id}`}
+                    className="text-gray-700 hover:text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  >
+                    {residence.title} · {residenceStatusLabel(residence.moderationStatus)}
+                  </Link>
+                ))}
+                {residenceAccount.residences.length > 3 ? (
+                  <span className="text-gray-400">
+                    +{residenceAccount.residences.length - 3} autres
+                  </span>
+                ) : null}
+              </div>
+            )}
+            {subscription}
+            {expiration}
+          </div>
+        );
+      },
     },
     {
       key: "statut",
@@ -221,15 +305,15 @@ export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
       sortable: true,
       width: "125px",
       sortValue: (item) =>
-        isClient
+        isClientRow(item)
           ? item.actif
             ? "actif"
             : "suspendu"
-          : item.suspendu
+          : item.suspended
             ? "suspendu"
             : "actif",
       cell: (item) => {
-        const suspendu = isClient ? !item.actif : item.suspendu;
+        const suspendu = isClientRow(item) ? !item.actif : item.suspended;
         return (
           <StatusBadge variant={suspendu ? "danger" : "success"}>
             {suspendu ? "Suspendu" : "Actif"}
@@ -255,7 +339,8 @@ export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
       width: "130px",
       align: "right",
       cell: (item) => {
-        const suspendu = isClient ? !item.actif : item.suspendu;
+        const identity = getRowIdentity(item);
+        const suspendu = isClientRow(item) ? !item.actif : item.suspended;
         return suspendu ? (
           <Button
             type="button"
@@ -263,7 +348,7 @@ export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
             variant="outline"
             disabled={isPending}
             onClick={() =>
-              handleReactiver(item.id, isClient ? "client" : "user")
+              handleReactiver(identity.id, isClientRow(item) ? "client" : "user")
             }
             className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900"
           >
@@ -277,9 +362,9 @@ export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
             disabled={isPending}
             onClick={() =>
               setMotifModal({
-                id: item.id,
-                nom: item.nom,
-                type: isClient ? "client" : "user",
+                id: identity.id,
+                nom: identity.name,
+                type: isClientRow(item) ? "client" : "user",
               })
             }
           >
@@ -302,11 +387,16 @@ export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
           <TabsList className="h-11 min-w-max gap-0">
             {[
               {
-                value: "restaurateurs",
-                label: "Restaurateurs",
+                value: "partenaires",
+                label: "Partenaires",
                 icon: UserCheck,
               },
               { value: "clients", label: "Clients", icon: Users },
+              {
+                value: "administrateurs",
+                label: "Administrateurs",
+                icon: UserCheck,
+              },
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -345,13 +435,13 @@ export function UsersAdminTable({ type, data, search }: UsersAdminTableProps) {
       <Table
         data={data.items}
         columns={columns}
-        getRowId={(item) => item.id}
+        getRowId={(item) => getRowIdentity(item).id}
         defaultSort={{ key: "createdAt", direction: "desc" }}
         resizable
         reorderable
-        rowHeight={isClient ? 64 : 92}
+        rowHeight={isClient ? 64 : 124}
         height={Math.min(
-          Math.max(data.items.length * (isClient ? 64 : 92) + 48, 180),
+          Math.max(data.items.length * (isClient ? 64 : 124) + 48, 180),
           520,
         )}
         className="rounded-xl bg-white"

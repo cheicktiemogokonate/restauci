@@ -1,4 +1,4 @@
-import type { Plat } from "@/lib/db/types";
+import type { Plat } from "@/infrastructure/db/types";
 
 export interface MenuCardBadge {
   label: string;

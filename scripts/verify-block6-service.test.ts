@@ -24,14 +24,14 @@ describe.skipIf(!enabled)("services financiers Bloc 6", () => {
 
   it("snapshotte, active, exclut provider, annule, alloue FIFO et clôture le cycle", async () => {
     if (!pool) throw new Error("Pool indisponible");
-    const { transactionalDb } = await import("@/lib/db/transaction");
+    const { transactionalDb } = await import("@/infrastructure/db/transaction");
     const {
       createCommissionSnapshot,
       createManualCommissionSettlement,
       getCashCommissionStatus,
       getOutstandingCashCommissionDebt,
       transitionCommissionForOrder,
-    } = await import("@/lib/commissions/ledger");
+    } = await import("@/modules/commissions/server");
     const context = await pool.query<{
       partner_account_id: string;
       admin_id: string;

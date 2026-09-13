@@ -14,7 +14,7 @@ const AboutPlatform = nextDynamic(
   () => import("@/components/landing/components/AboutPlatform"),
   { loading: () => <div /> },
 );
-const HoverFooter = nextDynamic(() => import("@/components/landing/ui/demo"), {
+const HoverFooter = nextDynamic(() => import("@/components/landing/ui/footer"), {
   loading: () => <div />,
 });
 

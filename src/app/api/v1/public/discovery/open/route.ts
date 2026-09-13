@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { env } from "@/lib/env";
+import { env } from "@/infrastructure/env";
 import { recordDiscoveryClick } from "@/modules/discovery/server";
 
 export async function GET(request: NextRequest) {

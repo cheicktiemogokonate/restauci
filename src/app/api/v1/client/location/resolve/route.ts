@@ -1,9 +1,9 @@
-import { getClientIp } from "@/lib/api/client-ip";
+import { getClientIp } from "@/shared/http/client-ip";
 import { NextRequest } from "next/server";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, geoSearchLimiter } from "@/lib/rate-limit";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, geoSearchLimiter } from "@/infrastructure/rate-limit";
 import { resolveServiceMarketSchema } from "@/modules/service-markets/contracts";
 import {
   getServiceMarketCapabilities,

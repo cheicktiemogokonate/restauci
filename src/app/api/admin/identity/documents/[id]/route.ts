@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireAdminSession } from "@/lib/api/auth-admin";
+import { requireAdminSession } from "@/app/api/_shared/auth-admin";
 import { readAdminIdentityDocument } from "@/modules/identity/server";
 
 export const runtime = "nodejs";
@@ -22,10 +22,12 @@ export async function GET(
     return new Response(new Uint8Array(document.body), {
       headers: {
         "Content-Type": document.contentType,
-        "Content-Disposition": `attachment; filename="justificatif-identite.${extension}"`,
+        "Content-Disposition": `inline; filename="justificatif-identite.${extension}"`,
         "Cache-Control": "private, no-store, max-age=0",
         Pragma: "no-cache",
         "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Cross-Origin-Resource-Policy": "same-origin",
         "Content-Security-Policy": "sandbox",
       },
     });

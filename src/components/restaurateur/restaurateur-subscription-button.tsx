@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { createSubscriptionRequestAction } from "@/lib/actions/partner-subscriptions";
+import { createSubscriptionRequestAction } from "@/app/_actions/partner-subscriptions";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import {

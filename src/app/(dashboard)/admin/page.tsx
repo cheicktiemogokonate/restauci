@@ -1,13 +1,9 @@
-import { getAdminSession } from "@/lib/auth/get-admin-session";
+import { getAdminSession } from "@/modules/auth/server";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { AdminPage } from "@/components/admin/ui/admin-page";
 import { AnimatedNumber } from "@/components/motion/animated-number";
-import {
-  getAdminActionCenterSummary,
-  getEvolutionPlateformeAdmin,
-  getStatsGlobalAdmin,
-} from "@/lib/db/queries-admin";
-import { formatPrix } from "@/lib/utils/format";
+import { getAdminDashboardProjection } from "@/modules/admin-projections/server";
+import { formatPrix } from "@/shared/format";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -28,13 +24,17 @@ import Link from "next/link";
 export default async function AdminDashboardPage() {
   const admin = await getAdminSession();
 
-  const [stats, evolution, actionSummary] = await Promise.all([
-    getStatsGlobalAdmin(),
-    getEvolutionPlateformeAdmin(14),
-    getAdminActionCenterSummary(),
-  ]);
+  const {
+    stats,
+    activity: evolution,
+    actionCenter: actionSummary,
+  } = await getAdminDashboardProjection({ days: 14 });
 
   const prenom = admin.nom.split(" ")[0];
+  const maxActivityCount = evolution.reduce(
+    (maximum, point) => Math.max(maximum, Number(point.count)),
+    1,
+  );
 
   // Calcul date actuelle en français
   const maintenant = new Date();
@@ -246,11 +246,8 @@ export default async function AdminDashboardPage() {
 
             <div className="flex items-end gap-1.5 h-44 w-full">
               {evolution.map((point) => {
-                const max = Math.max(
-                  ...evolution.map((p) => Number(p.count)),
-                  1,
-                );
-                const heightPct = (Number(point.count) / max) * 100;
+                const heightPct =
+                  (Number(point.count) / maxActivityCount) * 100;
                 const dayLabel = point.jour.split("-")[2] || point.jour;
 
                 return (

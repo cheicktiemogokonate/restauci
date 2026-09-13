@@ -1,7 +1,11 @@
-import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { getRestaurantsAdmin, getRestaurantsCountsAdmin } from "@/lib/db/queries-admin";
-import { parsePage } from "@/lib/config/pagination";
-import { RestaurantsAdminTable } from "@/components/admin/restaurants-admin-table";
+import { getAdminSession } from "@/modules/auth/server";
+import {
+  getAdminRestaurantCounts,
+  listAdminRestaurants,
+} from "@/modules/restaurants/server";
+import { getEffectiveSubscriptionSummaries } from "@/modules/subscriptions/server";
+import { parsePage } from "@/shared/pagination";
+import { RestaurantsAdminTable } from "@/modules/restaurants/presentation/admin-restaurants-table";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { AdminPage } from "@/components/admin/ui/admin-page";
 import { Store } from "lucide-react";
@@ -37,10 +41,30 @@ export default async function AdminRestaurantsPage({
         | "tous"
     : "tous";
 
-  const [{ items, total, totalPages }, counts] = await Promise.all([
-    getRestaurantsAdmin({ statut, search: awaitedParams.search, page, limit: 20 }),
-    getRestaurantsCountsAdmin(),
+  const [restaurants, counts] = await Promise.all([
+    listAdminRestaurants({ statut, search: awaitedParams.search, page, limit: 20 }),
+    getAdminRestaurantCounts(),
   ]);
+  const subscriptions = await getEffectiveSubscriptionSummaries(
+    restaurants.items.map((restaurant) => restaurant.partnerAccountId),
+  );
+  const subscriptionByAccount = new Map(
+    subscriptions.map((subscription) => [
+      subscription.partnerAccountId,
+      subscription,
+    ]),
+  );
+  const items = restaurants.items.map((restaurant) => {
+    const subscription = subscriptionByAccount.get(restaurant.partnerAccountId)!;
+    return {
+      ...restaurant,
+      planCode: subscription.plan.code,
+      planNom: subscription.plan.name,
+      statutAbonnement: subscription.period?.status ?? null,
+      dateEcheance: subscription.period?.expiresAt ?? null,
+      tauxCommissionBpsFige: subscription.plan.rateBps,
+    };
+  });
 
   return (
     <AdminPage>
@@ -57,9 +81,9 @@ export default async function AdminRestaurantsPage({
 
       <RestaurantsAdminTable
         items={items}
-        total={total}
+        total={restaurants.total}
         page={page}
-        totalPages={totalPages}
+        totalPages={restaurants.totalPages}
         counts={counts}
         statutActif={statut}
         search={awaitedParams.search}

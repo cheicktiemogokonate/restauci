@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 import type { TableColumn } from "./types";
 import { alignText } from "./utils";
 

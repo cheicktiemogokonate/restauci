@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { NextRequest } from "next/server";
-import { getClientSession } from "@/lib/api/auth-client";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { buildPaginationMeta } from "@/lib/config/pagination";
+import { getClientSession } from "@/app/api/_shared/auth-client";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { buildPaginationMeta } from "@/shared/pagination";
 import {
   listClientNotificationsSchema,
   markClientNotificationsReadSchema,

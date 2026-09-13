@@ -1,21 +1,12 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 import { scanDirectory } from "../engine";
 import {
   createSyntheticFile,
   findAppDbViolations,
-  findNewViolations,
   type ArchitectureViolation,
 } from "../rules";
 
-const baselinePath = path.join(
-  process.cwd(),
-  "tests/architecture/baselines/app-db-imports.json",
-);
-const baseline = JSON.parse(
-  fs.readFileSync(baselinePath, "utf8"),
-) as ArchitectureViolation[];
 const currentViolations = findAppDbViolations(
   scanDirectory(path.join(process.cwd(), "src/app")),
 );
@@ -32,27 +23,23 @@ function formatViolation({ file, target }: ArchitectureViolation) {
   ].join("\n");
 }
 
-describe("Architecture: app -> DB ratchet", () => {
-  it("accepts the exact A3.0 legacy baseline", () => {
-    const newViolations = findNewViolations(currentViolations, baseline);
-    expect(newViolations.map(formatViolation)).toEqual([]);
+describe("Architecture: app -> DB", () => {
+  it("forbids every app import of DB infrastructure", () => {
+    expect(currentViolations.map(formatViolation)).toEqual([]);
   });
 
-  it("rejects a new file importing the legacy DB", () => {
+  it("rejects a new file importing DB infrastructure", () => {
     const newFile = createSyntheticFile(
       "src/app/example/page.tsx",
-      [{ target: "@/lib/db", resolvedFilePath: "src/lib/db/index.ts" }],
+      [
+        {
+          target: "@/infrastructure/db",
+          resolvedFilePath: "src/infrastructure/db/index.ts",
+        },
+      ],
     );
-    const actual = [...currentViolations, ...findAppDbViolations([newFile])];
-
-    expect(findNewViolations(actual, baseline)).toEqual([
-      { file: "src/app/example/page.tsx", target: "@/lib/db" },
+    expect(findAppDbViolations([newFile])).toEqual([
+      { file: "src/app/example/page.tsx", target: "@/infrastructure/db" },
     ]);
-  });
-
-  it("continues to pass when a known violation is removed", () => {
-    const [removed, ...reducedViolations] = currentViolations;
-    expect(removed).toBeDefined();
-    expect(findNewViolations(reducedViolations, baseline)).toEqual([]);
   });
 });

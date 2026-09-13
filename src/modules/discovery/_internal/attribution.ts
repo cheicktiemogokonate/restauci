@@ -2,10 +2,10 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { env } from "@/lib/env";
-import { discoveryEvents } from "@/lib/db/schema";
+import { env } from "@/infrastructure/env";
+import { discoveryEvents } from "@/infrastructure/db/schema";
 import { db } from "@/infrastructure/db";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/infrastructure/logger";
 import { discoveryAttributionTokenPayloadSchema } from "../contracts";
 import type {
   DiscoveryAttributionInput,

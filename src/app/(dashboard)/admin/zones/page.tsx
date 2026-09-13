@@ -1,7 +1,7 @@
 import { AdminPage } from "@/components/admin/ui/admin-page";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { ServiceMarketAdmin } from "@/components/admin/service-market-admin";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
+import { getAdminSession } from "@/modules/auth/server";
 import {
   listGeoSourceAreas,
   listServiceMarkets,

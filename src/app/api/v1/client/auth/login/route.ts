@@ -1,32 +1,31 @@
-import { getClientIp } from "@/lib/api/client-ip";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
+import { getClientIp } from "@/shared/http/client-ip";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
 import {
   createSessionId,
   signClientAccessToken,
   signClientRefreshToken,
-} from "@/lib/auth";
-import { db } from "@/lib/db";
-import { clients } from "@/lib/db/schema";
-import { createLogger } from "@/lib/logger";
+} from "@/modules/auth/server";
+import { createLogger } from "@/infrastructure/logger";
 import {
   authAccountLimiter,
   checkRateLimit,
   clientAuthLimiter,
-} from "@/lib/rate-limit";
-import { securityIdentifier } from "@/lib/security/identifier";
-import { compare } from "bcryptjs";
-import { eq } from "drizzle-orm";
+} from "@/infrastructure/rate-limit";
+import { securityIdentifier } from "@/infrastructure/security/identifier";
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { applyClientRefreshTransport } from "@/lib/api/client-session-cookie";
-import { clientTokenTransportSchema } from "@/lib/api/client-token-transport";
+import { applyClientRefreshTransport } from "@/app/api/_shared/client-session-cookie";
+import { clientTokenTransportSchema } from "@/app/api/_shared/client-token-transport";
+import { authenticateClientSchema } from "@/modules/clients/contracts";
+import {
+  authenticateClientCredentials,
+  ClientDomainError,
+} from "@/modules/clients/server";
 
 const log = createLogger("v1-client-login");
 
-const loginSchema = z.object({
-  telephone: z.string().min(8),
-  password: z.string().min(1).max(128),
+const loginSchema = authenticateClientSchema.extend({
   rememberMe: z.boolean().default(false),
   tokenTransport: clientTokenTransportSchema,
 });
@@ -50,43 +49,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const [client] = await db
-      .select({
-        id: clients.id,
-        nom: clients.nom,
-        telephone: clients.telephone,
-        email: clients.email,
-        password: clients.password,
-        actif: clients.actif,
-      })
-      .from(clients)
-      .where(eq(clients.telephone, data.telephone))
-      .limit(1);
-
-    // Message générique pour éviter l'énumération
-    const erreurGenerique = "Numéro de téléphone ou mot de passe incorrect";
-
-    if (!client || !client.password) {
-      await compare(
-        data.password,
-        "$2b$12$uTgttD2C7DC66CkZOWNP..p1.dVZb72d./VYmD08jia4VsjYPs3O2",
-      );
-      return apiResponse.unauthorized(erreurGenerique);
-    }
-
-    const isValid = await compare(data.password, client.password);
-    if (!isValid) {
-      log.warn({ clientId: client.id }, "Mauvais mot de passe client");
-      return apiResponse.unauthorized(erreurGenerique);
-    }
-
-    if (!client.actif) {
-      return apiResponse.error(
-        "Votre compte a été désactivé. Contactez le support.",
-        "FORBIDDEN",
-        { status: 403 },
-      );
-    }
+    const client = await authenticateClientCredentials({
+      telephone: data.telephone,
+      password: data.password,
+    });
 
     const refreshMaxAge = data.rememberMe ? 30 * 24 * 3600 : 7 * 24 * 3600;
     const now = Math.floor(Date.now() / 1_000);
@@ -108,12 +74,8 @@ export async function POST(req: NextRequest) {
 
     log.info({ clientId: client.id }, "Client connecté");
 
-    // Ne pas retourner le hash du mot de passe
-    const { password: _password, ...clientSafe } = client;
-    void _password;
-
     const response = apiResponse.success({
-      client: clientSafe,
+      client,
       tokens: {
         accessToken,
         ...(data.tokenTransport === "json" ? { refreshToken } : {}),
@@ -127,6 +89,14 @@ export async function POST(req: NextRequest) {
     });
     return response;
   } catch (err) {
+    if (err instanceof ClientDomainError) {
+      if (err.code === "CLIENT_CREDENTIALS_INVALID") {
+        return apiResponse.unauthorized(err.message);
+      }
+      if (err.code === "CLIENT_INACTIVE") {
+        return apiResponse.error(err.message, "FORBIDDEN", { status: 403 });
+      }
+    }
     log.error({ err }, "Erreur lors de la connexion client");
     return apiResponse.internalError();
   }

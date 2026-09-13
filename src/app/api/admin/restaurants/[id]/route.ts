@@ -1,9 +1,7 @@
-import { requireAdminSession } from "@/lib/api/auth-admin";
-import {
-  AdminTransitionError,
-  validerRestaurant,
-} from "@/lib/db/mutations-admin";
-import { restaurantLogger } from "@/lib/loggers";
+import { requireAdminSession } from "@/app/api/_shared/auth-admin";
+import { validateAdminRestaurant } from "@/modules/restaurants/server";
+import { RestaurantAdminTransitionError } from "@/modules/restaurants/model";
+import { restaurantLogger } from "@/infrastructure/loggers";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -64,7 +62,7 @@ export async function PATCH(
       );
     }
 
-    const updated = await validerRestaurant(id, session.userId);
+    const updated = await validateAdminRestaurant(id, session.userId);
 
     if (!updated) {
       return NextResponse.json(
@@ -75,7 +73,7 @@ export async function PATCH(
 
     return NextResponse.json({ restaurant: updated }, { status: 200 });
   } catch (error) {
-    if (error instanceof AdminTransitionError) {
+    if (error instanceof RestaurantAdminTransitionError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
     restaurantLogger.error(

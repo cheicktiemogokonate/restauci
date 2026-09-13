@@ -15,9 +15,9 @@
 /test-results/
 
 # next.js
-/.next/
-/.next-e2e/
+/.next*/
 /out/
+/public/maplibre/
 
 # production
 /build

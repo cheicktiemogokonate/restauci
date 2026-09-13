@@ -14,21 +14,13 @@ export interface DaySchedule {
   closeTime: string;
 }
 
-export interface SocialLinks {
-  facebook: string;
-  instagram: string;
-  whatsapp: string;
-  website: string;
-  googleBusiness: string;
-  tripadvisor: string;
-}
-
 export interface GeneralInfo {
   name: string;
   description: string;
   logoUrl: string | null;
+  logoAssetId: string | null;
   bannerUrl: string | null;
-  galleryUrls: string[];
+  bannerAssetId: string | null;
 }
 
 export interface AddressContact {
@@ -46,8 +38,8 @@ export interface AddressContact {
   facebook: string;
 }
 
-import type { ServiceTypeInput } from "@/lib/actions/onboarding";
-import type { EstablishmentType } from "@/lib/onboarding/settings";
+import type { ServiceTypeInput } from "@/modules/restaurants/contracts";
+import type { EstablishmentType } from "@/modules/restaurants/presentation/onboarding-settings";
 
 export interface RestaurantSettings {
   establishmentType: EstablishmentType;
@@ -55,7 +47,6 @@ export interface RestaurantSettings {
   currency: string;
   serviceTypes: ServiceTypeInput[]; // 'dine-in', 'takeout', 'delivery', etc.
   menuLanguage: string;
-  enableOnlineBooking: boolean;
 }
 
 export interface MenuItem {
@@ -65,6 +56,7 @@ export interface MenuItem {
   price: number;
   category: string;
   photoUrl: string | null;
+  photoAssetId: string | null;
 }
 
 export interface RestaurantConfig {
@@ -72,7 +64,6 @@ export interface RestaurantConfig {
   address: AddressContact;
   schedule: DaySchedule[];
   exceptions: SpecialHourException[];
-  socials: SocialLinks;
   settings: RestaurantSettings;
   menu: MenuItem[];
 }

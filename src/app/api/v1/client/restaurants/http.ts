@@ -1,4 +1,4 @@
-import { apiResponse } from "@/lib/api/response";
+import { apiResponse } from "@/app/api/_shared/response";
 import { RestaurantMarketError } from "@/modules/restaurants/model";
 
 export function restaurantMarketErrorResponse(error: RestaurantMarketError) {

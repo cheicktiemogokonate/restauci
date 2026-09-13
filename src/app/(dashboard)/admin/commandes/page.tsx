@@ -1,4 +1,4 @@
-import { getAdminSession } from "@/lib/auth/get-admin-session";
+import { getAdminSession } from "@/modules/auth/server";
 import { redirect } from "next/navigation";
 
 export default async function AdminCommandesPage({

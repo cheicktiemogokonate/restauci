@@ -1,7 +1,5 @@
-import { db } from "@/lib/db";
-import { restaurants } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
 import type { MetadataRoute } from "next";
+import { listPublicRestaurantSitemapEntries } from "@/modules/restaurants/server";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -16,10 +14,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
   let slugs: Array<{ slug: string; updatedAt: Date }> = [];
   try {
-    slugs = await db
-      .select({ slug: restaurants.slug, updatedAt: restaurants.updatedAt })
-      .from(restaurants)
-      .where(and(eq(restaurants.actif, true), eq(restaurants.enLigne, true)));
+    slugs = await listPublicRestaurantSitemapEntries();
   } catch {
     // Le sitemap statique reste disponible pendant une indisponibilité DB.
   }

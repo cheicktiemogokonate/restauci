@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { registerSchema } from "@/lib/validations/auth";
+import { registerSchema } from "@/modules/auth/contracts";
 import { partnerActivitySchema } from "@/modules/partners/contracts";
 
 const registration = {

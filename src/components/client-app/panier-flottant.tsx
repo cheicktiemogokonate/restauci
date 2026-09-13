@@ -1,8 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { usePanierStore } from "@/lib/client-app/stores/panier-store";
-import { formatPrix } from "@/lib/utils/format";
+import { usePanierStore } from "@/modules/clients/presentation/client-app/stores/panier-store";
+import { formatPrix } from "@/shared/format";
 import { ShoppingBag } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";

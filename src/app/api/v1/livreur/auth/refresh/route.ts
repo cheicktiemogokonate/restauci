@@ -3,15 +3,15 @@ import {
   DRIVER_REFRESH_COOKIE,
   applyDriverRefreshTransport,
   clearDriverRefreshCookie,
-} from "@/lib/api/driver-session-cookie";
+} from "@/app/api/_shared/driver-session-cookie";
 import {
   driverRefreshRequestSchema,
   resolveDriverRefreshToken,
-} from "@/lib/api/driver-token-transport";
-import { deliveryErrorResponse } from "@/lib/api/delivery-response";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { createLogger } from "@/lib/logger";
+} from "@/app/api/_shared/driver-token-transport";
+import { deliveryErrorResponse } from "@/app/api/_shared/delivery-response";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { createLogger } from "@/infrastructure/logger";
 import { refreshDriverSession } from "@/modules/deliveries/server";
 
 const log = createLogger("v1-driver-refresh");

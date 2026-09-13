@@ -18,9 +18,9 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { EASE_OUT } from "@/lib/ease";
-import { useHoverCapable } from "@/lib/hooks/use-hover-capable";
-import { cn } from "@/lib/utils";
+import { EASE_OUT } from "@/shared/ui/motion";
+import { useHoverCapable } from "@/shared/ui/use-hover-capable";
+import { cn } from "@/shared/ui/cn";
 
 type Side = "top" | "right" | "bottom" | "left";
 

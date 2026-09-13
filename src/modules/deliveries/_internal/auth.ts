@@ -6,7 +6,7 @@ import {
   createSessionId,
   signDriverAccessToken,
   signDriverRefreshToken,
-} from "@/infrastructure/auth/driver-tokens";
+} from "@/infrastructure/auth/tokens";
 
 const DRIVER_PASSWORD_COST = 12;
 const DRIVER_ACCESS_EXPIRES_IN_SECONDS = 15 * 60;

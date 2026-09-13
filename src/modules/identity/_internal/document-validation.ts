@@ -56,7 +56,7 @@ export async function validateIdentityDocument(
       return null;
     }
   } else {
-    const { sanitizeImage } = await import("@/lib/media/image");
+    const { sanitizeImage } = await import("@/modules/media/server");
     const sanitized = await sanitizeImage(buffer, detected.contentType);
     if (!sanitized) return null;
     sanitizedBody = sanitized.body;

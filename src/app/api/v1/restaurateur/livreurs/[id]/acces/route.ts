@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { requireRestaurateurSession } from "@/lib/api/auth-mobile";
-import { deliveryErrorResponse } from "@/lib/api/delivery-response";
-import { apiResponse } from "@/lib/api/response";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, mobileApiLimiter } from "@/lib/rate-limit";
+import { requireRestaurateurSession } from "@/app/api/_shared/auth-mobile";
+import { deliveryErrorResponse } from "@/app/api/_shared/delivery-response";
+import { apiResponse } from "@/app/api/_shared/response";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, mobileApiLimiter } from "@/infrastructure/rate-limit";
 import { resetDriverCredentials } from "@/modules/deliveries/server";
 
 const log = createLogger("v1-restaurant-driver-access");

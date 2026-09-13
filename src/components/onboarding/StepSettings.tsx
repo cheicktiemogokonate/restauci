@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   RESTAURANT_TYPE_OPTIONS,
   SERVICE_TYPE_OPTIONS,
-} from "@/lib/onboarding/settings";
+} from "@/modules/restaurants/presentation/onboarding-settings";
 import { Check, ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { useState } from "react";
 import type { RestaurantSettings } from "./types";

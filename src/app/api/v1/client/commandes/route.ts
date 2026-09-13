@@ -1,29 +1,27 @@
-import { getClientSession } from "@/lib/api/auth-client";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody, validateSearchParams } from "@/lib/api/validate";
+import { getClientSession } from "@/app/api/_shared/auth-client";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody, validateSearchParams } from "@/app/api/_shared/validate";
 import {
   buildPaginationMeta,
   parseLimit,
   parsePage,
-} from "@/lib/config/pagination";
-import { db } from "@/lib/db";
-import { commandes } from "@/lib/db/schema";
-import { createLogger } from "@/lib/logger";
+} from "@/shared/pagination";
+import { createLogger } from "@/infrastructure/logger";
 import {
   createRestaurantOrder,
+  listClientOrders,
   RestaurantOrderError,
 } from "@/modules/orders/server";
-import { scheduleRestaurantOrderCreatedEffects } from "@/lib/orders/restaurant-order-effects";
+import { scheduleRestaurantOrderCreatedEffects } from "@/modules/orders/server";
 import { createRestaurantOrderSchema } from "@/modules/orders/contracts";
 import {
   checkRateLimit,
   clientApiLimiter,
   commandeClientLimiter,
-} from "@/lib/rate-limit";
-import { and, count, desc, eq, ilike } from "drizzle-orm";
+} from "@/infrastructure/rate-limit";
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { initializePreparedPaystackPayment } from "@/modules/transactions/payment-service";
+import { initializePreparedPaystackPayment } from "@/modules/payments/server";
 import { PaystackGatewayError } from "@/infrastructure/paystack/gateway";
 import { restaurantOrderErrorResponse } from "./order-error-response";
 import { recordDiscoveryConversion } from "@/modules/discovery/server";
@@ -150,41 +148,15 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (queryError) return queryError;
   const page = parsePage(query.page);
   const limit = parseLimit(query.limit, 10);
-  const offset = (page - 1) * limit;
 
   try {
-    const conditions = [eq(commandes.clientId, (await session).clientId)];
-    if (query?.search) {
-      conditions.push(ilike(commandes.numero, `%${query.search}%`));
-    }
-    const whereClause = and(...conditions);
-
-    const [items, [{ total }]] = await Promise.all([
-      db
-        .select({
-          id: commandes.id,
-          numero: commandes.numero,
-          statut: commandes.statut,
-          total: commandes.total,
-          modeCommande: commandes.modeCommande,
-          items: commandes.items,
-          createdAt: commandes.createdAt,
-          restaurantId: commandes.restaurantId,
-        })
-        .from(commandes)
-        .where(whereClause)
-        .orderBy(desc(commandes.createdAt))
-        .limit(limit)
-        .offset(offset),
-
-      db
-        .select({ total: count() })
-        .from(commandes)
-        .where(whereClause),
-    ]);
+    const { items, total } = await listClientOrders(
+      (await session).clientId,
+      { search: query.search, page, limit },
+    );
 
     return apiResponse.success(items, {
-      meta: buildPaginationMeta(Number(total), page, limit),
+      meta: buildPaginationMeta(total, page, limit),
     });
   } catch (err) {
     log.error(

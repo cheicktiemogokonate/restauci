@@ -1,22 +1,20 @@
-import { getClientIp } from "@/lib/api/client-ip";
+import { getClientIp } from "@/shared/http/client-ip";
 import {
   consumeTokenOnce,
   isOwnerSessionRevoked,
   isSessionRevoked,
   revokeSession,
-} from "@/lib/api/token-blacklist";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { apiLimiter, checkRateLimit } from "@/lib/rate-limit";
+} from "@/infrastructure/auth/revocation";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { apiLimiter, checkRateLimit } from "@/infrastructure/rate-limit";
 import {
   signPartnerAccessToken,
   signPartnerRefreshToken,
   verifyPartnerRefreshToken,
-} from "@/lib/auth";
-import { createLogger } from "@/lib/logger";
-import { eq } from "drizzle-orm";
+} from "@/modules/auth/server";
+import { getActivePartnerUserIdentity } from "@/modules/auth/server";
+import { createLogger } from "@/infrastructure/logger";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -95,13 +93,9 @@ export async function POST(request: NextRequest) {
 
     // 3. Le rôle et le statut du compte viennent TOUJOURS de la base :
     //    suspension, rétrogradation ou suppression prennent effet immédiat.
-    const [user] = await db
-      .select({ id: users.id, role: users.role, suspendu: users.suspendu })
-      .from(users)
-      .where(eq(users.id, String(payload.userId)))
-      .limit(1);
+    const user = await getActivePartnerUserIdentity(String(payload.userId));
 
-    if (!user || user.suspendu) {
+    if (!user) {
       return apiResponse.forbidden("Compte suspendu ou introuvable");
     }
 

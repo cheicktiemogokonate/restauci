@@ -1,8 +1,8 @@
 export const revalidate = 0;
 
 import type { Metadata } from "next";
-import { ClientRegisterForm } from "@/components/client-app/client-register-form";
-import { ClientAuthShell } from "@/components/client-app/client-auth-shell";
+import { ClientRegisterForm } from "@/modules/clients/presentation/client-register-form";
+import { ClientAuthShell } from "@/modules/clients/presentation/client-auth-shell";
 import { Suspense } from "react";
 
 export const metadata: Metadata = {

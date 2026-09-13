@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { locationSampleSchema } from "@/modules/service-markets/contracts";
+import { locationSampleSchema } from "@/shared/geo";
+import { RESTAURANT_ORDER_STATUSES } from "./model";
 
 const orderBaseSchema = z.object({
   restaurantSlug: z.string().trim().min(1).max(255),
@@ -88,3 +89,115 @@ export type CreateRestaurantOrderHttpInput = z.infer<
 export type PrevalidateRestaurantOrderInput = z.infer<
   typeof prevalidateRestaurantOrderSchema
 >;
+
+export const restaurantOrderStatusUpdateSchema = z
+  .object({
+    statut: z.enum([
+      "recue",
+      "en_preparation",
+      "prete",
+      "servie",
+      "annulee",
+    ]),
+  })
+  .strict();
+
+export type RestaurantOrderStatusUpdateInput = z.infer<
+  typeof restaurantOrderStatusUpdateSchema
+>;
+
+export type CreateRestaurantOrderInput = Omit<
+  CreateRestaurantOrderHttpInput,
+  "idempotencyKey" | "discoveryToken" | "paymentReturnChannel"
+>;
+
+export const restaurantOrderListSchema = z
+  .object({
+    statut: z.enum(RESTAURANT_ORDER_STATUSES).optional(),
+    modeCommande: z.enum(["sur_place", "livraison", "emporter"]).optional(),
+    search: z.string().trim().max(100).optional(),
+    dateDebut: z.date().optional(),
+    dateFin: z.date().optional(),
+    lifecycle: z.enum(["visible", "history", "all"]).default("visible"),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).max(100).default(20),
+  })
+  .strict();
+
+export type RestaurantOrderListInput = z.input<typeof restaurantOrderListSchema>;
+
+export const clientOrderListSchema = z
+  .object({
+    search: z.string().trim().min(3).max(80).optional(),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).max(50).default(10),
+  })
+  .strict();
+
+export type ClientOrderListInput = z.input<typeof clientOrderListSchema>;
+
+export interface RestaurantOrderActor {
+  type: "restaurant" | "client" | "delivery" | "system";
+  id: string;
+  restaurantId?: string;
+  clientId?: string;
+}
+
+export interface TransitionRestaurantOrderCommand {
+  orderId: string;
+  targetStatus: (typeof RESTAURANT_ORDER_STATUSES)[number];
+  allowedPreviousStatuses?: (typeof RESTAURANT_ORDER_STATUSES)[number][];
+  allowDeliveryCompletion?: boolean;
+  now?: Date;
+}
+
+export interface LegacyRestaurantOrderTransitionInput {
+  id: string;
+  targetStatus: (typeof RESTAURANT_ORDER_STATUSES)[number];
+  restaurantId?: string;
+  clientId?: string;
+  allowedPreviousStatuses?: (typeof RESTAURANT_ORDER_STATUSES)[number][];
+  allowDeliveryCompletion?: boolean;
+  now?: Date;
+}
+
+export const adminRestaurantOrdersSchema = z
+  .object({
+    restaurantId: z.uuid(),
+    statut: z.enum(RESTAURANT_ORDER_STATUSES).optional(),
+    dateDebut: z.date().optional(),
+    dateFin: z.date().optional(),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).max(100).default(20),
+  })
+  .strict();
+
+export type AdminRestaurantOrdersInput = z.input<
+  typeof adminRestaurantOrdersSchema
+>;
+
+export const ADMIN_ORDER_SUPPORT_SIGNALS = [
+  "stalled",
+  "payment_failed",
+  "refunded",
+  "cancelled_today",
+] as const;
+
+export type AdminOrderSupportSignal =
+  (typeof ADMIN_ORDER_SUPPORT_SIGNALS)[number];
+
+export const adminOrderSupportSchema = z
+  .object({
+    restaurantId: z.uuid().optional(),
+    restaurantSearch: z.string().trim().max(100).optional(),
+    statut: z.enum(RESTAURANT_ORDER_STATUSES).optional(),
+    search: z.string().trim().max(100).optional(),
+    startDate: z.date().optional(),
+    endDate: z.date().optional(),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).max(100).default(25),
+    signal: z.enum(ADMIN_ORDER_SUPPORT_SIGNALS).optional(),
+  })
+  .strict();
+
+export type AdminOrderSupportInput = z.output<typeof adminOrderSupportSchema>;

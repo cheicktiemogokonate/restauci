@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { saveResidenceSchema } from "./contracts";
 import {
+  consumesResidencePublicationQuota,
   evaluateResidenceVisibility,
   getResidenceModerationStatus,
   getResidenceReservationTemporalStatus,
@@ -179,5 +180,34 @@ describe("residence public visibility", () => {
         moderationStatus: "suspended",
       }).blockers,
     ).toEqual(["residence_suspended"]);
+  });
+
+  it("ne consomme le quota que si la résidence est publiée et réellement visible", () => {
+    const quotaCandidate = {
+      publicationIntent: true,
+      publicationEnabled: true,
+      moderationStatus: "approved" as const,
+      ownerIdentityStatus: "verified" as const,
+      destinationStatus: "eligible" as const,
+    };
+    expect(consumesResidencePublicationQuota(quotaCandidate)).toBe(true);
+    expect(
+      consumesResidencePublicationQuota({
+        ...quotaCandidate,
+        publicationEnabled: false,
+      }),
+    ).toBe(false);
+    expect(
+      consumesResidencePublicationQuota({
+        ...quotaCandidate,
+        moderationStatus: "suspended",
+      }),
+    ).toBe(false);
+    expect(
+      consumesResidencePublicationQuota({
+        ...quotaCandidate,
+        ownerIdentityStatus: "pending",
+      }),
+    ).toBe(false);
   });
 });

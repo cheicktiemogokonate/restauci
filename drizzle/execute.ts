@@ -1,4 +1,4 @@
-// import { pool } from "../src/lib/db/index";
+// import { db } from "../src/infrastructure/db/index";
 
 import { readFileSync } from "fs";
 import { resolve } from "path";
@@ -32,7 +32,7 @@ async function main() {
   }
 }
 main();
-// import { env } from "@/lib/env";
+// import { env } from "@/infrastructure/env";
 // import { Pool } from "pg";
 
 // export const migrationPool = new Pool({

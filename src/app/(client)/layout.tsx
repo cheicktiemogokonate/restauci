@@ -1,6 +1,6 @@
 "use client";
 
-import { useInitAuth } from "@/lib/client-app/hooks/use-init-auth";
+import { useInitAuth } from "@/modules/clients/presentation/client-app/hooks/use-init-auth";
 
 export default function ClientLayout({
   children,

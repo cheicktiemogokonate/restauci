@@ -1,10 +1,10 @@
-import { getClientIp } from "@/lib/api/client-ip";
+import { getClientIp } from "@/shared/http/client-ip";
 import {
   AUTH_COOKIE_NAME,
   AUTH_TOKEN_AUDIENCE,
   AUTH_TOKEN_ISSUER,
-} from "@/lib/auth/tokens";
-import { env } from "@/lib/env";
+} from "@/infrastructure/auth/tokens";
+import { env } from "@/infrastructure/env";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { jwtVerify } from "jose";
@@ -172,6 +172,13 @@ function nextPageResponse(req: NextRequest): NextResponse {
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Les consommateurs Vercel Queues sont privés et le callback du SDK valide
+  // lui-même l'enveloppe signée. Éviter ici le cookie et Redis, qui ne font pas
+  // partie du protocole d'invocation interne de la file.
+  if (pathname.startsWith("/api/queues/")) {
+    return NextResponse.next();
+  }
+
   // --- Rate limiting global sur les routes API ---
   if (pathname.startsWith("/api/")) {
     const ip = getClientIp(req);
@@ -297,6 +304,15 @@ export async function proxy(req: NextRequest) {
 
     if (pathname.startsWith("/admin") && role !== "admin") {
       return NextResponse.redirect(new URL("/partenaire", req.url));
+    }
+
+    if (
+      pathname.startsWith("/api/admin/identity/documents/") ||
+      pathname.startsWith("/api/partner/identity/documents/")
+    ) {
+      // La ressource binaire porte sa propre CSP sandbox et doit pouvoir être
+      // intégrée par une page Toutci de même origine.
+      return NextResponse.next();
     }
 
     return nextPageResponse(req);

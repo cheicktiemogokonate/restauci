@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { env } from "@/lib/env";
-import { getClientIp } from "@/lib/api/client-ip";
-import { redis } from "@/lib/cache/redis";
-import { createLogger } from "@/lib/logger";
+import { env } from "@/infrastructure/env";
+import { getClientIp } from "@/shared/http/client-ip";
+import { redis } from "@/infrastructure/cache/redis";
+import { createLogger } from "@/infrastructure/logger";
 import { verifyPaystackSignature } from "@/infrastructure/paystack/signature";
-import { confirmProviderPayment, ProviderPaymentError } from "@/modules/transactions/payment-service";
+import { confirmProviderPayment, ProviderPaymentError } from "@/modules/payments/server";
 import { fromPaystackSubunit, mapPaystackStatus, mapReliablePaystackNetwork } from "@/infrastructure/paystack/mapper";
-import { schedulePaidRestaurantOrderEffects } from "@/lib/orders/restaurant-order-effects";
+import { schedulePaidRestaurantOrderEffects } from "@/modules/orders/server";
 import {
   confirmResidenceReservationPaymentInTransaction,
   sendConfirmedResidenceReservationPush,
-} from "@/modules/residences/payment-lifecycle";
+} from "@/modules/residences/server";
 
 export const runtime = "nodejs";
 

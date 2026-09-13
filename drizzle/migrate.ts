@@ -1,5 +1,5 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-// import { db, pool } from "../src/lib/db/index";
+// import { db } from "../src/infrastructure/db/index";
 
 import { drizzle } from "drizzle-orm/node-postgres";
 import { dirname, resolve } from "path";

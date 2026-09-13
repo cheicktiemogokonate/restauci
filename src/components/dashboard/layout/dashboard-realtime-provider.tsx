@@ -64,6 +64,10 @@ export function useRealtimeContext(): RealtimeContextValue {
   return context;
 }
 
+export function useOptionalRealtimeContext(): RealtimeContextValue | null {
+  return useContext(RealtimeContext);
+}
+
 // ─── Audio ──────────────────────────────────────────────────────────────────
 
 let audioCtx: AudioContext | null = null;

@@ -1,11 +1,13 @@
-import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { getMyRestaurant } from "@/lib/db/queries";
-import { restaurants } from "@/lib/db/schema";
-import { restaurantLogger } from "@/lib/loggers";
-import { restaurantUpdateSchema } from "@/lib/validations/restaurant";
-import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/modules/auth/server";
+import { restaurantLogger } from "@/infrastructure/loggers";
+import { getPartnerAccountByUserId } from "@/modules/partners/server";
+import {
+  changeRestaurantLocation,
+  getRestaurantByPartnerAccountId,
+  updateRestaurantProfile,
+} from "@/modules/restaurants/server";
+import { restaurantUpdateSchema } from "@/modules/restaurants/contracts";
 
 export async function PATCH(
   request: NextRequest,
@@ -13,36 +15,22 @@ export async function PATCH(
 ) {
   try {
     const session = await getCurrentUser();
-    if (!session) {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-    }
-
+    if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+    const account = await getPartnerAccountByUserId(session.userId);
+    const restaurant = account
+      ? await getRestaurantByPartnerAccountId(account.id)
+      : null;
     const { id } = await context.params;
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      restaurantLogger.warn(
-        { userId: session.userId, reason: "invalid json body" },
-        "Restaurant update request with invalid JSON",
-      );
+    if (!restaurant || restaurant.id !== id) {
       return NextResponse.json(
-        { error: "Corps de requête invalide — JSON attendu." },
-        { status: 400 },
+        { error: "Restaurant introuvable ou accès refusé." },
+        { status: 403 },
       );
     }
 
+    const body = await request.json().catch(() => null);
     const validation = restaurantUpdateSchema.safeParse(body);
-
     if (!validation.success) {
-      restaurantLogger.warn(
-        {
-          userId: session.userId,
-          reason: "invalid restaurant update format",
-          errors: validation.error.flatten().fieldErrors,
-        },
-        "Restaurant update validation failed",
-      );
       return NextResponse.json(
         {
           error: "Données invalides",
@@ -52,44 +40,38 @@ export async function PATCH(
       );
     }
 
-    const restaurant = await getMyRestaurant(session.userId);
-    if (!restaurant || restaurant.id !== id) {
-      return NextResponse.json(
-        { error: "Restaurant introuvable ou accès refusé." },
-        { status: 403 },
-      );
+    const { adresse, latitude, longitude, pays, ville, ...profile } =
+      validation.data;
+    const locationTouched =
+      adresse !== undefined || latitude !== undefined || longitude !== undefined;
+    if (locationTouched) {
+      if (
+        adresse === undefined ||
+        latitude === undefined ||
+        longitude === undefined
+      ) {
+        return NextResponse.json(
+          { error: "L'adresse et ses coordonnées doivent être modifiées ensemble." },
+          { status: 400 },
+        );
+      }
+      await changeRestaurantLocation({
+        restaurantId: restaurant.id,
+        adresse,
+        latitude,
+        longitude,
+        pays: pays || undefined,
+      });
     }
-
-    const data = validation.data;
-    const [updated] = await db
-      .update(restaurants)
-      .set({
-        nom: data.nom,
-        description: data.description ?? null,
-        telephone: data.telephone,
-        adresse: data.adresse,
-        fraisLivraison: data.fraisLivraison,
-        modesCommande: data.modesCommande,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        logoUrl: data.logoUrl ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(restaurants.id, id))
-      .returning();
-
+    await updateRestaurantProfile(
+      restaurant.id,
+      ville === undefined ? profile : { ...profile, ville },
+      { ownerUserId: session.userId },
+    );
+    const updated = await getRestaurantByPartnerAccountId(account!.id);
     return NextResponse.json({ restaurant: updated }, { status: 200 });
   } catch (error) {
-    restaurantLogger.error(
-      {
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack:
-          process.env.NODE_ENV === "development" && error instanceof Error
-            ? error.stack
-            : undefined,
-      },
-      "Restaurant update failed",
-    );
+    restaurantLogger.error({ error }, "restaurant update failed");
     return NextResponse.json(
       { error: "Une erreur interne est survenue." },
       { status: 500 },

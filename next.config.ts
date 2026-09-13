@@ -122,6 +122,22 @@ const nextConfig: NextConfig = {
             : []),
         ],
       },
+      {
+        // Les justificatifs KYC assainis sont rendus dans un aperçu intégré
+        // authentifié. Cette règle plus spécifique doit rester après la règle
+        // globale afin que Next remplace DENY / frame-ancestors 'none'.
+        source: "/api/:audience(admin|partner)/identity/documents/:id",
+        headers: [
+          {
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
+          },
+          {
+            key: "Content-Security-Policy",
+            value: "sandbox; frame-ancestors 'self'",
+          },
+        ],
+      },
     ];
   },
 };

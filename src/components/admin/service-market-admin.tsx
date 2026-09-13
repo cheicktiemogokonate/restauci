@@ -17,7 +17,7 @@ import {
   createServiceMarketVersionAction,
   publishServiceMarketVersionAction,
   setServiceMarketCapabilityAction,
-} from "@/lib/actions/admin-service-markets";
+} from "@/app/_actions/admin-service-markets";
 import {
   ServiceMarketBoundaryMap,
   type ServiceMarketBoundaryFeature,

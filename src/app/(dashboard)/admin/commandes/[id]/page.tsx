@@ -1,11 +1,11 @@
-import { CommandeItemsAdminTable } from "@/components/admin/commande-items-admin-table";
+import { CommandeItemsAdminTable } from "@/modules/orders/presentation/commande-items-admin-table";
 import { StatusBadge } from "@/components/admin/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { AdminPage } from "@/components/admin/ui/admin-page";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { getCommandeStatusMeta } from "@/lib/config/commande-status";
-import { getCommandeDetailAdmin } from "@/lib/db/queries-admin";
-import { formatDate, formatHeure, formatPrix } from "@/lib/utils/format";
+import { getAdminSession } from "@/modules/auth/server";
+import { getCommandeStatusMeta } from "@/modules/orders/presentation/order-status-meta";
+import { getAdminOrderDetail } from "@/modules/orders/server";
+import { formatDate, formatHeure, formatPrix } from "@/shared/format";
 import { ArrowLeft, CreditCard, Store, UserRound } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -24,7 +24,7 @@ export default async function AdminCommandeDetailPage({
 }) {
   await getAdminSession();
   const { id } = await params;
-  const commande = await getCommandeDetailAdmin(id);
+  const commande = await getAdminOrderDetail(id);
   if (!commande) notFound();
 
   const statut = getCommandeStatusMeta(commande.statut);

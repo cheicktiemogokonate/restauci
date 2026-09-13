@@ -8,7 +8,7 @@ describe("service du catalogue discovery", () => {
   );
   const server = readFileSync("src/modules/subscriptions/server.ts", "utf8");
   const actions = readFileSync(
-    "src/lib/actions/admin-subscriptions.ts",
+    "src/app/_actions/admin-subscriptions.ts",
     "utf8",
   );
 

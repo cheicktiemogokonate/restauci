@@ -1,27 +1,28 @@
-import { getClientIp } from "@/lib/api/client-ip";
-import { apiResponse } from "@/lib/api/response";
-import { validateSearchParams } from "@/lib/api/validate";
-import { db } from "@/lib/db";
-import { commandes } from "@/lib/db/schema";
-import { getRestaurantBySlug } from "@/lib/db/queries";
+import { getClientIp } from "@/shared/http/client-ip";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateSearchParams } from "@/app/api/_shared/validate";
 import {
   calculerItineraire,
   calculerTempsAttente,
   distanceHaversine,
   estimerTempsTrajet,
-} from "@/lib/geo";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, clientApiLimiter } from "@/lib/rate-limit";
-import { and, count, eq, inArray } from "drizzle-orm";
+} from "@/infrastructure/geocoding";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, clientApiLimiter } from "@/infrastructure/rate-limit";
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { toPublicRestaurantDTO } from "@/lib/restaurants/public-dto";
-import { env } from "@/lib/env";
+import { env } from "@/infrastructure/env";
 import {
   getServiceMarketCapability,
   resolveServiceMarketAtCoordinates,
 } from "@/modules/service-markets/server";
 import { evaluateRestaurantOrderability } from "@/modules/restaurants/model";
+import {
+  getPublicRestaurantBySlug,
+  getRestaurantOrderCandidateBySlug,
+  getRestaurantOrderContext,
+} from "@/modules/restaurants/server";
+import { getRestaurantActiveOrderCount } from "@/modules/orders/server";
 
 const log = createLogger("v1-client-restaurant-detail");
 
@@ -55,9 +56,13 @@ export async function GET(
 
   try {
     // Restaurant de base (caché 1h)
-    const restaurant = await getRestaurantBySlug(slug);
-
-    if (!restaurant) return apiResponse.notFound("Restaurant");
+    const [restaurant, candidate] = await Promise.all([
+      getPublicRestaurantBySlug(slug),
+      getRestaurantOrderCandidateBySlug(slug),
+    ]);
+    if (!restaurant || !candidate) return apiResponse.notFound("Restaurant");
+    const orderContext = await getRestaurantOrderContext(candidate.id);
+    if (!orderContext) return apiResponse.notFound("Restaurant");
 
     let sameServiceMarket: boolean | null = null;
     if (query?.lat !== undefined && query.lng !== undefined) {
@@ -66,36 +71,28 @@ export async function GET(
         lng: query.lng,
       });
       sameServiceMarket =
-        resolution.status === "resolved" && restaurant.serviceMarketId !== null
-          ? resolution.market.id === restaurant.serviceMarketId
+        resolution.status === "resolved" && orderContext.serviceMarketId !== null
+          ? resolution.market.id === orderContext.serviceMarketId
           : false;
     }
-    const capability = restaurant.serviceMarketId
+    const capability = orderContext.serviceMarketId
       ? await getServiceMarketCapability(
-          restaurant.serviceMarketId,
+          orderContext.serviceMarketId,
           "restaurant",
         )
       : null;
     const orderability = evaluateRestaurantOrderability({
-      restaurant,
+      restaurant: orderContext,
       policyMode: env.RESTAURANT_GEO_POLICY_MODE,
       hasMarketAssignment: Boolean(
-        restaurant.serviceMarketId && restaurant.serviceMarketVersionId,
+        orderContext.serviceMarketId && orderContext.serviceMarketVersionId,
       ),
       sameServiceMarket,
       restaurantCapabilityActive: capability?.status === "active",
     });
 
     // Nombre de commandes en cours (temps réel — pas caché)
-    const [{ commandesEnCours }] = await db
-      .select({ commandesEnCours: count() })
-      .from(commandes)
-      .where(
-        and(
-          eq(commandes.restaurantId, restaurant.id),
-          inArray(commandes.statut, ["recue", "en_preparation"]),
-        ),
-      );
+    const commandesEnCours = await getRestaurantActiveOrderCount(restaurant.id);
 
     // Géolocalisation (si coordonnées client fournies)
     let distanceKm: number | null = null;
@@ -133,7 +130,7 @@ export async function GET(
     }
 
     return apiResponse.success({
-      ...toPublicRestaurantDTO(restaurant),
+      ...restaurant,
       sameServiceMarket,
       orderable: orderability.orderable,
       orderabilityReason: orderability.reason,

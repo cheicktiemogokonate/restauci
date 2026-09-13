@@ -13,20 +13,25 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { persistAuditLog } from "@/lib/audit";
-import { db } from "@/lib/db";
+import { db } from "@/infrastructure/db";
 import {
   partnerAccounts,
   residenceImages,
   residences,
   users,
-} from "@/lib/db/schema";
+} from "@/infrastructure/db/schema";
+import { getPartnerAccountById } from "@/modules/partners/server";
 import {
   transactionalDb,
   type DbExecutor,
   type TransactionExecutor,
-} from "@/lib/db/transaction";
-import { persistNotification } from "@/lib/notifications";
+} from "@/infrastructure/db/transaction";
+import { persistNotification } from "@/modules/notifications/server";
+import {
+  attachPublicMediaAsset,
+  getAttachedPublicMediaAssetByUrl,
+  releasePublicMediaAssets,
+} from "@/modules/media/server";
 import type {
   AdminResidenceDetailsDTO,
   AdminResidenceListItemDTO,
@@ -39,6 +44,7 @@ import {
   ResidenceDomainError,
   residenceSlugBase,
 } from "../model";
+import { persistResidenceEvent } from "./events";
 
 type ResidenceRow = typeof residences.$inferSelect;
 type ResidenceImageRow = typeof residenceImages.$inferSelect;
@@ -99,18 +105,60 @@ async function assertResidencePartner(
   partnerAccountId: string,
   executor: DbExecutor = db,
 ) {
-  const account = await executor.query.partnerAccounts.findFirst({
-    where: and(
-      eq(partnerAccounts.id, partnerAccountId),
-      eq(partnerAccounts.activityType, "residence"),
-    ),
-  });
-  if (!account) {
+  const account = await getPartnerAccountById(partnerAccountId, { executor });
+  if (!account || account.activityType !== "residence") {
     throw new ResidenceDomainError(
       "RESIDENCE_ACTIVITY_REQUIRED",
       "Ce compte partenaire n’est pas rattaché à l’activité Résidence.",
     );
   }
+  return account;
+}
+
+async function resolveResidencePhotos(
+  tx: TransactionExecutor,
+  input: {
+    ownerUserId: string;
+    residenceId: string;
+    photos: SaveResidenceInput["photos"];
+    currentUrls: ReadonlySet<string>;
+  },
+) {
+  const keepAssetIds: string[] = [];
+  const photos = [] as Array<{ url: string; altText: string | null }>;
+  for (const photo of input.photos) {
+    if (photo.assetId) {
+      const asset = await attachPublicMediaAsset(tx, {
+        assetId: photo.assetId,
+        ownerUserId: input.ownerUserId,
+        targetType: "residence_photo",
+        targetId: input.residenceId,
+      });
+      keepAssetIds.push(asset.id);
+      photos.push({ url: asset.publicUrl, altText: photo.altText });
+      continue;
+    }
+    if (!input.currentUrls.has(photo.url)) {
+      throw new ResidenceDomainError(
+        "RESIDENCE_MEDIA_INVALID",
+        "Une nouvelle photo doit être rattachée par son identifiant d’asset.",
+      );
+    }
+    const registered = await getAttachedPublicMediaAssetByUrl(tx, {
+      publicUrl: photo.url,
+      ownerUserId: input.ownerUserId,
+      targetType: "residence_photo",
+      targetId: input.residenceId,
+    });
+    if (registered) keepAssetIds.push(registered.id);
+    photos.push({ url: photo.url, altText: photo.altText });
+  }
+  await releasePublicMediaAssets(tx, {
+    targetType: "residence_photo",
+    targetId: input.residenceId,
+    keepAssetIds,
+  });
+  return photos;
 }
 
 export async function listPartnerResidenceRecords(
@@ -171,10 +219,16 @@ export async function createResidenceRecord(
   partnerAccountId: string,
   input: SaveResidenceInput,
 ) {
-  await assertResidencePartner(partnerAccountId);
+  const account = await assertResidencePartner(partnerAccountId);
   const id = crypto.randomUUID();
   const slug = `${residenceSlugBase(input.title)}-${id.slice(0, 8)}`;
   await transactionalDb.transaction(async (tx) => {
+    const resolvedPhotos = await resolveResidencePhotos(tx, {
+      ownerUserId: account.userId,
+      residenceId: id,
+      photos: input.photos,
+      currentUrls: new Set(),
+    });
     await tx.insert(residences).values({
       id,
       partnerAccountId,
@@ -190,9 +244,9 @@ export async function createResidenceRecord(
       longitude: input.longitude,
       publicationIntent: input.publicationIntent,
     });
-    if (input.photos.length > 0) {
+    if (resolvedPhotos.length > 0) {
       await tx.insert(residenceImages).values(
-        input.photos.map((photo, index) => ({
+        resolvedPhotos.map((photo, index) => ({
           residenceId: id,
           url: photo.url,
           altText: photo.altText,
@@ -200,6 +254,17 @@ export async function createResidenceRecord(
         })),
       );
     }
+    await persistResidenceEvent(tx, {
+      type: "residence.listing.created.v1",
+      action: "residence_created",
+      actor: { type: "partner", id: partnerAccountId },
+      partnerAccountId,
+      target: { type: "residence", id },
+      payload: {
+        publicationIntent: input.publicationIntent,
+        photoCount: resolvedPhotos.length,
+      },
+    });
   });
   return getPartnerResidenceRecord(partnerAccountId, id);
 }
@@ -209,7 +274,7 @@ export async function updateResidenceRecord(
   residenceId: string,
   input: SaveResidenceInput,
 ) {
-  await assertResidencePartner(partnerAccountId);
+  const account = await assertResidencePartner(partnerAccountId);
   await transactionalDb.transaction(async (tx) => {
     await tx.execute(
       sql`SELECT id FROM ${residences} WHERE id = ${residenceId} FOR UPDATE`,
@@ -220,6 +285,7 @@ export async function updateResidenceRecord(
         eq(residences.partnerAccountId, partnerAccountId),
         isNull(residences.archivedAt),
       ),
+      with: { images: true },
     });
     if (!current) {
       throw new ResidenceDomainError(
@@ -233,6 +299,12 @@ export async function updateResidenceRecord(
         "Une résidence suspendue doit d’abord être réactivée par un administrateur.",
       );
     }
+    const resolvedPhotos = await resolveResidencePhotos(tx, {
+      ownerUserId: account.userId,
+      residenceId,
+      photos: input.photos,
+      currentUrls: new Set(current.images.map((image) => image.url)),
+    });
     await tx
       .update(residences)
       .set({
@@ -257,9 +329,9 @@ export async function updateResidenceRecord(
     await tx
       .delete(residenceImages)
       .where(eq(residenceImages.residenceId, residenceId));
-    if (input.photos.length > 0) {
+    if (resolvedPhotos.length > 0) {
       await tx.insert(residenceImages).values(
-        input.photos.map((photo, index) => ({
+        resolvedPhotos.map((photo, index) => ({
           residenceId,
           url: photo.url,
           altText: photo.altText,
@@ -267,6 +339,18 @@ export async function updateResidenceRecord(
         })),
       );
     }
+    await persistResidenceEvent(tx, {
+      type: "residence.listing.updated.v1",
+      action: "residence_updated",
+      actor: { type: "partner", id: partnerAccountId },
+      partnerAccountId,
+      target: { type: "residence", id: residenceId },
+      payload: {
+        publicationIntent: input.publicationIntent,
+        photoCount: resolvedPhotos.length,
+        reviewRequired: true,
+      },
+    });
   });
   return getPartnerResidenceRecord(partnerAccountId, residenceId);
 }
@@ -378,6 +462,7 @@ export async function listAdminResidenceRecords(
   const base = db
     .select({
       id: residences.id,
+      partnerAccountId: residences.partnerAccountId,
       title: residences.title,
       city: residences.city,
       accountName: users.nom,
@@ -413,6 +498,7 @@ export async function listAdminResidenceRecords(
   ]);
   const items: AdminResidenceListItemDTO[] = rows.map((row) => ({
     id: row.id,
+    partnerAccountId: row.partnerAccountId,
     title: row.title,
     city: row.city,
     accountName: row.accountName,
@@ -496,12 +582,19 @@ export async function approveResidenceRecord(
         updatedAt: now,
       })
       .where(eq(residences.id, residenceId));
-    await persistAuditLog(tx, {
-      adminId,
+    const causal = await persistResidenceEvent(tx, {
+      type: "residence.moderation.approved.v1",
       action: "residence_validee",
-      ressourceType: "residence",
-      ressourceId: residenceId,
-      details: { title: current.title },
+      actor: { type: "admin", id: adminId },
+      partnerAccountId: current.partnerAccountId,
+      target: { type: "residence", id: residenceId },
+      notifications: [
+        {
+          recipient: { type: "user", id: current.partnerAccount.user.id },
+          template: "residence_approved",
+          destination: { type: "residence", id: residenceId },
+        },
+      ],
     });
     await persistNotification(tx, {
       userId: current.partnerAccount.user.id,
@@ -510,6 +603,7 @@ export async function approveResidenceRecord(
       message: `${current.title} a été validée par l’équipe Toutci.`,
       lienType: "residence",
       lienId: residenceId,
+      ...causal,
     });
   });
   return getAdminResidenceRecord(residenceId);
@@ -540,12 +634,20 @@ export async function rejectResidenceRecord(
       .update(residences)
       .set({ motifRejet: reason, updatedAt: new Date() })
       .where(eq(residences.id, residenceId));
-    await persistAuditLog(tx, {
-      adminId,
+    const causal = await persistResidenceEvent(tx, {
+      type: "residence.moderation.rejected.v1",
       action: "residence_rejetee",
-      ressourceType: "residence",
-      ressourceId: residenceId,
-      details: { reason },
+      actor: { type: "admin", id: adminId },
+      partnerAccountId: current.partnerAccountId,
+      target: { type: "residence", id: residenceId },
+      payload: { reasonCode: "corrections_required" },
+      notifications: [
+        {
+          recipient: { type: "user", id: current.partnerAccount.user.id },
+          template: "residence_rejected",
+          destination: { type: "residence", id: residenceId },
+        },
+      ],
     });
     await persistNotification(tx, {
       userId: current.partnerAccount.user.id,
@@ -554,6 +656,7 @@ export async function rejectResidenceRecord(
       message: reason,
       lienType: "residence",
       lienId: residenceId,
+      ...causal,
     });
   });
   return getAdminResidenceRecord(residenceId);
@@ -579,12 +682,20 @@ export async function suspendResidenceRecord(
       .update(residences)
       .set({ suspendu: true, motifSuspension: reason, updatedAt: new Date() })
       .where(eq(residences.id, residenceId));
-    await persistAuditLog(tx, {
-      adminId,
+    const causal = await persistResidenceEvent(tx, {
+      type: "residence.moderation.suspended.v1",
       action: "residence_suspendue",
-      ressourceType: "residence",
-      ressourceId: residenceId,
-      details: { reason },
+      actor: { type: "admin", id: adminId },
+      partnerAccountId: current.partnerAccountId,
+      target: { type: "residence", id: residenceId },
+      payload: { reasonCode: "administrative_suspension" },
+      notifications: [
+        {
+          recipient: { type: "user", id: current.partnerAccount.user.id },
+          template: "residence_suspended",
+          destination: { type: "residence", id: residenceId },
+        },
+      ],
     });
     await persistNotification(tx, {
       userId: current.partnerAccount.user.id,
@@ -593,6 +704,7 @@ export async function suspendResidenceRecord(
       message: reason,
       lienType: "residence",
       lienId: residenceId,
+      ...causal,
     });
   });
   return getAdminResidenceRecord(residenceId);
@@ -617,11 +729,19 @@ export async function reactivateResidenceRecord(
       .update(residences)
       .set({ suspendu: false, motifSuspension: null, updatedAt: new Date() })
       .where(eq(residences.id, residenceId));
-    await persistAuditLog(tx, {
-      adminId,
+    const causal = await persistResidenceEvent(tx, {
+      type: "residence.moderation.reactivated.v1",
       action: "residence_reactivee",
-      ressourceType: "residence",
-      ressourceId: residenceId,
+      actor: { type: "admin", id: adminId },
+      partnerAccountId: current.partnerAccountId,
+      target: { type: "residence", id: residenceId },
+      notifications: [
+        {
+          recipient: { type: "user", id: current.partnerAccount.user.id },
+          template: "residence_reactivated",
+          destination: { type: "residence", id: residenceId },
+        },
+      ],
     });
     await persistNotification(tx, {
       userId: current.partnerAccount.user.id,
@@ -630,6 +750,7 @@ export async function reactivateResidenceRecord(
       message: `${current.title} a été réactivée.`,
       lienType: "residence",
       lienId: residenceId,
+      ...causal,
     });
   });
   return getAdminResidenceRecord(residenceId);

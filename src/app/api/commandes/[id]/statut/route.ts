@@ -1,14 +1,14 @@
-import { getClientIp } from "@/lib/api/client-ip";
-import { getCurrentUser } from "@/lib/auth";
-import { commissionLedgerHttpStatus } from "@/lib/commissions/ledger";
-import { db } from "@/lib/db";
-import { updateStatutCommande } from "@/lib/db/mutations";
-import { getMyRestaurant } from "@/lib/db/queries";
-import { commandes } from "@/lib/db/schema";
-import { commandeLogger } from "@/lib/loggers";
-import { commandeStatutSchema } from "@/lib/validations/commande";
-import { canRestaurateurSetCommandeStatus } from "@/types/commandes";
-import { eq } from "drizzle-orm";
+import { getClientIp } from "@/shared/http/client-ip";
+import { getCurrentUser } from "@/modules/auth/server";
+import { commissionLedgerHttpStatus } from "@/modules/commissions/server";
+import {
+  getRestaurantOrder,
+  transitionRestaurantOrder,
+} from "@/modules/orders/server";
+import { getRestaurantByOwnerUserId } from "@/modules/restaurants/server";
+import { commandeLogger } from "@/infrastructure/loggers";
+import { restaurantOrderStatusUpdateSchema } from "@/modules/orders/contracts";
+import { canRestaurantSetOrderStatus } from "@/modules/orders/model";
 import { NextRequest, NextResponse } from "next/server";
 import {
   cancelRestaurantDeliveryOrder,
@@ -46,7 +46,7 @@ export async function PATCH(
       );
     }
 
-    const validation = commandeStatutSchema.safeParse(body);
+    const validation = restaurantOrderStatusUpdateSchema.safeParse(body);
     if (!validation.success) {
       commandeLogger.warn(
         {
@@ -70,7 +70,7 @@ export async function PATCH(
       "Status update attempt",
     );
 
-    const restaurant = await getMyRestaurant(session.userId);
+    const restaurant = await getRestaurantByOwnerUserId(session.userId);
     if (!restaurant) {
       commandeLogger.warn(
         { ip, userId: session.userId, reason: "restaurant not found" },
@@ -82,11 +82,10 @@ export async function PATCH(
       );
     }
 
-    const [existingCommande] = await db
-      .select()
-      .from(commandes)
-      .where(eq(commandes.id, commandeId))
-      .limit(1);
+    const existingCommande = await getRestaurantOrder(
+      commandeId,
+      restaurant.id,
+    );
 
     if (!existingCommande) {
       commandeLogger.warn(
@@ -99,24 +98,7 @@ export async function PATCH(
       );
     }
 
-    if (existingCommande.restaurantId !== restaurant.id) {
-      commandeLogger.warn(
-        {
-          ip,
-          commandeId,
-          restaurantId: restaurant.id,
-          commandeRestaurantId: existingCommande.restaurantId,
-          reason: "access denied",
-        },
-        "Status update failed",
-      );
-      return NextResponse.json(
-        { error: "Accès refusé pour cette commande." },
-        { status: 403 },
-      );
-    }
-
-    if (!canRestaurateurSetCommandeStatus(
+    if (!canRestaurantSetOrderStatus(
       existingCommande.modeCommande,
       validation.data.statut,
     )) {
@@ -138,10 +120,13 @@ export async function PATCH(
             { userId: session.userId, restaurantId: restaurant.id },
             commandeId,
           )
-        : await updateStatutCommande(
-            commandeId,
-            restaurant.id,
-            validation.data.statut,
+        : await transitionRestaurantOrder(
+            {
+              type: "restaurant",
+              id: session.userId,
+              restaurantId: restaurant.id,
+            },
+            { orderId: commandeId, targetStatus: validation.data.statut },
           );
 
     if (!updatedCommande) {

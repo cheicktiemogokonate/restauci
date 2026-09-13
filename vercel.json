@@ -1,6 +1,27 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "src/app/api/queues/identity-document-scan/route.ts": {
+      "maxDuration": 300,
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "identity-document-scan",
+          "retryAfterSeconds": 60,
+          "initialDelaySeconds": 0
+        }
+      ]
+    }
+  },
   "crons": [
+    {
+      "path": "/api/cron/causality",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/media-cleanup",
+      "schedule": "15 * * * *"
+    },
     {
       "path": "/api/cron/subscriptions",
       "schedule": "15 0 * * *"

@@ -8,9 +8,9 @@ import { ArrowLeft, ArrowRight, BedDouble, CalendarDays, MapPin } from "lucide-r
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { clientApi } from "@/lib/client-app/api-client";
-import { useAuthStore } from "@/lib/client-app/stores/auth-store";
-import { formatPrix } from "@/lib/utils/format";
+import { clientApi } from "@/modules/clients/presentation/client-app/api-client";
+import { useAuthStore } from "@/modules/clients/presentation/client-app/stores/auth-store";
+import { formatPrix } from "@/shared/format";
 import type { ResidenceReservationDTO } from "@/modules/residences/contracts";
 import { getResidenceReservationStatusLabel } from "@/modules/residences/presentation";
 

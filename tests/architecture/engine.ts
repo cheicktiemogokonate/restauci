@@ -96,7 +96,7 @@ export function parseSourceImports(
     content,
     ts.ScriptTarget.Latest,
     true,
-    filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    /\.[cm]?[jt]sx$/.test(filePath) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
   const imports: ImportMetadata[] = [];
 
@@ -174,7 +174,7 @@ export function walkSourceFiles(dir: string): string[] {
       if (entry.isDirectory()) {
         return EXCLUDED_DIRECTORIES.has(entry.name) ? [] : walkSourceFiles(fullPath);
       }
-      return /\.tsx?$/.test(entry.name) ? [normalizePath(fullPath)] : [];
+      return /\.[cm]?[jt]sx?$/.test(entry.name) ? [normalizePath(fullPath)] : [];
     })
     .sort();
 }

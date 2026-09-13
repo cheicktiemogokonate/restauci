@@ -4,13 +4,16 @@ import { describe, expect, it } from "vitest";
 describe("intégration discovery Restaurant", () => {
   const persistence = readFileSync("src/modules/restaurants/_internal/search.ts", "utf8");
   const service = readFileSync("src/modules/restaurants/server.ts", "utf8");
+  const discovery = readFileSync("src/modules/discovery/server.ts", "utf8");
   const map = readFileSync("src/components/client-app/restaurant-map.tsx", "utf8");
 
   it("filtre l’éligibilité avant de classer", () => {
     expect(persistence).toContain("eq(restaurants.actif, true)");
     expect(persistence).toContain("eq(restaurants.suspendu, false)");
     expect(persistence).toContain("eq(restaurants.serviceMarketId, serviceMarketId)");
-    expect(service).toContain("rankDiscoveryPage");
+    expect(service).toContain("getRestaurantDiscoveryEligibility");
+    expect(service).not.toContain("rankDiscoveryPage");
+    expect(discovery).toContain("rankDiscoveryPage");
   });
 
   it("utilise uniquement une période payante active et non expirée", () => {

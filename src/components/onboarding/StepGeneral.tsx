@@ -18,7 +18,7 @@ import React, { useState } from "react";
 import {
   RESTAURANT_TYPE_OPTIONS,
   SERVICE_TYPE_OPTIONS,
-} from "@/lib/onboarding/settings";
+} from "@/modules/restaurants/presentation/onboarding-settings";
 import type { GeneralInfo, RestaurantSettings } from "./types";
 import { Button } from "../ui/button";
 import { Input as FileInput } from "@/components/ui/input";
@@ -57,11 +57,11 @@ export default function StepGeneral({
       method: "POST",
       body: formData,
     });
-    const payload = (await response.json()) as { url?: string; error?: string };
-    if (!response.ok || !payload.url) {
+    const payload = (await response.json()) as { assetId?: string; url?: string; error?: string };
+    if (!response.ok || !payload.assetId || !payload.url) {
       throw new Error(payload.error || "Impossible d’envoyer cette image.");
     }
-    return payload.url;
+    return { assetId: payload.assetId, url: payload.url };
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,9 +70,9 @@ export default function StepGeneral({
     setIsUploading(true);
     setError(null);
     try {
-      const url = await uploadImage(file);
-      setLogoPreview(url);
-      updateData({ logoUrl: url });
+      const uploaded = await uploadImage(file);
+      setLogoPreview(uploaded.url);
+      updateData({ logoUrl: uploaded.url, logoAssetId: uploaded.assetId });
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
@@ -90,9 +90,9 @@ export default function StepGeneral({
     setIsUploading(true);
     setError(null);
     try {
-      const url = await uploadImage(file);
-      setBannerPreview(url);
-      updateData({ bannerUrl: url });
+      const uploaded = await uploadImage(file);
+      setBannerPreview(uploaded.url);
+      updateData({ bannerUrl: uploaded.url, bannerAssetId: uploaded.assetId });
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
@@ -107,10 +107,10 @@ export default function StepGeneral({
   const removeImage = (type: "logo" | "banner") => {
     if (type === "logo") {
       setLogoPreview(null);
-      updateData({ logoUrl: null });
+      updateData({ logoUrl: null, logoAssetId: null });
     } else if (type === "banner") {
       setBannerPreview(null);
-      updateData({ bannerUrl: null });
+      updateData({ bannerUrl: null, bannerAssetId: null });
     }
   };
 

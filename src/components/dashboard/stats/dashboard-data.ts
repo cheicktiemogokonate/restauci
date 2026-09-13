@@ -1,4 +1,4 @@
-import { getCommandesParJour } from "@/lib/db/queries";
+import { getRestaurantOrdersByDay } from "@/modules/restaurants/server";
 import { cache } from "react";
 
 /**
@@ -7,5 +7,5 @@ import { cache } from "react";
  * couche Redis protège les rechargements rapprochés.
  */
 export const getDashboardDailyData = cache((restaurantId: string) =>
-  getCommandesParJour(restaurantId, 7),
+  getRestaurantOrdersByDay(restaurantId, 7),
 );

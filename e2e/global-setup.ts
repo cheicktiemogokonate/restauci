@@ -1,9 +1,11 @@
 import { hash } from "bcryptjs";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { Pool } from "pg";
 
-const E2E_RESTAURATEUR_EMAIL = "e2e.restaurateur@restauci.test";
+const E2E_RESTAURATEUR_EMAIL = "phase14-paystack-restaurant@toutci.app";
+const LEGACY_E2E_RESTAURATEUR_EMAIL = "e2e.restaurateur@restauci.test";
 const E2E_RESTAURATEUR_PASSWORD = "RestauCI-e2e-2026";
 const E2E_ADMIN_EMAIL = "e2e.admin@toutci.test";
 const E2E_ADMIN_PASSWORD = "Toutci-admin-e2e-2026";
@@ -18,6 +20,8 @@ const E2E_COMMANDE_NUMERO = "E2E-CMD-RESTO-001";
 const E2E_COMMANDE_ANNULEE_NUMERO = "E2E-ANN-001";
 const E2E_COMMANDE_LIVRAISON_NUMERO = "E2E-LIV-001";
 const E2E_RESTAURANT_SLUG = "restaurant-e2e-restauci";
+const E2E_PAYSTACK_RESIDENCE_TITLE = "Résidence Paystack Phase 14";
+const E2E_PAYSTACK_RESIDENCE_SLUG = "residence-paystack-phase-14";
 
 function parseEnvFile(contents: string) {
   return Object.fromEntries(
@@ -28,7 +32,39 @@ function parseEnvFile(contents: string) {
   );
 }
 
+function minimalKycPdf() {
+  const pageContent = "BT /F1 16 Tf 28 82 Td (Toutci KYC Phase 14) Tj ET";
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 160] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${Buffer.byteLength(pageContent, "ascii")} >>\nstream\n${pageContent}\nendstream`,
+  ];
+  let document = "%PDF-1.4\n";
+  const offsets = [0];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(Buffer.byteLength(document, "ascii"));
+    document += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xref = Buffer.byteLength(document, "ascii");
+  document += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  document += offsets
+    .slice(1)
+    .map((offset) => `${offset.toString().padStart(10, "0")} 00000 n \n`)
+    .join("");
+  document += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(document, "ascii");
+}
+
 export default async function globalSetup() {
+  if (!new Set(["development", "test"]).has(
+    process.env.TOUTCI_DATA_ENVIRONMENT ?? "",
+  )) {
+    throw new Error(
+      "TOUTCI_DATA_ENVIRONMENT=development|test est requis pour créer les fixtures E2E.",
+    );
+  }
   const testEnv = parseEnvFile(await readFile(".env.test.local", "utf8"));
   const databaseUrl = testEnv.DATABASE_URL_TEST;
 
@@ -53,6 +89,15 @@ export default async function globalSetup() {
 
   try {
     await client.query("BEGIN");
+    await client.query("SET LOCAL toutci.financial_journal_maintenance = 'on'");
+
+    await client.query(
+      `UPDATE users
+       SET email = $1, updated_at = NOW()
+       WHERE email = $2
+         AND NOT EXISTS (SELECT 1 FROM users WHERE email = $1)`,
+      [E2E_RESTAURATEUR_EMAIL, LEGACY_E2E_RESTAURATEUR_EMAIL],
+    );
 
     const passwordHash = await hash(E2E_RESTAURATEUR_PASSWORD, 12);
     const userSeedId = randomUUID();
@@ -175,8 +220,201 @@ export default async function globalSetup() {
       "residence",
     );
 
+    const mainVerificationResult = await client.query<{ id: string }>(
+      `INSERT INTO partner_identity_verifications (
+        id, partner_account_id, status, legal_name, document_type,
+        document_country_code, document_expires_on, submitted_at,
+        reviewed_at, reviewed_by_admin_id, verified_at, created_at, updated_at
+      ) VALUES (
+        $1, $2, 'verified', 'Restaurateur E2E', 'national_id',
+        'CI', '2035-01-01', NOW(), NOW(), $3, NOW(), NOW(), NOW()
+      )
+       ON CONFLICT (partner_account_id) DO UPDATE SET
+         status = 'verified',
+         legal_name = EXCLUDED.legal_name,
+         document_type = EXCLUDED.document_type,
+         document_country_code = EXCLUDED.document_country_code,
+         document_expires_on = EXCLUDED.document_expires_on,
+         rejection_reason = null,
+         submitted_at = NOW(),
+         reviewed_at = NOW(),
+         reviewed_by_admin_id = EXCLUDED.reviewed_by_admin_id,
+         verified_at = NOW(),
+         updated_at = NOW()
+       RETURNING id`,
+      [randomUUID(), mainPartnerAccountId, adminId],
+    );
+    const mainVerificationId = mainVerificationResult.rows[0]?.id;
+    if (!mainVerificationId) {
+      throw new Error("Impossible de préparer le dossier KYC E2E.");
+    }
+
+    if (process.env.E2E_KYC_INLINE === "true") {
+      const localEnv = parseEnvFile(await readFile(".env.local", "utf8"));
+      const accountId = localEnv.R2_ACCOUNT_ID;
+      const accessKeyId = localEnv.R2_KYC_ACCESS_KEY_ID;
+      const secretAccessKey = localEnv.R2_KYC_SECRET_ACCESS_KEY;
+      const bucket = localEnv.R2_KYC_BUCKET_NAME;
+      if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
+        throw new Error("Configuration R2 KYC requise pour la preuve inline E2E.");
+      }
+      const body = await readFile("public/favicon-96x96.png");
+      const sha256 = createHash("sha256").update(body).digest("hex");
+      const prefix = `identity/e2e/phase14/${mainVerificationId}`;
+      const storageKey = `${prefix}/front-quarantine.png`;
+      const cleanStorageKey = `${prefix}/front-clean.png`;
+      const storage = new S3Client({
+        region: "auto",
+        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+        credentials: { accessKeyId, secretAccessKey },
+      });
+      for (const key of [storageKey, cleanStorageKey]) {
+        await storage.send(new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: body,
+          ContentType: "image/png",
+          CacheControl: "private, no-store",
+        }));
+      }
+      await client.query(
+        `INSERT INTO partner_identity_documents (
+          id, verification_id, side, storage_key, content_type, size_bytes,
+          sha256, scan_status, clean_storage_key, clean_content_type,
+          clean_size_bytes, clean_sha256, scan_attempts, scan_completed_at,
+          scan_engine, scan_result, uploaded_at
+        ) VALUES (
+          $1, $2, 'front', $3, 'image/png', $4, $5, 'clean', $6,
+          'image/png', $4, $5, 1, NOW(), 'phase14-e2e-fixture', 'clean', NOW()
+        )
+        ON CONFLICT (verification_id, side) DO UPDATE SET
+          storage_key = EXCLUDED.storage_key,
+          content_type = EXCLUDED.content_type,
+          size_bytes = EXCLUDED.size_bytes,
+          sha256 = EXCLUDED.sha256,
+          scan_status = EXCLUDED.scan_status,
+          clean_storage_key = EXCLUDED.clean_storage_key,
+          clean_content_type = EXCLUDED.clean_content_type,
+          clean_size_bytes = EXCLUDED.clean_size_bytes,
+          clean_sha256 = EXCLUDED.clean_sha256,
+          scan_attempts = EXCLUDED.scan_attempts,
+          scan_completed_at = EXCLUDED.scan_completed_at,
+          scan_engine = EXCLUDED.scan_engine,
+          scan_result = EXCLUDED.scan_result,
+          last_scan_error = null,
+          uploaded_at = NOW()`,
+        [randomUUID(), mainVerificationId, storageKey, body.length, sha256, cleanStorageKey],
+      );
+
+      const pdfBody = minimalKycPdf();
+      const pdfSha256 = createHash("sha256").update(pdfBody).digest("hex");
+      const pdfStorageKey = `${prefix}/back-quarantine.pdf`;
+      const pdfCleanStorageKey = `${prefix}/back-clean.pdf`;
+      for (const key of [pdfStorageKey, pdfCleanStorageKey]) {
+        await storage.send(new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: pdfBody,
+          ContentType: "application/pdf",
+          CacheControl: "private, no-store",
+        }));
+      }
+      await client.query(
+        `INSERT INTO partner_identity_documents (
+          id, verification_id, side, storage_key, content_type, size_bytes,
+          sha256, scan_status, clean_storage_key, clean_content_type,
+          clean_size_bytes, clean_sha256, scan_attempts, scan_completed_at,
+          scan_engine, scan_result, uploaded_at
+        ) VALUES (
+          $1, $2, 'back', $3, 'application/pdf', $4, $5, 'clean', $6,
+          'application/pdf', $4, $5, 1, NOW(), 'phase14-e2e-fixture', 'clean', NOW()
+        )
+        ON CONFLICT (verification_id, side) DO UPDATE SET
+          storage_key = EXCLUDED.storage_key,
+          content_type = EXCLUDED.content_type,
+          size_bytes = EXCLUDED.size_bytes,
+          sha256 = EXCLUDED.sha256,
+          scan_status = EXCLUDED.scan_status,
+          clean_storage_key = EXCLUDED.clean_storage_key,
+          clean_content_type = EXCLUDED.clean_content_type,
+          clean_size_bytes = EXCLUDED.clean_size_bytes,
+          clean_sha256 = EXCLUDED.clean_sha256,
+          scan_attempts = EXCLUDED.scan_attempts,
+          scan_completed_at = EXCLUDED.scan_completed_at,
+          scan_engine = EXCLUDED.scan_engine,
+          scan_result = EXCLUDED.scan_result,
+          last_scan_error = null,
+          uploaded_at = NOW()`,
+        [
+          randomUUID(),
+          mainVerificationId,
+          pdfStorageKey,
+          pdfBody.length,
+          pdfSha256,
+          pdfCleanStorageKey,
+        ],
+      );
+    }
+
+    if (process.env.E2E_PAYSTACK_LIVE === "true") {
+      await client.query(
+        `DELETE FROM financial_journal_entries
+         WHERE transaction_id IN (
+           SELECT id FROM transactions
+           WHERE partner_account_id = $1 AND type = 'abonnement_partenaire'
+         )
+            OR subscription_period_id IN (
+              SELECT id FROM subscription_periods WHERE partner_account_id = $1
+            )`,
+        [mainPartnerAccountId],
+      );
+      await client.query(
+        `DELETE FROM payments
+         WHERE transaction_id IN (
+           SELECT id FROM transactions
+           WHERE partner_account_id = $1 AND type = 'abonnement_partenaire'
+         )`,
+        [mainPartnerAccountId],
+      );
+      await client.query(
+        "DELETE FROM transactions WHERE partner_account_id = $1 AND type = 'abonnement_partenaire'",
+        [mainPartnerAccountId],
+      );
+      await client.query(
+        `DELETE FROM subscription_period_limits
+         WHERE subscription_period_id IN (
+           SELECT id FROM subscription_periods WHERE partner_account_id = $1
+         )`,
+        [mainPartnerAccountId],
+      );
+      await client.query(
+        "DELETE FROM subscription_periods WHERE partner_account_id = $1",
+        [mainPartnerAccountId],
+      );
+      await client.query(
+        "DELETE FROM subscription_requests WHERE partner_account_id = $1",
+        [mainPartnerAccountId],
+      );
+    }
+
     // Le parcours Résidence repart de zéro à chaque exécution tout en gardant
     // le compte, le KYC et le moyen de règlement déterministes.
+    await client.query(
+      "DELETE FROM financial_journal_entries WHERE partner_account_id = $1",
+      [residencePartnerAccountId],
+    );
+    await client.query(
+      `DELETE FROM transactions
+       WHERE type = 'remboursement'
+         AND original_payment_id IN (
+           SELECT payment.id
+           FROM payments AS payment
+           INNER JOIN transactions AS original_transaction
+             ON original_transaction.id = payment.transaction_id
+           WHERE original_transaction.partner_account_id = $1
+         )`,
+      [residencePartnerAccountId],
+    );
     await client.query(
       `DELETE FROM payments
        WHERE transaction_id IN (
@@ -211,10 +449,21 @@ export default async function globalSetup() {
       "DELETE FROM residences WHERE partner_account_id = $1",
       [residencePartnerAccountId],
     );
-    await client.query(
-      "DELETE FROM payment_provider_accounts WHERE partner_account_id = $1",
-      [residencePartnerAccountId],
-    );
+    if (process.env.E2E_PAYSTACK_LIVE === "true") {
+      // Le pilote réel conserve un subaccount déjà provisionné et ne retire que
+      // l'ancienne référence factice utilisée par le serveur Paystack simulé.
+      await client.query(
+        `DELETE FROM payment_provider_accounts
+         WHERE partner_account_id = $1
+           AND provider_account_reference = 'ACCT_E2ERESIDENCE'`,
+        [residencePartnerAccountId],
+      );
+    } else {
+      await client.query(
+        "DELETE FROM payment_provider_accounts WHERE partner_account_id = $1",
+        [residencePartnerAccountId],
+      );
+    }
 
     await client.query(
       `INSERT INTO partner_identity_verifications (
@@ -240,16 +489,43 @@ export default async function globalSetup() {
       [randomUUID(), residencePartnerAccountId, adminId],
     );
 
-    await client.query(
-      `INSERT INTO payment_provider_accounts (
-        id, partner_account_id, provider, provider_account_reference, status,
-        verified_at, linked_by_admin_id, created_at, updated_at
-      ) VALUES (
-        $1, $2, 'paystack', 'ACCT_E2ERESIDENCE', 'active',
-        NOW(), $3, NOW(), NOW()
-      )`,
-      [randomUUID(), residencePartnerAccountId, adminId],
-    );
+    if (process.env.E2E_PAYSTACK_LIVE !== "true") {
+      await client.query(
+        `INSERT INTO payment_provider_accounts (
+          id, partner_account_id, provider, provider_account_reference, status,
+          provider_verified, verified_at, linked_by_admin_id, created_at, updated_at
+        ) VALUES (
+          $1, $2, 'paystack', 'ACCT_E2ERESIDENCE', 'active',
+          true, NOW(), $3, NOW(), NOW()
+        )`,
+        [randomUUID(), residencePartnerAccountId, adminId],
+      );
+    } else {
+      // Le pilote Paystack doit isoler la preuve de paiement des parcours de
+      // création et de modération déjà couverts par residences.spec.ts.
+      await client.query(
+        `INSERT INTO residences (
+          id, partner_account_id, title, slug, description,
+          price_per_night_fcfa, max_guests, address, city, country,
+          latitude, longitude, publication_intent, publication_enabled_at,
+          first_published_at, actif, validated_by_admin_id, validated_at,
+          suspendu, created_at, updated_at
+        ) VALUES (
+          $1, $2, $3, $4,
+          'Logement de recette réservé au pilote Paystack TEST de la Phase 14.',
+          45000, 4, 'Quartier Commerce, Bouaké', 'Bouaké', 'Côte d’Ivoire',
+          7.6817075, -5.0166143, true, NOW(), NOW(), true, $5, NOW(),
+          false, NOW(), NOW()
+        )`,
+        [
+          randomUUID(),
+          residencePartnerAccountId,
+          E2E_PAYSTACK_RESIDENCE_TITLE,
+          E2E_PAYSTACK_RESIDENCE_SLUG,
+          adminId,
+        ],
+      );
+    }
 
     await client.query(
       `INSERT INTO restaurants (
@@ -387,7 +663,7 @@ export default async function globalSetup() {
     const clientPasswordHash = await hash(E2E_CLIENT_PASSWORD, 12);
     const clientResult = await client.query<{ id: string }>(
       `INSERT INTO clients (id, nom, telephone, email, password, actif, created_at, updated_at)
-       VALUES ($1, 'Client E2E', $2, 'e2e.client@restauci.test', $3, true, NOW(), NOW())
+       VALUES ($1, 'Client E2E', $2, 'e2e.client@toutci.app', $3, true, NOW(), NOW())
        ON CONFLICT (telephone) DO UPDATE SET
          nom = EXCLUDED.nom,
          email = EXCLUDED.email,
@@ -544,4 +820,6 @@ export const e2eCredentials = {
   adminRestaurantName: E2E_ADMIN_RESTAURANT_NAME,
   residenceOwnerEmail: E2E_RESIDENCE_OWNER_EMAIL,
   residenceOwnerPassword: E2E_RESIDENCE_OWNER_PASSWORD,
+  paystackResidenceTitle: E2E_PAYSTACK_RESIDENCE_TITLE,
+  paystackResidenceSlug: E2E_PAYSTACK_RESIDENCE_SLUG,
 };

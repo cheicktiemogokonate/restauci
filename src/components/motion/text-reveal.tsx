@@ -14,8 +14,8 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { EASE_OUT } from "@/lib/ease";
-import { cn } from "@/lib/utils";
+import { EASE_OUT } from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 
 type SplitMode = "word" | "char";
 

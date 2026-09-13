@@ -1,13 +1,13 @@
 import "server-only";
 
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { db } from "@/infrastructure/db";
 import {
   residenceReservations,
   residences,
   residenceUnavailablePeriods,
-} from "@/lib/db/schema";
-import type { DbExecutor, TransactionExecutor } from "@/lib/db/transaction";
+} from "@/infrastructure/db/schema";
+import type { DbExecutor, TransactionExecutor } from "@/infrastructure/db/transaction";
 import type {
   ResidenceAvailabilityDTO,
   ResidenceReservationDTO,

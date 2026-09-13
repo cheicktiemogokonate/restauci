@@ -1,6 +1,6 @@
-import { getClientIp } from "@/lib/api/client-ip";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, geoSearchLimiter } from "@/lib/rate-limit";
+import { getClientIp } from "@/shared/http/client-ip";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, geoSearchLimiter } from "@/infrastructure/rate-limit";
 import { NextRequest, NextResponse } from "next/server";
 
 const log = createLogger("api-geo");
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const { calculerItineraire } = await import("@/lib/geo");
+      const { calculerItineraire } = await import("@/infrastructure/geocoding");
 
       const resultat = await calculerItineraire(
         { lat: fromLat, lng: fromLng },

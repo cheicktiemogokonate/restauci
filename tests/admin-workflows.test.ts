@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  getAdminRestaurantStatus,
-  normalizeSettlementInput,
-} from "../src/lib/config/admin-workflows";
+import { normalizeSettlementInput } from "../src/modules/commissions/model";
+import { getAdminRestaurantStatus } from "../src/modules/restaurants/model";
 
 describe("workflows administrateur", () => {
   it("distingue un restaurant rejeté d’une demande en attente", () => {

@@ -1,8 +1,8 @@
 "use client";
 // beui.dev/components/motion/animated-badge
 
-import { EASE_OUT } from "@/lib/ease";
-import { cn } from "@/lib/utils";
+import { EASE_OUT } from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 import {
   AlertTriangle,
   Check,

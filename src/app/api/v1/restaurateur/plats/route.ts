@@ -1,15 +1,15 @@
 import { NextRequest }                from "next/server";
-import { requireRestaurateurSession } from "@/lib/api/auth-mobile";
-import { apiResponse }                from "@/lib/api/response";
-import { validateBody, validateSearchParams } from "@/lib/api/validate";
-import { checkRateLimit, mobileApiLimiter }   from "@/lib/rate-limit";
-import { getPlats }                   from "@/lib/db/queries";
-import { createPlat }                 from "@/lib/db/mutations";
-import { platSchema }                 from "@/lib/validations/plat";
+import { requireRestaurateurSession } from "@/app/api/_shared/auth-mobile";
+import { apiResponse }                from "@/app/api/_shared/response";
+import { validateBody, validateSearchParams } from "@/app/api/_shared/validate";
+import { checkRateLimit, mobileApiLimiter }   from "@/infrastructure/rate-limit";
+import { createMenuDish, getMenuManagementWorkspace } from "@/modules/menu/server";
+import { MenuDomainError } from "@/modules/menu/model";
+import { menuDishPayloadSchema } from "@/modules/menu/contracts";
 import { buildPaginationMeta, parsePage, parseLimit, PAGINATION }
-  from "@/lib/config/pagination";
+  from "@/shared/pagination";
 import { z }            from "zod";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/infrastructure/logger";
 
 const log = createLogger("v1-restaurateur-plats");
 
@@ -40,9 +40,9 @@ export async function GET(
   const limit = parseLimit(query.limit, PAGINATION.PLATS_PAR_PAGE);
 
   try {
-    const result = await getPlats({
+    const result = await getMenuManagementWorkspace({
       restaurantId: session.restaurantId,
-      categorieId:  query.categorieId,
+      categoryId:  query.categorieId,
       search:       query.search,
       disponible:   query.disponible === "true"  ? true
                   : query.disponible === "false" ? false
@@ -51,8 +51,8 @@ export async function GET(
       limit,
     });
 
-    return apiResponse.success(result.items, {
-      meta: buildPaginationMeta(result.total, page, limit),
+    return apiResponse.success(result.dishes, {
+      meta: buildPaginationMeta(result.totalDishes, page, limit),
     });
   } catch (err) {
     log.error({ err }, "Erreur liste plats mobile");
@@ -70,19 +70,33 @@ export async function POST(
   const rl = await checkRateLimit(mobileApiLimiter, session.userId);
   if (rl) return rl;
 
-  const { data, error: vError } = await validateBody(request, platSchema);
+  const { data, error: vError } = await validateBody(request, menuDishPayloadSchema);
   if (vError) return vError;
 
   try {
-    const plat = await createPlat({
-      ...data,
+    const plat = await createMenuDish({
       restaurantId: session.restaurantId,
+      ownerUserId: session.userId,
+      nom: data.nom,
+      description: data.description,
+      prix: data.prix,
+      photoUrl: data.image,
+      photoAssetId: data.imageAssetId,
+      categorieId: data.categorieId,
+      newCategorieName: data.categorieName,
+      disponible: data.disponible,
+      ordre: 0,
+      tags: data.tags,
+      allergenes: data.allergenes,
     });
 
     log.info({ platId: plat.id }, "Plat créé via mobile");
     return apiResponse.created(plat);
   } catch (err) {
     log.error({ err }, "Erreur création plat mobile");
+    if (err instanceof MenuDomainError) {
+      return apiResponse.error(err.message, "BAD_REQUEST", { status: 400 });
+    }
     return apiResponse.internalError();
   }
 }

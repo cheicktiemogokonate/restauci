@@ -6,13 +6,25 @@ import {
   findClientServerViolations,
 } from "../rules";
 
+const allFiles = scanDirectory(path.join(process.cwd(), "src"));
+
 describe("Architecture: client -> server boundary", () => {
   it("keeps current source free of new module/infrastructure violations", () => {
-    expect(
-      findClientServerViolations(
-        scanDirectory(path.join(process.cwd(), "src")),
-      ),
-    ).toEqual([]);
+    expect(findClientServerViolations(allFiles)).toEqual([]);
+  });
+
+  it("marks every module server facade as server-only", () => {
+    const serverSurfaces = allFiles.filter(({ filePath }) =>
+      /\/src\/modules\/[^/]+\/server\.ts$/.test(filePath),
+    );
+
+    expect(serverSurfaces.length).toBeGreaterThan(0);
+    for (const surface of serverSurfaces) {
+      expect(
+        surface.imports.some(({ target }) => target === "server-only"),
+        surface.filePath,
+      ).toBe(true);
+    }
   });
 
   it("detects a Client Component importing a module server entrypoint", () => {

@@ -20,7 +20,7 @@ Copy `.env.example` to `.env.local` and fill in:
 ## Project Structure
 - `src/app` - Next.js app router with route groups: `(auth)`, `(client)`, `(dashboard)`, `(public)`
 - `src/app/api` - API route handlers (including versioned `v1` subdirectory)
-- `src/lib/db/schema.ts` - Drizzle database schema
+- `src/infrastructure/db/schema.ts` - Drizzle database schema
 - `src/proxy.ts` - Middleware for auth, rate limiting, and route protection (`/api/v1` uses Bearer token, others use cookies)
 
 ## Important Notes
@@ -39,7 +39,7 @@ Copy `.env.example` to `.env.local` and fill in:
 - Do not duplicate business rules, status mappings, quota logic or money calculations.
 - Use canonical commands for business writes.
 - Server code must stay server-only.
-- During A3 migration, old `src/lib` imports may be bridges only; do not add new business logic there.
+- `src/lib` has been retired; do not recreate it or add compatibility bridges there.
 - See `ARCHITECTURE.md` for ownership and dependency rules.
 
 ## UI implementation protocol
@@ -51,21 +51,40 @@ Before writing or changing application UI:
 2. Inventory the components required by the screen.
 3. Search the components already installed in `src/components` before adding or
    recreating anything.
-4. Search every relevant requested UI source before implementation: shadcn/ui,
-   beUI through its MCP, React Bits and configured registries through the
-   React Bits/shadcn MCP, and—when the use case matches—Kokonut UI and Bklit UI.
-5. When more than one suitable component exists, present the user with the
+4. Load and follow the global `app-components-registry` skill. Its resolution
+   order is absolute for application UI: search beUI first, then shadcn/ui.
+   Dashboard shells and layouts use the shadcn/ui dashboard block directly.
+5. Search other requested or configured UI sources only after this mandatory
+   resolution step. Do not combine libraries to animate the same interaction.
+6. When more than one suitable component remains, present the user with the
    library, component name, reference/demo, dependencies, strengths, limits,
    and a recommendation. Wait for the user's choice unless they explicitly
    delegate the selection.
-6. Install the selected component through its registry/MCP command and adapt it
+7. Install the selected component through its registry/MCP command and adapt it
    minimally to the existing design system. Prefer a reusable product component
    over screen-specific duplicated markup.
-7. Do not replace the discovery step with raw native controls or handwritten
+8. Do not replace the discovery step with raw native controls or handwritten
    custom widgets merely because a component is not already installed locally.
-8. After implementation, run the relevant registry audit checklist, accessibility
+9. After implementation, run the relevant registry audit checklist, accessibility
    checks, targeted lint/type checks, and the verification level authorized by
    the user.
+
+### User verification preference
+
+- Never open or launch a browser for this project unless the user explicitly
+  authorizes browser use in the current message. Use static analysis, tests,
+  builds and non-browser CLI diagnostics by default.
+
+The current UI is not a visual-compatibility target during the modular-monolith
+migration. Every interface may be redesigned or rebuilt when its owning domain
+is migrated. A domain is not considered migrated while its affected screens
+remain obsolete, incoherent, or incomplete.
+
+Visual coherence is centralized: generic primitives and tokens stay shared and
+contain no business vocabulary; domain-specific composition stays in the owning
+module's `presentation/` surface. Domain components must reuse the same product
+tokens, typography, spacing, variants, interaction states, accessibility rules,
+and responsive patterns instead of defining a local visual language.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

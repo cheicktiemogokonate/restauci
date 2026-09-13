@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { getClientSession } from "@/lib/api/auth-client";
-import { deliveryErrorResponse } from "@/lib/api/delivery-response";
-import { apiResponse } from "@/lib/api/response";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, clientApiLimiter } from "@/lib/rate-limit";
+import { getClientSession } from "@/app/api/_shared/auth-client";
+import { deliveryErrorResponse } from "@/app/api/_shared/delivery-response";
+import { apiResponse } from "@/app/api/_shared/response";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, clientApiLimiter } from "@/infrastructure/rate-limit";
 import {
   confirmClientDelivery,
   getClientDelivery,

@@ -2,14 +2,14 @@ import "server-only";
 
 import { and, asc, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { persistAuditLog } from "@/lib/audit";
+import { persistAuditLog } from "@/modules/audit/server";
 import {
   geoSourceAreas,
   serviceMarketCapabilities,
   serviceMarkets,
   serviceMarketVersionAreas,
   serviceMarketVersions,
-} from "@/lib/db/schema";
+} from "@/infrastructure/db/schema";
 import { db, transactionalDb } from "@/infrastructure/db";
 import type {
   CreateServiceMarketInput,

@@ -13,6 +13,19 @@ describe("restaurant visibility and orderability", () => {
       suspendu: false,
       enLigne: false,
       accepteCommandes: true,
+      ownerIdentityStatus: "verified" as const,
+    };
+    expect(isRestaurantPubliclyVisible(restaurant)).toBe(true);
+    expect(isRestaurantOrderable(restaurant)).toBe(false);
+  });
+
+  it("keeps a restaurant visible while order intake is paused", () => {
+    const restaurant = {
+      actif: true,
+      suspendu: false,
+      enLigne: true,
+      accepteCommandes: false,
+      ownerIdentityStatus: "verified" as const,
     };
     expect(isRestaurantPubliclyVisible(restaurant)).toBe(true);
     expect(isRestaurantOrderable(restaurant)).toBe(false);
@@ -20,7 +33,11 @@ describe("restaurant visibility and orderability", () => {
 
   it("hides administratively suspended restaurants", () => {
     expect(
-      isRestaurantPubliclyVisible({ actif: true, suspendu: true }),
+      isRestaurantPubliclyVisible({
+        actif: true,
+        suspendu: true,
+        ownerIdentityStatus: "verified",
+      }),
     ).toBe(false);
   });
 });
@@ -31,6 +48,7 @@ describe("restaurant geographic orderability", () => {
     suspendu: false,
     enLigne: true,
     accepteCommandes: true,
+    ownerIdentityStatus: "verified" as const,
   };
 
   it("refuses another market only when enforcement is active", () => {
@@ -52,6 +70,16 @@ describe("restaurant geographic orderability", () => {
         restaurantCapabilityActive: true,
       }),
     ).toEqual({ orderable: true, reason: null });
+  });
+
+  it("hides an approved restaurant until its owner identity is verified", () => {
+    expect(
+      isRestaurantPubliclyVisible({
+        actif: true,
+        suspendu: false,
+        ownerIdentityStatus: "pending",
+      }),
+    ).toBe(false);
   });
 });
 

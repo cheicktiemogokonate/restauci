@@ -6,7 +6,7 @@ describe("migration du catalogue discovery", () => {
     "drizzle/migrations/0024_discovery_catalogue.sql",
     "utf8",
   );
-  const schema = readFileSync("src/lib/db/schema.ts", "utf8");
+  const schema = readFileSync("src/infrastructure/db/schema.ts", "utf8");
 
   it("crée les projections runtime et l'historique administrable", () => {
     for (const table of [

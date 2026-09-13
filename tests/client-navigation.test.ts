@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSafeClientRedirect } from "../src/lib/client-app/navigation";
+import { getSafeClientRedirect } from "../src/modules/clients/presentation/client-app/navigation";
 
 describe("redirections du parcours client", () => {
   it("accepte les routes internes du parcours client", () => {

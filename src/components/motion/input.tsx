@@ -16,7 +16,7 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
 } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 
 export type InputClassNames = {
   root?: string;
@@ -35,8 +35,8 @@ export interface InputProps
     "value" | "defaultValue" | "onChange"
   > {
   label?: string;
-  value?: string;
-  defaultValue?: string;
+  value?: string | number;
+  defaultValue?: string | number;
   onChange?: (value: string) => void;
   error?: string | boolean;
   success?: boolean;
@@ -71,7 +71,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const id = idProp ?? reactId;
   const reduce = useReducedMotion();
   const controlled = valueProp !== undefined;
-  const [internal, setInternal] = useState(defaultValue ?? "");
+  const [internal, setInternal] = useState<string | number>(defaultValue ?? "");
   const [focused, setFocused] = useState(false);
   const fieldRef = useRef<HTMLDivElement>(null);
   const value = controlled ? (valueProp ?? "") : internal;

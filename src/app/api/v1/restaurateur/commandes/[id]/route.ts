@@ -1,14 +1,16 @@
 import { NextRequest }                from "next/server";
 import { z }                          from "zod";
-import { requireRestaurateurSession } from "@/lib/api/auth-mobile";
-import { apiResponse }                from "@/lib/api/response";
-import { validateBody }               from "@/lib/api/validate";
-import { checkRateLimit, mobileApiLimiter } from "@/lib/rate-limit";
-import { getCommandeById }            from "@/lib/db/queries";
-import { updateStatutCommande }       from "@/lib/db/mutations";
-import { createLogger }               from "@/lib/logger";
-import { canRestaurateurSetCommandeStatus } from "@/types/commandes";
-import { deliveryErrorResponse } from "@/lib/api/delivery-response";
+import { requireRestaurateurSession } from "@/app/api/_shared/auth-mobile";
+import { apiResponse }                from "@/app/api/_shared/response";
+import { validateBody }               from "@/app/api/_shared/validate";
+import { checkRateLimit, mobileApiLimiter } from "@/infrastructure/rate-limit";
+import {
+  getRestaurantOrder,
+  transitionRestaurantOrder,
+} from "@/modules/orders/server";
+import { createLogger }               from "@/infrastructure/logger";
+import { canRestaurantSetOrderStatus } from "@/modules/orders/model";
+import { deliveryErrorResponse } from "@/app/api/_shared/delivery-response";
 import { cancelRestaurantDeliveryOrder } from "@/modules/deliveries/server";
 
 const log = createLogger("v1-restaurateur-commande-detail");
@@ -26,7 +28,7 @@ export async function GET(
   if (rl) return rl;
 
   try {
-    const commande = await getCommandeById(id, session.restaurantId);
+    const commande = await getRestaurantOrder(id, session.restaurantId);
     if (!commande) return apiResponse.notFound("Commande");
 
     return apiResponse.success(commande);
@@ -57,10 +59,10 @@ export async function PATCH(
 
   try {
     // Vérifier que la commande appartient au restaurant
-    const commande = await getCommandeById(id, session.restaurantId);
+    const commande = await getRestaurantOrder(id, session.restaurantId);
     if (!commande) return apiResponse.notFound("Commande");
 
-    if (!canRestaurateurSetCommandeStatus(commande.modeCommande, data.statut)) {
+    if (!canRestaurantSetOrderStatus(commande.modeCommande, data.statut)) {
       return apiResponse.error(
         "Une livraison est clôturée après confirmation de remise ou de livraison.",
         "VALIDATION_ERROR",
@@ -71,7 +73,14 @@ export async function PATCH(
     const updated =
       commande.modeCommande === "livraison" && data.statut === "annulee"
         ? await cancelRestaurantDeliveryOrder(session, id)
-        : await updateStatutCommande(id, session.restaurantId, data.statut);
+        : await transitionRestaurantOrder(
+            {
+              type: "restaurant",
+              id: session.userId,
+              restaurantId: session.restaurantId,
+            },
+            { orderId: id, targetStatus: data.statut },
+          );
 
     if (!updated) {
       return apiResponse.error(

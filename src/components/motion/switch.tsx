@@ -1,8 +1,14 @@
 "use client";
 
 import { animate, motion, MotionConfig, useReducedMotion } from "motion/react";
-import { useEffect, useId, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type MouseEventHandler,
+} from "react";
+import { cn } from "@/shared/ui/cn";
 
 // Heavy, deliberate thumb — high mass keeps the travel weighty without wobble.
 const THUMB_SPRING = { type: "spring", stiffness: 800, damping: 80, mass: 4 } as const;
@@ -12,10 +18,20 @@ export interface SwitchProps {
   onCheckedChange: (checked: boolean) => void;
   disabled?: boolean;
   label?: string;
+  ariaLabel?: string;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
   className?: string;
 }
 
-export function Switch({ checked, onCheckedChange, disabled, label, className }: SwitchProps) {
+export function Switch({
+  checked,
+  onCheckedChange,
+  disabled,
+  label,
+  ariaLabel,
+  onClick,
+  className,
+}: SwitchProps) {
   const id = useId();
   const thumbRef = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
@@ -44,8 +60,12 @@ export function Switch({ checked, onCheckedChange, disabled, label, className }:
           type="button"
           role="switch"
           aria-checked={checked}
+          aria-label={ariaLabel}
           disabled={disabled}
-          onClick={() => !disabled && onCheckedChange(!checked)}
+          onClick={(event) => {
+            onClick?.(event);
+            if (!event.defaultPrevented && !disabled) onCheckedChange(!checked);
+          }}
           onPointerDown={(e) => {
             setIsPressed(true);
             setIsPointer(e.type.startsWith("pointer"));

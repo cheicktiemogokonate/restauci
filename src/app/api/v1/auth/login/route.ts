@@ -1,28 +1,24 @@
-import { getClientIp } from "@/lib/api/client-ip";
-import { apiResponse } from "@/lib/api/response";
-import { validateBody } from "@/lib/api/validate";
-import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { createLogger } from "@/lib/logger";
+import { getClientIp } from "@/shared/http/client-ip";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateBody } from "@/app/api/_shared/validate";
+import { createLogger } from "@/infrastructure/logger";
 import {
   authAccountLimiter,
   checkRateLimit,
   mobileAuthLimiter,
-} from "@/lib/rate-limit";
-import { securityIdentifier } from "@/lib/security/identifier";
-import { emailSchema } from "@/lib/validations/auth";
-import { eq } from "drizzle-orm";
+} from "@/infrastructure/rate-limit";
+import { securityIdentifier } from "@/infrastructure/security/identifier";
+import { emailSchema } from "@/modules/auth/contracts";
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { verifyAdminMfa } from "@/lib/auth/admin-mfa";
 
 // Adapte ces imports selon ta lib auth existante
 import {
-  comparePassword,
+  authenticatePartnerCredentials,
   createSessionId,
   signPartnerAccessToken,
   signPartnerRefreshToken,
-} from "@/lib/auth";
+} from "@/modules/auth/server";
 
 const log = createLogger("v1-auth-login");
 
@@ -58,28 +54,11 @@ export async function POST(request: NextRequest) {
   try {
     const { email, password, rememberMe } = data;
 
-    // Chercher l'utilisateur
-    const [user] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        password: users.password,
-        nom: users.nom,
-        role: users.role,
-        emailVerifie: users.emailVerifie,
-        suspendu: users.suspendu,
-      })
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-
-    if (!user) {
-      // Même message pour email inconnu et mauvais mot de passe
-      // (évite l'énumération d'emails)
-      await comparePassword(
-        password,
-        "$2b$12$uTgttD2C7DC66CkZOWNP..p1.dVZb72d./VYmD08jia4VsjYPs3O2",
-      );
+    const authentication = await authenticatePartnerCredentials(
+      { email, password, otp: data.otp },
+      { enforceAdminMfa: !bypassE2eSecurityProviders },
+    );
+    if (authentication.status === "invalid_credentials") {
       log.warn(
         { accountId },
         "Tentative de connexion — utilisateur inconnu",
@@ -87,43 +66,25 @@ export async function POST(request: NextRequest) {
       return apiResponse.unauthorized("Email ou mot de passe incorrect");
     }
 
-    // Vérifier le mot de passe
-    const isValid = await comparePassword(password, user.password);
-    if (!isValid) {
-      log.warn(
-        { userId: user.id },
-        "Tentative de connexion — mauvais mot de passe",
-      );
-      return apiResponse.unauthorized("Email ou mot de passe incorrect");
-    }
-
-    // Bloquer les comptes suspendus après vérification du mot de passe
-    // (pas d'énumération : le message ne fuit que si les credentials sont valides)
-    if (user.suspendu) {
-      log.warn({ userId: user.id }, "Tentative de connexion — compte suspendu");
+    if (authentication.status === "suspended") {
+      log.warn({ userId: authentication.userId }, "Tentative de connexion — compte suspendu");
       return apiResponse.forbidden("Compte suspendu. Contactez le support.");
     }
 
-    if (user.role === "admin" && !bypassE2eSecurityProviders) {
-      const mfaResult = await verifyAdminMfa(user.id, data.otp);
-      if (mfaResult === "disabled") {
-        log.warn(
-          { userId: user.id },
-          "Connexion admin sans MFA : exception de déploiement explicitement activée",
-        );
-      } else if (mfaResult === "not-configured") {
+    if (authentication.status !== "authenticated") {
+      if (authentication.status === "mfa_not_configured") {
         return apiResponse.error(
           "L’authentification forte administrateur n’est pas configurée",
           "ADMIN_MFA_NOT_CONFIGURED",
           { status: 503 },
         );
-      } else if (mfaResult === "unavailable") {
+      } else if (authentication.status === "mfa_unavailable") {
         return apiResponse.error(
           "Vérification du second facteur temporairement indisponible",
           "SERVICE_UNAVAILABLE",
           { status: 503 },
         );
-      } else if (mfaResult !== "ok") {
+      } else {
         return apiResponse.error(
           "Code de sécurité requis ou invalide",
           "MFA_REQUIRED",
@@ -134,6 +95,7 @@ export async function POST(request: NextRequest) {
 
     // L'access token reste court. « Se souvenir de moi » étend uniquement la
     // session de renouvellement, avec une expiration absolue de 30 jours.
+    const user = authentication.user;
     const now = Math.floor(Date.now() / 1_000);
     const sessionExpiresAt =
       now + (rememberMe ? 30 * 24 * 3600 : 7 * 24 * 3600);

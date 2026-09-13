@@ -1,19 +1,19 @@
-import { CommandesAdminFilters } from "@/components/admin/commandes-admin-filters";
-import { CommandesAdminTable } from "@/components/admin/commandes-admin-table";
+import { CommandesAdminFilters } from "@/modules/orders/presentation/commandes-admin-filters";
+import { CommandesAdminTable } from "@/modules/orders/presentation/commandes-admin-table";
 import { AdminPage } from "@/components/admin/ui/admin-page";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { StatusBadge } from "@/components/admin/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getAdminSession } from "@/lib/auth/get-admin-session";
-import { parsePage } from "@/lib/config/pagination";
+import { getAdminSession } from "@/modules/auth/server";
+import { parsePage } from "@/shared/pagination";
 import {
-  getAdminSupportSummary,
-  getCommandesGlobalAdmin,
-  type AdminSupportSignal,
-} from "@/lib/db/queries-admin";
-import type { StatutCommande } from "@/lib/db/types";
+  getAdminOrderSupportSummary,
+  listAdminOrderSupport,
+  type AdminOrderSupportSignal,
+} from "@/modules/orders/server";
+import type { RestaurantOrderStatus as StatutCommande } from "@/modules/orders/model";
 import {
   AlertTriangle,
   ChevronLeft,
@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-const validSignals = new Set<AdminSupportSignal>([
+const validSignals = new Set<AdminOrderSupportSignal>([
   "stalled",
   "payment_failed",
   "refunded",
@@ -34,7 +34,7 @@ const validSignals = new Set<AdminSupportSignal>([
 ]);
 
 const signalMeta: Record<
-  AdminSupportSignal,
+  AdminOrderSupportSignal,
   { label: string; description: string }
 > = {
   stalled: {
@@ -46,8 +46,8 @@ const signalMeta: Record<
     description: "Échecs de paiement enregistrés sur les 30 derniers jours.",
   },
   refunded: {
-    label: "Paiements remboursés",
-    description: "Remboursements enregistrés sur les 30 derniers jours.",
+    label: "Remboursements à suivre",
+    description: "Obligations de remboursement enregistrées sur les 30 derniers jours.",
   },
   cancelled_today: {
     label: "Commandes annulées aujourd’hui",
@@ -61,7 +61,7 @@ function SignalCard({
   icon: Icon,
   active,
 }: {
-  signal: AdminSupportSignal;
+  signal: AdminOrderSupportSignal;
   count: number;
   icon: LucideIcon;
   active: boolean;
@@ -114,8 +114,8 @@ export default async function AdminSupportPage({
   await getAdminSession();
   const params = await searchParams;
   const page = parsePage(params.page);
-  const signal = validSignals.has(params.signal as AdminSupportSignal)
-    ? (params.signal as AdminSupportSignal)
+  const signal = validSignals.has(params.signal as AdminOrderSupportSignal)
+    ? (params.signal as AdminOrderSupportSignal)
     : undefined;
   const validStatuts = new Set<StatutCommande>([
     "recue",
@@ -147,14 +147,14 @@ export default async function AdminSupportPage({
       params.dateFin,
   );
   const [summary, result] = await Promise.all([
-    getAdminSupportSummary(),
+    getAdminOrderSupportSummary(),
     hasInvestigationCriteria
-      ? getCommandesGlobalAdmin({
+      ? listAdminOrderSupport({
           statut,
           search: params.search,
           restaurantSearch: params.restaurant,
-          dateDebut: toStartOfDay(params.dateDebut),
-          dateFin: toEndOfDay(params.dateFin),
+          startDate: toStartOfDay(params.dateDebut),
+          endDate: toEndOfDay(params.dateFin),
           signal,
           page,
           limit: 25,

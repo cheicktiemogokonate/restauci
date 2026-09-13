@@ -7,11 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useGeolocation } from "@/lib/client-app/hooks/use-geolocation";
-import { useRestaurantDetail } from "@/lib/client-app/hooks/use-restaurant-detail";
-import { useRestaurantMenu } from "@/lib/client-app/hooks/use-restaurant-menu";
-import { usePanierStore } from "@/lib/client-app/stores/panier-store";
-import { formatPrix } from "@/lib/utils/format";
+import { useGeolocation } from "@/modules/clients/presentation/client-app/hooks/use-geolocation";
+import { useRestaurantDetail } from "@/modules/clients/presentation/client-app/hooks/use-restaurant-detail";
+import { useRestaurantMenu } from "@/modules/clients/presentation/client-app/hooks/use-restaurant-menu";
+import { usePanierStore } from "@/modules/clients/presentation/client-app/stores/panier-store";
+import { formatPrix } from "@/shared/format";
 import {
   ArrowLeft,
   AlertCircle,
@@ -23,7 +23,7 @@ import {
   Navigation,
   Phone,
   Plus,
-  Star,
+  Store,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -153,15 +153,23 @@ export default function RestaurantDetailPage() {
   return (
     <main className="min-h-screen bg-background pb-28">
       <section className="relative h-60 overflow-hidden bg-muted sm:h-72">
-        <Image
-          src={restaurant.banniereUrl ?? "/assets/images/restaurant_exterior_night_1781800314693.jpg"}
-          alt={restaurant.banniereUrl ? `Devanture de ${restaurant.nom}` : "Devanture de restaurant"}
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent" />
+        {restaurant.banniereUrl ? (
+          <Image
+            src={restaurant.banniereUrl}
+            alt={`Devanture de ${restaurant.nom}`}
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
+        ) : (
+          <div className="flex size-full items-center justify-center bg-primary/10 text-primary">
+            <Store className="size-12" aria-hidden="true" />
+          </div>
+        )}
+        {restaurant.banniereUrl ? (
+          <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent" />
+        ) : null}
         <Button
           asChild
           variant="secondary"
@@ -170,7 +178,9 @@ export default function RestaurantDetailPage() {
         >
           <Link href="/client" aria-label="Retour aux restaurants"><ArrowLeft /></Link>
         </Button>
-        <div className="absolute right-4 bottom-4 left-4 flex items-end justify-between gap-3 text-primary-foreground">
+        <div
+          className={`absolute right-4 bottom-4 left-4 flex items-end justify-between gap-3 ${restaurant.banniereUrl ? "text-primary-foreground" : "text-foreground"}`}
+        >
           <Badge className="border-0 bg-background/95 text-primary shadow-sm hover:bg-background/95">
             {commandesOuvertes ? "Ouvert aux commandes" : "Consultation uniquement"}
           </Badge>
@@ -190,12 +200,6 @@ export default function RestaurantDetailPage() {
             <p className="mt-1 text-sm text-muted-foreground">{restaurant.cuisines.join(" · ")}</p>
           ) : null}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-            {restaurant.noteMoyenne ? (
-              <span className="flex items-center gap-1 font-semibold text-foreground">
-                <Star className="size-4 fill-amber-400 text-amber-400" />
-                {restaurant.noteMoyenne}
-              </span>
-            ) : null}
             {restaurant.geo ? (
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <MapPinned className="size-4 text-primary" />

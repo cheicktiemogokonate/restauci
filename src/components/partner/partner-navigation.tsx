@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bell,
   Building2,
   CalendarRange,
   ExternalLink,
@@ -24,7 +25,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 import type { PartnerActivityType } from "@/modules/partners/model";
 
 const residenceNavigation = [
@@ -51,6 +52,12 @@ const residenceNavigation = [
     href: "/partenaire/facturation",
     icon: WalletCards,
     description: "Abonnement et quotas",
+  },
+  {
+    label: "Notifications",
+    href: "/partenaire/notifications",
+    icon: Bell,
+    description: "Décisions et réservations",
   },
 ] as const;
 

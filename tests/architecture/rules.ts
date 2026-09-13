@@ -47,6 +47,18 @@ function isModuleServer(relativePath: string | null) {
   );
 }
 
+function moduleSurface(relativePath: string | null) {
+  return relativePath?.match(
+    /^src\/modules\/([^/]+)\/(.+)$/,
+  ) ?? null;
+}
+
+function isPublicModuleSurface(moduleRelativePath: string) {
+  return /^(?:server|model|contracts|presentation)(?:\.[cm]?[jt]sx?|\/)/.test(
+    moduleRelativePath,
+  );
+}
+
 function isDbTarget(relativePath: string | null) {
   return (
     isInside(relativePath, "src/lib/db") ||
@@ -61,16 +73,6 @@ export function findAppDbViolations(files: FileMetadata[]) {
       .filter((dependency) => isDbTarget(targetRelativePath(dependency)))
       .map((dependency) => violation(file, dependency));
   });
-}
-
-export function findNewViolations(
-  actual: ArchitectureViolation[],
-  baseline: readonly ArchitectureViolation[],
-) {
-  const allowed = new Set(
-    baseline.map((entry) => `${entry.file}::${entry.target}`),
-  );
-  return actual.filter((entry) => !allowed.has(`${entry.file}::${entry.target}`));
 }
 
 export function findModulesToAppViolations(files: FileMetadata[]) {
@@ -106,6 +108,23 @@ export function findAppInternalViolations(files: FileMetadata[]) {
         Boolean(internalModuleName(targetRelativePath(dependency))),
       )
       .map((dependency) => violation(file, dependency));
+  });
+}
+
+export function findNonPublicModuleSurfaceViolations(files: FileMetadata[]) {
+  return files.flatMap((file) => {
+    const sourceOwner = moduleName(relativeToProject(file.filePath));
+
+    return file.imports.flatMap((dependency) => {
+      const target = moduleSurface(targetRelativePath(dependency));
+      if (!target) return [];
+
+      const [, targetOwner, targetRelativePathValue] = target;
+      return sourceOwner !== targetOwner &&
+        !isPublicModuleSurface(targetRelativePathValue)
+        ? [violation(file, dependency)]
+        : [];
+    });
   });
 }
 
@@ -165,7 +184,7 @@ export function findInfrastructureToModulesViolations(files: FileMetadata[]) {
 export function findRootBarrelViolations(files: FileMetadata[]) {
   return files
     .map((file) => relativeToProject(file.filePath))
-    .filter((file) => /^src\/modules\/[^/]+\/index\.tsx?$/.test(file))
+    .filter((file) => /^src\/modules\/[^/]+\/index\.[cm]?[jt]sx?$/.test(file))
     .map((file) => ({ file, target: "root module barrel" }));
 }
 

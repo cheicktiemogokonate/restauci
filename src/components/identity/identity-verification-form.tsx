@@ -1,9 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, FileCheck2, Loader2, LockKeyhole, Upload } from "lucide-react";
-import { saveIdentityDraftAction, submitIdentityVerificationAction } from "@/app/(dashboard)/partenaire/verification/actions";
+import { saveIdentityDraftAction, submitIdentityVerificationAction } from "@/app/(dashboard)/(partenaire)/partenaire/verification/actions";
 import { IdentityStatusBadge } from "@/modules/identity/presentation/identity-status-badge";
 import type { IdentityDraftInput, PartnerIdentityVerificationDTO } from "@/modules/identity/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -21,8 +20,18 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Une erreur inattendue est survenue.";
 }
 
+function scanStatusLabel(document: PartnerIdentityVerificationDTO["documents"][number]) {
+  if (document.scanStatus === "clean") return "Analyse terminée : document sûr";
+  if (document.scanStatus === "rejected") return "Document rejeté par l’analyse antivirus";
+  if (document.scanStatus === "error") {
+    return document.scanRetryable
+      ? "Analyse interrompue : nouvelle tentative automatique"
+      : "Échec de l’analyse : remplacez le fichier pour réessayer";
+  }
+  return "Analyse antivirus en cours";
+}
+
 export function IdentityVerificationForm({ initialVerification, storageConfigured }: Props) {
-  const router = useRouter();
   const [verification, setVerification] = useState(initialVerification);
   const [legalName, setLegalName] = useState(initialVerification?.legalName ?? "");
   const [documentType, setDocumentType] = useState<"national_id" | "passport">(
@@ -38,7 +47,40 @@ export function IdentityVerificationForm({ initialVerification, storageConfigure
   const [uploadingSide, setUploadingSide] = useState<"front" | "back" | null>(null);
   const [isPending, startTransition] = useTransition();
   const editable = !verification || verification.status === "not_submitted" || verification.status === "rejected";
-  const uploadedSides = useMemo(() => new Set(verification?.documents.map((item) => item.side) ?? []), [verification]);
+  const scansInProgress = verification?.documents.some(
+    (document) =>
+      document.scanStatus === "pending" ||
+      document.scanStatus === "processing" ||
+      document.scanRetryable,
+  ) ?? false;
+
+  useEffect(() => {
+    if (!scansInProgress) return;
+
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const response = await fetch("/api/partner/identity/documents", {
+          cache: "no-store",
+        });
+        if (!response.ok || cancelled) return;
+        const payload = (await response.json()) as {
+          verification?: PartnerIdentityVerificationDTO | null;
+        };
+        if (!cancelled && payload.verification) {
+          setVerification(payload.verification);
+        }
+      } catch {
+        // Une indisponibilité ponctuelle ne doit pas effacer l'état affiché.
+      }
+    };
+
+    const timer = window.setInterval(() => void refresh(), 3_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [scansInProgress]);
 
   const draft = (): IdentityDraftInput => ({
     legalName,
@@ -54,8 +96,12 @@ export function IdentityVerificationForm({ initialVerification, storageConfigure
         const result = kind === "save"
           ? await saveIdentityDraftAction(draft())
           : await submitIdentityVerificationAction(draft());
+        if (!result.success) {
+          setMessage({ kind: "error", text: result.message });
+          return;
+        }
+        setVerification(result.verification);
         setMessage({ kind: "success", text: result.message });
-        router.refresh();
       } catch (error) {
         setMessage({ kind: "error", text: errorMessage(error) });
       }
@@ -74,8 +120,7 @@ export function IdentityVerificationForm({ initialVerification, storageConfigure
       const payload = await response.json() as { verification?: PartnerIdentityVerificationDTO; error?: string };
       if (!response.ok || !payload.verification) throw new Error(payload.error ?? "Envoi impossible.");
       setVerification(payload.verification);
-      setMessage({ kind: "success", text: "Justificatif enregistré dans l’espace privé." });
-      router.refresh();
+      setMessage({ kind: "success", text: "Justificatif enregistré. L’analyse antivirus a démarré." });
     } catch (error) {
       setMessage({ kind: "error", text: errorMessage(error) });
     } finally {
@@ -174,10 +219,17 @@ export function IdentityVerificationForm({ initialVerification, storageConfigure
                   <div>
                     <p className="font-medium">{documentType === "passport" ? "Page d’identité" : side === "front" ? "Recto" : "Verso"}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{existing ? `${Math.ceil(existing.sizeBytes / 1024)} Ko enregistrés` : "Aucun fichier envoyé"}</p>
+                    {existing && <p className="mt-1 text-xs text-muted-foreground">{scanStatusLabel(existing)}</p>}
                   </div>
-                  {uploadedSides.has(side) && <FileCheck2 className="size-5 text-emerald-600" />}
+                  {existing?.scanStatus === "clean" ? (
+                    <FileCheck2 className="size-5 text-emerald-600" />
+                  ) : existing?.scanStatus === "pending" || existing?.scanStatus === "processing" ? (
+                    <Loader2 className="size-5 animate-spin text-amber-600" />
+                  ) : existing ? (
+                    <AlertCircle className="size-5 text-red-600" />
+                  ) : null}
                 </div>
-                {existing && <a className="mt-3 inline-block text-sm font-medium text-emerald-700 underline" href={`/api/partner/identity/documents/${existing.id}`} target="_blank" rel="noreferrer">Voir le document</a>}
+                {existing?.scanStatus === "clean" && <a className="mt-3 inline-block text-sm font-medium text-emerald-700 underline" href={`/api/partner/identity/documents/${existing.id}`} target="_blank" rel="noreferrer">Voir le document</a>}
                 {editable && (
                   <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
                     {uploadingSide === side ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
@@ -194,7 +246,7 @@ export function IdentityVerificationForm({ initialVerification, storageConfigure
       {editable && (
         <div className="flex flex-col-reverse justify-end gap-3 sm:flex-row">
           <Button variant="outline" onClick={() => runAction("save")} disabled={isPending}>Enregistrer le brouillon</Button>
-          <Button onClick={() => runAction("submit")} disabled={isPending || !storageConfigured}>
+          <Button onClick={() => runAction("submit")} disabled={isPending || !storageConfigured || scansInProgress}>
             {isPending && <Loader2 className="animate-spin" />}
             Soumettre pour vérification
           </Button>

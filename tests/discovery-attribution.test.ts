@@ -71,8 +71,8 @@ describe("attribution discovery", () => {
       "src/app/api/v1/client/commandes/route.ts",
       "utf8",
     );
-    const residenceService = readFileSync(
-      "src/modules/residences/server.ts",
+    const residenceRoute = readFileSync(
+      "src/app/api/v1/client/reservations/route.ts",
       "utf8",
     );
     expect(attribution).toContain('eventType: "impression"');
@@ -84,7 +84,7 @@ describe("attribution discovery", () => {
     expect(attribution).toContain("payload.expiresAt >=");
     expect(attribution).toContain("TOKEN_LIFETIME_SECONDS");
     expect(restaurantRoute).toContain("recordDiscoveryConversion");
-    expect(residenceService).toContain("recordDiscoveryConversion");
+    expect(residenceRoute).toContain("recordDiscoveryConversion");
   });
 });
 

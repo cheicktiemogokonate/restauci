@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { formatPrix } from "@/lib/utils/format";
+import { cn } from "@/shared/ui/cn";
+import { formatPrix } from "@/shared/format";
 import type { StatsDashboard } from "@/types/dashboard";
 import {
   CalendarRange,

@@ -1,4 +1,4 @@
-import { getCommandes } from "@/lib/db/queries";
+import { listRestaurantOrders } from "@/modules/orders/server";
 import { RecentOrders } from "./recent-orders";
 import type { CommandeResume } from "@/types/dashboard";
 
@@ -13,8 +13,7 @@ interface RecentOrdersSectionProps {
 export async function RecentOrdersSection({
   restaurantId,
 }: RecentOrdersSectionProps) {
-  const { items } = await getCommandes({
-    restaurantId,
+  const { items } = await listRestaurantOrders(restaurantId, {
     limit: 5,
     page: 1,
   });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { locationSampleSchema } from "@/shared/geo";
 import {
   LOCATION_CONTEXTS,
   LOCATION_POLICY_USES,
@@ -10,14 +11,7 @@ import {
   type ServiceMarketCapabilityStatus,
 } from "./model";
 
-export const locationSampleSchema = z
-  .object({
-    lat: z.number().finite().min(-90).max(90),
-    lng: z.number().finite().min(-180).max(180),
-    accuracyMeters: z.number().finite().min(0).max(100_000),
-    capturedAt: z.string().datetime({ offset: true }),
-  })
-  .strict();
+export { locationSampleSchema } from "@/shared/geo";
 
 export const resolveServiceMarketSchema = locationSampleSchema.extend({
   context: z.enum(LOCATION_CONTEXTS).default("currentLocation"),

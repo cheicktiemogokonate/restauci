@@ -1,9 +1,9 @@
-import { getClientIp } from "@/lib/api/client-ip";
-import { apiResponse } from "@/lib/api/response";
-import { validateSearchParams } from "@/lib/api/validate";
-import { geocoder } from "@/lib/geo";
-import { createLogger } from "@/lib/logger";
-import { checkRateLimit, geoSearchLimiter } from "@/lib/rate-limit";
+import { getClientIp } from "@/shared/http/client-ip";
+import { apiResponse } from "@/app/api/_shared/response";
+import { validateSearchParams } from "@/app/api/_shared/validate";
+import { geocoder } from "@/infrastructure/geocoding";
+import { createLogger } from "@/infrastructure/logger";
+import { checkRateLimit, geoSearchLimiter } from "@/infrastructure/rate-limit";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 

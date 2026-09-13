@@ -37,7 +37,7 @@ export function ChartSkeleton() {
         </div>
       </CardHeader>
       <CardContent className="pt-4">
-        {/* Barres du graphique simulées */}
+        {/* Forme de chargement sans valeur métier. */}
         <div className="flex items-end gap-2 h-50 sm:h-[250px] pt-4">
           {Array.from({ length: 7 }).map((_, i) => (
             <Skeleton
