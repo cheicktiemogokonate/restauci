@@ -18,8 +18,8 @@
   temporaire sur Vercel Hobby après la Phase 14
 - **Phase courante :** aucune ; pilote contrôlé TEST ouvert
 - **Verdict courant :** pilote TEST prêt, validations locales complètes vertes ;
-  configuration compatible Vercel Hobby prête à être publiée, sans nouvelle
-  phase de migration ouverte
+  configuration Hobby publiée et active sur `restauci.vercel.app`, sans
+  nouvelle phase de migration ouverte
 - **Autorisation consommée :** validation automatisée, remise en conformité du
   pilote TEST, synchronisation Git/Vercel et adaptation des tâches planifiées au
   plan Hobby
@@ -143,8 +143,10 @@
 - `git diff --check` réussi.
 - Adaptation Hobby : 6/6 tests cron ciblés, porte `ci:quality` verte, suite
   complète à 432 tests réussis / 74 ignorés et build de 84 pages réussi.
-- Contrôle post-déploiement : les modules `.mjs` publics de MapLibre sont
-  explicitement exclus de l'authentification cookie par le proxy.
+- Contrôle post-déploiement `dpl_9Ad4Bw96C7B9fFMpkSoPU3kTW2QB` : état
+  `READY`, accueil et santé en `200`, modules `.mjs` MapLibre servis en
+  JavaScript, deux crons actifs sans modification en attente et aucune erreur
+  d'exécution détectée.
 
 ## Décisions, blocages et action requise
 
