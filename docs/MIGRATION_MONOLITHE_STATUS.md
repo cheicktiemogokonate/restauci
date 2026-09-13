@@ -112,7 +112,7 @@
   `e2e/residences.spec.ts`
 - `scripts/causality/reconcile.ts` et `scripts/media/reconcile.ts`
 - `src/app/api/cron/daily-maintenance/route.ts`
-- `vercel.json` et `deploy/vps/README.md`
+- `vercel.json`, `.vercelignore` et `deploy/vps/README.md`
 
 ## Validations
 

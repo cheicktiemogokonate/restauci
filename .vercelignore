@@ -13,7 +13,8 @@ coverage
 deploy
 e2e
 tests
-scripts
+scripts/*
+!scripts/copy-maplibre-worker.mjs
 drizzle
 Dockerfile
 .dockerignore
