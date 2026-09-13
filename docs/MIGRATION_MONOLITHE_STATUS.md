@@ -14,14 +14,15 @@
 ## État courant
 
 - **Dernière mise à jour :** 13 septembre 2026
-- **Dernière étape terminée :** validation du lot de clôture destiné à
-  synchroniser `main` et Vercel Production après la Phase 14
+- **Dernière étape terminée :** adaptation et validation de l'exploitation
+  temporaire sur Vercel Hobby après la Phase 14
 - **Phase courante :** aucune ; pilote contrôlé TEST ouvert
 - **Verdict courant :** pilote TEST prêt, validations locales complètes vertes ;
-  lot de clôture autorisé pour publication sur Git et Vercel Production ; aucune
-  phase suivante ouverte
+  configuration compatible Vercel Hobby prête à être publiée, sans nouvelle
+  phase de migration ouverte
 - **Autorisation consommée :** validation automatisée, remise en conformité du
-  pilote TEST et synchronisation du code par Git/Vercel
+  pilote TEST, synchronisation Git/Vercel et adaptation des tâches planifiées au
+  plan Hobby
 - **Code / DB modifiés par la Phase 14 :** migrations `0044` à `0048`
   appliquées à la base Neon déclarée non-production. `DATABASE_URL_TEST` et
   `.env.local` utilisent des identifiants distincts mais le même endpoint et la
@@ -88,8 +89,8 @@
 4. La santé de l'artefact standalone est `healthy` (base et cache `up`) ; la
    causalité compte 181 effets terminés, sans anomalie ni dead-letter, et les
    médias E2E orphelins ont été nettoyés par les mécanismes canoniques.
-5. Qualité, 428 tests, build de 83 pages et audit npm à zéro vulnérabilité sont
-   verts ; aucun contrôle local ne bloque la préparation Git/Vercel.
+5. L'adaptation Vercel Hobby conserve deux tâches quotidiennes : expiration des
+   abonnements à 00:15 UTC, puis causalité et médias regroupés à 01:15 UTC.
 
 ## Fichiers principaux
 
@@ -110,6 +111,8 @@
 - `e2e/kyc-inline.spec.ts`, `e2e/paystack-live.spec.ts` et
   `e2e/residences.spec.ts`
 - `scripts/causality/reconcile.ts` et `scripts/media/reconcile.ts`
+- `src/app/api/cron/daily-maintenance/route.ts`
+- `vercel.json` et `deploy/vps/README.md`
 
 ## Validations
 
@@ -138,6 +141,8 @@
   confirmés comme fixtures TEST puis nettoyés par les commandes canoniques.
 - Audit des dépendances de production : 0 vulnérabilité.
 - `git diff --check` réussi.
+- Adaptation Hobby : 6/6 tests cron ciblés, porte `ci:quality` verte, suite
+  complète à 432 tests réussis / 74 ignorés et build de 84 pages réussi.
 
 ## Décisions, blocages et action requise
 
@@ -165,9 +170,13 @@
 - Le passage automatisé post-ouverture est vert ; aucun suivi périodique n'est
   requis pour établir ce verdict ponctuel. Le contrôle `pilot:check:test` reste
   le diagnostic à exécuter après toute future mutation de la cohorte TEST.
-- Prochaine étape hors migration : exploitation normale et observation du
-  déploiement Vercel associé au lot de clôture. Ne pas ouvrir de phase suivante ;
-  tout futur déploiement exige sa propre demande explicite.
+- La cadence quotidienne de Vercel Hobby est un compromis réservé au pilote à
+  faible trafic : elle ne convient pas à une production réelle. Le futur VPS
+  doit rétablir causalité toutes les 5 minutes, médias toutes les heures et
+  abonnements une fois par jour avec des timers supervisés.
+- Prochaine étape hors migration : maintenir le pilote Hobby, puis exécuter la
+  checklist de préparation VPS de `deploy/vps/README.md` avant l'ouverture
+  publique. Ne pas ouvrir de phase de migration supplémentaire.
 
 ## Règle de reprise
 

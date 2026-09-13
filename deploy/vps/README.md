@@ -125,3 +125,24 @@ sudo systemctl status --no-pager toutci-kyc-worker
 
 Les migrations s'exécutent explicitement avec `DATABASE_MIGRATION_URL` depuis
 un poste opérateur ou une CI protégée, jamais au démarrage du conteneur web.
+
+## Passage du pilote Hobby à la production VPS
+
+La configuration Vercel Hobby regroupe volontairement la causalité et le
+nettoyage média dans `/api/cron/daily-maintenance`, exécuté une fois par jour.
+Cette cadence convient au pilote à faible trafic, mais pas à une production
+réelle : sur le VPS, planifier les routes protégées par `CRON_SECRET` avec des
+timers systemd distincts, toutes les 5 minutes pour la causalité, toutes les
+heures pour les médias et une fois par jour pour les abonnements.
+
+Avant la bascule publique :
+
+- utiliser une base de production isolée, appliquer les migrations avec le rôle
+  opérateur et prouver une restauration de sauvegarde ;
+- remplacer le bridge Redis HTTP temporaire par un client Valkey natif ;
+- superviser l'application, les timers, l'outbox, les dead-letters, le worker
+  KYC, PostgreSQL, Valkey et l'espace disque avec alertes ;
+- tester le rollback applicatif et base, la rotation des secrets et le
+  renouvellement TLS avant le changement DNS ;
+- valider un paiement et un versement réels à faible montant, puis rapprocher
+  le journal financier avec le fournisseur avant l'ouverture générale.

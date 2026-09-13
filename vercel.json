@@ -15,16 +15,12 @@
   },
   "crons": [
     {
-      "path": "/api/cron/causality",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/media-cleanup",
-      "schedule": "15 * * * *"
-    },
-    {
       "path": "/api/cron/subscriptions",
       "schedule": "15 0 * * *"
+    },
+    {
+      "path": "/api/cron/daily-maintenance",
+      "schedule": "15 1 * * *"
     }
   ]
 }
