@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 720" fill="none" role="img" aria-label="Carte stylisée du quartier">
+  <!-- Fond cartographique doux -->
+  <rect width="350" height="720" fill="#f6f9f7"/>
+
+  <!-- Espaces paysagers et parcs stylisés -->
+  <path d="M-20 80 Q 40 60, 90 120 T 170 190 Q 230 250, 160 320 T -20 300 Z" fill="#ebf3ee" opacity="0.95"/>
+  <path d="M220 40 Q 280 20, 360 80 T 380 220 Q 320 280, 260 210 Z" fill="#ebf3ee" opacity="0.85"/>
+  <path d="M190 400 Q 260 380, 320 450 T 370 590 Q 280 620, 210 540 Z" fill="#eaf2ec" opacity="0.8"/>
+  <path d="M-30 460 Q 50 430, 90 510 T 50 640 Q -10 680, -40 600 Z" fill="#ebf3ee" opacity="0.7"/>
+  <path d="M80 680 Q 150 660, 210 710 T 290 730" fill="#ebf3ee" opacity="0.7"/>
+
+  <!-- Voies principales -->
+  <path d="M-20 240 C 80 230, 160 260, 240 210 C 290 180, 330 140, 380 130" stroke="#dfede4" stroke-width="9" stroke-linecap="round"/>
+  <path d="M70 -20 C 80 120, 120 240, 145 360 C 170 480, 150 600, 170 740" stroke="#dfede4" stroke-width="8" stroke-linecap="round"/>
+  <path d="M-20 480 C 100 460, 190 490, 280 430 C 320 400, 350 360, 380 340" stroke="#dfede4" stroke-width="8" stroke-linecap="round"/>
+  
+  <!-- Voies secondaires -->
+  <path d="M240 210 C 260 320, 280 420, 280 430" stroke="#e6f0e9" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M-10 120 Q 80 140, 135 180" stroke="#e6f0e9" stroke-width="4" stroke-linecap="round"/>
+  <path d="M145 360 Q 220 380, 270 330" stroke="#e6f0e9" stroke-width="4" stroke-linecap="round"/>
+  <path d="M40 320 C 90 350, 130 355, 145 360" stroke="#e6f0e9" stroke-width="4" stroke-linecap="round"/>
+  <path d="M170 520 C 220 540, 300 530, 370 510" stroke="#e6f0e9" stroke-width="4" stroke-linecap="round"/>
+  <path d="M30 620 C 100 600, 150 630, 220 620" stroke="#e6f0e9" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Maillage urbain local -->
+  <line x1="40" y1="80" x2="110" y2="40" stroke="#edf5f0" stroke-width="2"/>
+  <line x1="260" y1="90" x2="330" y2="60" stroke="#edf5f0" stroke-width="2"/>
+  <line x1="190" y1="280" x2="230" y2="350" stroke="#edf5f0" stroke-width="2"/>
+  <line x1="60" y1="420" x2="120" y2="400" stroke="#edf5f0" stroke-width="2"/>
+  <line x1="150" y1="630" x2="190" y2="690" stroke="#edf5f0" stroke-width="2"/>
+</svg>
