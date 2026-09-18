@@ -476,6 +476,7 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
               draggable={false}
               width={110}
               height={24}
+              priority
             />
           </div>
 
