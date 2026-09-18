@@ -140,7 +140,7 @@ function buildCspHeader(nonce: string): string {
     : "";
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${vercelAnalyticsSource}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=' 'sha256-7gJsrTTWooo5lIqQI0ArmdgmtwzxXwVtS8qDHOgyJP4='${vercelAnalyticsSource}`,
     // 'unsafe-inline' requis : framer-motion/gsap injectent des <style> à l'exécution
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
