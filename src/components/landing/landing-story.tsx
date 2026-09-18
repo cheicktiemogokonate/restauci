@@ -408,8 +408,6 @@ function MotionStage() {
         trigger: track,
         start: "top top",
         end: "bottom bottom",
-        pin: stageRef.current,
-        pinSpacing: false,
         invalidateOnRefresh: true,
         onUpdate: (self) => syncProgress(self.progress),
         onRefresh: (self) => syncProgress(self.progress),
@@ -428,8 +426,14 @@ function MotionStage() {
     const timer = setTimeout(() => {
       ScrollTrigger.refresh();
     }, 100);
+    const onLoad = () => ScrollTrigger.refresh();
+    window.addEventListener("load", onLoad);
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => ScrollTrigger.refresh());
+    }
     dispose = () => {
       clearTimeout(timer);
+      window.removeEventListener("load", onLoad);
       mm.revert();
     };
 

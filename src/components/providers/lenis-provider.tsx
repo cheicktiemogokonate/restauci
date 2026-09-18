@@ -11,24 +11,19 @@ gsap.registerPlugin(ScrollTrigger);
 const subscribeToHydration = () => () => undefined;
 
 function ScrollTriggerSync() {
-  const lenis = useLenis();
+  const lenis = useLenis(ScrollTrigger.update);
 
   useEffect(() => {
     if (!lenis) return;
-
-    const onScroll = () => {
-      ScrollTrigger.update();
-    };
-    lenis.on("scroll", onScroll);
 
     const update = (time: number) => {
       lenis.raf(time * 1000);
     };
     gsap.ticker.add(update);
     gsap.ticker.lagSmoothing(0);
+    ScrollTrigger.refresh();
 
     return () => {
-      lenis.off("scroll", onScroll);
       gsap.ticker.remove(update);
     };
   }, [lenis]);

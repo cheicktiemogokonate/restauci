@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "maplibre-gl/dist/maplibre-gl.css";
+@import "lenis/dist/lenis.css";
 @import "./landing-styles.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -183,8 +184,13 @@ h6 {
 }
 
 /* Custom smooth transitions and animations scroll behaviors */
-html {
+html:not(.lenis) {
   scroll-behavior: smooth;
+}
+
+html.lenis,
+html.lenis-smooth {
+  scroll-behavior: auto !important;
 }
 
 /* Hide scrollbar for neat presentation during screenshot / preview */
