@@ -23,7 +23,7 @@ export function PartnerVerticals() {
   const handleCtaClick = () => {
     const el = document.getElementById("tarifs");
     if (el) {
-      el.scrollIntoView({ behavior: "smooth" });
+      el.scrollIntoView();
     }
   };
 

@@ -10,7 +10,7 @@ export function SiteHeader() {
     const el = document.getElementById("download");
     if (el) {
       e.preventDefault();
-      el.scrollIntoView({ behavior: "smooth" });
+      el.scrollIntoView();
     }
   };
 

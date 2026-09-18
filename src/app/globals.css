@@ -183,16 +183,6 @@ h6 {
   font-family: var(--font-display);
 }
 
-/* Custom smooth transitions and animations scroll behaviors */
-html:not(.lenis) {
-  scroll-behavior: smooth;
-}
-
-html.lenis,
-html.lenis-smooth {
-  scroll-behavior: auto !important;
-}
-
 /* Hide scrollbar for neat presentation during screenshot / preview */
 ::-webkit-scrollbar {
   width: 6px;
