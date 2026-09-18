@@ -27,8 +27,8 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { EASE_OUT } from "@/lib/ease";
-import { cn } from "@/lib/utils";
+import { EASE_OUT } from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 
 export type ToastStatus = "neutral" | "info" | "loading" | "success" | "error";
 export type ToastPosition =

@@ -20,8 +20,8 @@ import {
   useId,
   useState,
 } from "react";
-import { SPRING_LAYOUT } from "@/lib/ease";
-import { cn } from "@/lib/utils";
+import { SPRING_LAYOUT } from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 
 export interface SharedLayoutBgProps
   extends Omit<HTMLAttributes<HTMLElement>, "children"> {

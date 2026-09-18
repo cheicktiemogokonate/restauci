@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { request } from "@/lib/landing/story-data";
+import { request } from "./story-data";
 
 export function RequestCard({ floating = false }: { floating?: boolean }) {
   return (

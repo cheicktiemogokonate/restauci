@@ -1,6 +1,6 @@
 import Image from "next/image";
-import { brand } from "@/lib/landing/story-data";
-import { cn } from "@/lib/utils";
+import { brand } from "./story-data";
+import { cn } from "@/shared/ui/cn";
 
 export function BrandLogo({ className }: { className?: string }) {
   return (

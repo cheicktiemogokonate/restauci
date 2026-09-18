@@ -11,14 +11,26 @@ gsap.registerPlugin(ScrollTrigger);
 const subscribeToHydration = () => () => undefined;
 
 function ScrollTriggerSync() {
-  const lenis = useLenis(ScrollTrigger.update);
+  const lenis = useLenis();
 
   useEffect(() => {
     if (!lenis) return;
-    const update = (time: number) => lenis.raf(time * 1000);
+
+    const onScroll = () => {
+      ScrollTrigger.update();
+    };
+    lenis.on("scroll", onScroll);
+
+    const update = (time: number) => {
+      lenis.raf(time * 1000);
+    };
     gsap.ticker.add(update);
     gsap.ticker.lagSmoothing(0);
-    return () => gsap.ticker.remove(update);
+
+    return () => {
+      lenis.off("scroll", onScroll);
+      gsap.ticker.remove(update);
+    };
   }, [lenis]);
 
   return null;
@@ -37,13 +49,9 @@ export function LenisProvider({ children }: { children: ReactNode }) {
       options={{
         autoRaf: false,
         anchors: true,
-        // The story itself scrubs to the scroll position. Letting Lenis coast
-        // after wheel input made the phone lag behind the reader and created
-        // apparent dead zones between acts.
-        smoothWheel: false,
-        lerp: 1,
-        wheelMultiplier: 1,
-        overscroll: false,
+        smoothWheel: true,
+        lerp: 0.1,
+        duration: 1.0,
       }}
     >
       <MotionConfig reducedMotion={hydrated ? "user" : "never"}>

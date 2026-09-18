@@ -4,7 +4,7 @@ import { ArrowRight, Clock3, MapPin, Star } from "lucide-react";
 import Image from "next/image";
 import { BottomSheet } from "@/components/motion/bottom-sheet";
 import { Iphone } from "@/components/ui/iphone";
-import { brand, request, type StoryStep } from "@/lib/landing/story-data";
+import { brand, request, type StoryStep } from "./story-data";
 
 function PhoneMap() {
   return (

@@ -11,10 +11,10 @@ import {
 } from "motion/react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { EASE_DRAWER } from "@/lib/ease";
-import { PresenceGate } from "@/lib/presence-gate";
-import { TOUCH_GESTURE_CONTENT_CLASS } from "@/lib/touch";
-import { cn } from "@/lib/utils";
+import { EASE_DRAWER } from "@/shared/ui/motion";
+import { PresenceGate } from "@/shared/ui/presence-gate";
+import { TOUCH_GESTURE_CONTENT_CLASS } from "@/shared/ui/touch";
+import { cn } from "@/shared/ui/cn";
 
 // Vaul-style glide: a long, fully-damped tween reads smoother than a spring on
 // open — no settle/overshoot, just one clean decel. Same curve drives the

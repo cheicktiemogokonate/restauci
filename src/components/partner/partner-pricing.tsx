@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Building2, Check, Store } from "lucide-react";
 import { MotionButton } from "@/components/ui/motion-button";
-import { PARTNER_PLANS, type PartnerActivityType } from "@/lib/landing/partner-data";
+import { PARTNER_PLANS, type PartnerActivityType } from "./partner-data";
 
 export function PartnerPricing() {
   const [activity, setActivity] = useState<PartnerActivityType>("restaurant");

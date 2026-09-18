@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 
 interface BarChartProps {
   items: {

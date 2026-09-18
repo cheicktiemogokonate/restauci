@@ -6,7 +6,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Building2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { brand } from "@/lib/landing/story-data";
+import { brand } from "./story-data";
 
 import { MotionButton } from "@/components/ui/motion-button";
 

@@ -1,7 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 
 const glowVariants = cva("absolute w-full pointer-events-none", {
   variants: {

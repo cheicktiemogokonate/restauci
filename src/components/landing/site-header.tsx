@@ -3,7 +3,7 @@
 import Link from "next/link";
 import StaggeredMenu from "@/components/StaggeredMenu";
 import { BrandLogo } from "@/components/landing/brand-logo";
-import { brand } from "@/lib/landing/story-data";
+import { brand } from "./story-data";
 
 export function SiteHeader() {
   const handleDownloadClick = (e: React.MouseEvent<HTMLAnchorElement>) => {

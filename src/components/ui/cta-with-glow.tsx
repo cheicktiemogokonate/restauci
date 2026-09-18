@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Glow } from "@/components/ui/glow"
-import { cn } from "@/lib/utils"
+import { cn } from "@/shared/ui/cn"
 
 interface CTAProps {
   title: string

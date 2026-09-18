@@ -2,8 +2,8 @@
 // beui.dev/components/motion/number
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { EASE_OUT } from "@/lib/ease";
-import { cn } from "@/lib/utils";
+import { EASE_OUT } from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 
 export type DigitSwapDirection = "up" | "down";
 

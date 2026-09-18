@@ -32,8 +32,8 @@ import {
   EASE_OUT,
   SPRING_LAYOUT,
   SPRING_PRESS,
-} from "@/lib/ease";
-import { cn } from "@/lib/utils";
+} from "@/shared/ui/motion";
+import { cn } from "@/shared/ui/cn";
 
 type SidebarState = "expanded" | "collapsed";
 type SidebarSide = "left" | "right";

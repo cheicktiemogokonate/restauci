@@ -66,8 +66,7 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className="h-full scroll-smooth antialiased"
-      data-scroll-behavior="smooth"
+      className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col font-sans bg-[#FAFBFA] text-slate-900">
         <a

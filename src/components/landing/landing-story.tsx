@@ -3,12 +3,12 @@
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { ArrowDown, ArrowRight } from "lucide-react";
-import { memo, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { PhoneExperience } from "@/components/landing/phone-experience";
 import { ProDashboard } from "@/components/landing/pro-dashboard";
 import { RequestCard } from "@/components/landing/request-card";
 import { Highlighter } from "@/components/ui/highlighter";
-import { brand, type StoryStep } from "@/lib/landing/story-data";
+import { brand, type StoryStep } from "./story-data";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -85,7 +85,8 @@ function MotionStage() {
   const [step, setStep] = useState<StoryStep>(0);
   const [ready, setReady] = useState(false);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     let dispose: () => void = () => { };
@@ -407,6 +408,8 @@ function MotionStage() {
         trigger: track,
         start: "top top",
         end: "bottom bottom",
+        pin: stageRef.current,
+        pinSpacing: false,
         invalidateOnRefresh: true,
         onUpdate: (self) => syncProgress(self.progress),
         onRefresh: (self) => syncProgress(self.progress),
@@ -422,8 +425,13 @@ function MotionStage() {
     mm.add("(min-width: 900px)", () => createTimeline(false));
     mm.add("(max-width: 899px)", () => createTimeline(true));
     setReady(true);
-    ScrollTrigger.refresh();
-    dispose = () => mm.revert();
+    const timer = setTimeout(() => {
+      ScrollTrigger.refresh();
+    }, 100);
+    dispose = () => {
+      clearTimeout(timer);
+      mm.revert();
+    };
 
     return () => {
       dispose();

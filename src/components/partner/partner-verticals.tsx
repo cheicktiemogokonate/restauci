@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   UserCheck,
 } from "lucide-react";
-import { PARTNER_ACTIVITIES } from "@/lib/landing/partner-data";
+import { PARTNER_ACTIVITIES } from "./partner-data";
 import { ScrambleButton } from "@/components/ui/cta-with-marquee";
 
 export function PartnerVerticals() {

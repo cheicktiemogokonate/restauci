@@ -1,7 +1,7 @@
 "use client";
 
 import HowItWorks, { type Step } from "@/components/ui/how-it-works";
-import { ONBOARDING_STEPS } from "@/lib/landing/partner-data";
+import { ONBOARDING_STEPS } from "./partner-data";
 
 const workflowSteps: Step[] = ONBOARDING_STEPS.map((step, idx) => {
   const themes: Array<"emerald" | "blue" | "orange" | "purple"> = [

@@ -2,7 +2,7 @@
 
 import React, { FC } from "react";
 import { ArrowRight } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/ui/cn";
 
 export interface MotionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;

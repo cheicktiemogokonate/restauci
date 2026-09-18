@@ -31,7 +31,7 @@ import {
 import { NumberTicker } from "@/components/motion/number-ticker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Safari } from "@/components/ui/safari";
-import { brand, dashboard, request, type StoryStep } from "@/lib/landing/story-data";
+import { brand, dashboard, request, type StoryStep } from "./story-data";
 import { AnimatePresence, motion } from "motion/react";
 
 type View = "overview" | "requests" | "detail";

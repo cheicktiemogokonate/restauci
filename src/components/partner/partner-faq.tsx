@@ -7,7 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { PARTNER_FAQS } from "@/lib/landing/partner-data";
+import { PARTNER_FAQS } from "./partner-data";
 
 export function PartnerFaq() {
   return (
