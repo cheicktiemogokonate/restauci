@@ -20,6 +20,8 @@ const ROUTES_PUBLIQUES = [
   "/restaurant/*",
   "/residences",
   "/residences/*",
+  "/partenaires",
+  "/partenaires/*",
   "/client/*",
   "/livreur",
   "/livreur/*",

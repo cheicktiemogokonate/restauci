@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -117,9 +118,32 @@ export function MotionFooter() {
             />
           </div>
         </div>
-        {/* <div className="footer-meta">
-          <small>© 2026 {brand.name}. {brand.context}.</small>
-        </div> */}
+        <div className="footer-meta">
+          <nav aria-label="Informations légales et publiques" className="footer-legal-nav">
+            <Link href="/partenaires" className="footer-legal-link">
+              Espace Partenaires
+            </Link>
+            <span className="footer-legal-sep" aria-hidden="true">•</span>
+            <Link href="/conditions-generales" className="footer-legal-link">
+              Conditions générales
+            </Link>
+            <span className="footer-legal-sep" aria-hidden="true">•</span>
+            <Link href="/mentions-legales" className="footer-legal-link">
+              Mentions légales
+            </Link>
+            <span className="footer-legal-sep" aria-hidden="true">•</span>
+            <Link href="/confidentialite" className="footer-legal-link">
+              Confidentialité
+            </Link>
+            <span className="footer-legal-sep" aria-hidden="true">•</span>
+            <Link href="/cookies" className="footer-legal-link">
+              Cookies
+            </Link>
+          </nav>
+          <small className="footer-copyright">
+            © {new Date().getFullYear()} {brand.name}. Tous droits réservés. {brand.context}.
+          </small>
+        </div>
         <div ref={wordRef} className="footer-wordmark-container" aria-label={brand.name}>
           <svg
             ref={svgRef}
