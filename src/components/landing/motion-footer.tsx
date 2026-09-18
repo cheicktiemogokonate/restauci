@@ -120,9 +120,6 @@ export function MotionFooter() {
         </div>
         <div className="footer-meta">
           <nav aria-label="Informations légales et publiques" className="footer-legal-nav">
-            <Link href="/partenaires" className="footer-legal-link">
-              Espace Partenaires
-            </Link>
             <span className="footer-legal-sep" aria-hidden="true">•</span>
             <Link href="/conditions-generales" className="footer-legal-link">
               Conditions générales
