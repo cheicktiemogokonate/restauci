@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { locationSampleSchema } from "@/shared/geo";
 import type {
   ResidenceBookabilityBlocker,
   ResidenceBookingPaymentMethod,
@@ -10,6 +11,26 @@ import type {
   ResidenceVisibilityBlocker,
 } from "./model";
 import { RESIDENCE_BOOKING_PAYMENT_METHODS } from "./model";
+
+export const residenceMoodSchema = z.enum([
+  "calme_discret",
+  "entre_amis",
+  "belle_vue",
+  "coup_de_coeur",
+]);
+export type ResidenceMood = z.infer<typeof residenceMoodSchema>;
+
+export const residenceGeoSearchSchema = z
+  .object({
+    currentLocation: locationSampleSchema,
+    query: z.string().trim().max(100).optional(),
+    mood: residenceMoodSchema.optional(),
+    radiusKm: z.number().min(0.5).max(200).default(50),
+    limit: z.number().int().min(1).max(100).default(50),
+  })
+  .strict();
+
+export type ResidenceGeoSearchInput = z.infer<typeof residenceGeoSearchSchema>;
 
 const nullableCoordinate = z.number().finite().nullable();
 
@@ -255,6 +276,26 @@ export interface ResidenceDiscoveryEligibleRecord {
     PublicResidenceDTO,
     "placement" | "partnerBadgeEnabled" | "discoveryToken"
   >;
+  candidate: {
+    resourceId: string;
+    partnerAccountId: string;
+    planCode: "decouverte" | "croissance" | "partenaire_fier";
+    organicRank: number;
+  };
+}
+
+export interface ResidenceGeoItemDTO extends Omit<
+  PublicResidenceDTO,
+  "placement" | "partnerBadgeEnabled" | "discoveryToken"
+> {
+  address: string;
+  latitude: number;
+  longitude: number;
+  distanceKm: number;
+}
+
+export interface ResidenceGeoDiscoveryEligibleRecord {
+  item: ResidenceGeoItemDTO;
   candidate: {
     resourceId: string;
     partnerAccountId: string;

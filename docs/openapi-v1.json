@@ -3763,6 +3763,68 @@
         }
       }
     },
+    "/public/discovery/mood": {
+      "post": {
+        "operationId": "searchPublicMood",
+        "tags": [
+          "Découverte"
+        ],
+        "summary": "Rechercher par ambiance et envie multi-verticales",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoodSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session absente ou expirée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requêtes dépassée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/public/discovery/open": {
       "get": {
         "operationId": "openDiscoveryDestination",
@@ -3781,6 +3843,68 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session absente ou expirée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requêtes dépassée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/etablissements/search": {
+      "post": {
+        "operationId": "searchPublicEtablissements",
+        "tags": [
+          "Découverte"
+        ],
+        "summary": "Rechercher les établissements unifiés sur la carte",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EtablissementSearchRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Succès",
@@ -5878,6 +6002,99 @@
           },
           "eventType": {
             "const": "detail_open"
+          }
+        }
+      },
+      "MoodSearchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "currentLocation"
+        ],
+        "properties": {
+          "currentLocation": {
+            "$ref": "#/components/schemas/LocationSample"
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "mood": {
+            "type": "string",
+            "enum": [
+              "calme_discret",
+              "entre_amis",
+              "belle_vue",
+              "coup_de_coeur"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "tous",
+              "restaurant",
+              "residence"
+            ],
+            "default": "tous"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "radiusKm": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 200,
+            "default": 50
+          }
+        }
+      },
+      "EtablissementSearchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "currentLocation"
+        ],
+        "properties": {
+          "currentLocation": {
+            "$ref": "#/components/schemas/LocationSample"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "tous",
+              "restaurant",
+              "residence"
+            ],
+            "default": "tous"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "radiusKm": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 200,
+            "default": 50
+          },
+          "search": {
+            "type": "string",
+            "maxLength": 100
           }
         }
       },

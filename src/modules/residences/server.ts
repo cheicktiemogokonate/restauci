@@ -67,7 +67,13 @@ import {
 } from "./_internal/persistence";
 import {
   searchPublicResidenceRecords,
+  searchVisibleResidencesNearLocationRecord,
 } from "./_internal/search";
+import {
+  residenceGeoSearchSchema,
+  type ResidenceGeoSearchInput,
+  type ResidenceGeoDiscoveryEligibleRecord,
+} from "./contracts";
 import {
   cancelResidenceReservationRecord,
   createResidenceReservationRecord,
@@ -392,6 +398,13 @@ export async function getResidenceDiscoveryEligibility(
 ) {
   const parsed = publicResidenceSearchSchema.parse(input);
   return searchPublicResidenceRecords(parsed);
+}
+
+export async function getResidenceGeoDiscoveryEligibility(
+  input: ResidenceGeoSearchInput,
+): Promise<ResidenceGeoDiscoveryEligibleRecord[]> {
+  const parsed = residenceGeoSearchSchema.parse(input);
+  return searchVisibleResidencesNearLocationRecord(parsed);
 }
 
 export async function getPublicResidenceBySlug(slug: string) {

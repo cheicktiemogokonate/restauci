@@ -59,6 +59,8 @@ continue d'utiliser le cookie HttpOnly.
 Le contrat OpenAPI couvre notamment :
 
 - profil, géocodage et résolution de marché de service ;
+- recherche unifiée d'établissements pour la carte (`POST /public/etablissements/search`) ;
+- recherche Mood & Découverte par mots-clés et ambiance (`POST /public/discovery/mood`) ;
 - recherche/détail/menu Restaurants ;
 - prévalidation, création idempotente, historique, détail, annulation, paiement
   et suivi SSE des commandes ;

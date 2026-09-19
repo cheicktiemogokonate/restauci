@@ -122,7 +122,7 @@ migration : les écrans obsolètes peuvent être reconstruits avec leur domaine.
 | Notification persistence | Notifications | `persistNotification()` | `src/modules/notifications/server.ts` |
 | Notification destination | Notifications | `getUserNotificationDestination()` | `src/modules/notifications/model.ts` |
 | Admin dashboard projections | Admin Projections | `getAdminDashboardProjection()`, `getAdminActionCenter()` | `src/modules/admin-projections/server.ts` |
-| Public discovery | Discovery | `searchRestaurantsInCurrentMarket()`, `searchPublicResidences()` | `src/modules/discovery/server.ts` |
+| Public discovery | Discovery | `searchRestaurantsInCurrentMarket()`, `searchPublicResidences()`, `searchEtablissements()`, `searchMoodDiscovery()` | `src/modules/discovery/server.ts` |
 | Money | Shared Money | primitives FCFA/BPS | `src/shared/money.ts`, `src/shared/format.ts` |
 | Partner identity eligibility | Identity | `assertPartnerIdentityVerified()` | `src/modules/identity/server.ts` |
 | Residence availability | Residences | `getResidenceAvailability()`, `createResidenceUnavailablePeriod()` | `src/modules/residences/server.ts` |

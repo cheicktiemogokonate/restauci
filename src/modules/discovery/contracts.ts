@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { locationSampleSchema } from "@/shared/geo";
 
 export const discoveryAttributionTokenPayloadSchema = z
   .object({
@@ -38,3 +39,69 @@ export const discoveryRankingContextSchema = z
     at: z.date(),
   })
   .strict();
+
+export const moodSchema = z.enum([
+  "calme_discret",
+  "entre_amis",
+  "belle_vue",
+  "coup_de_coeur",
+]);
+export type MoodType = z.infer<typeof moodSchema>;
+
+export const etablissementSearchSchema = z
+  .object({
+    currentLocation: locationSampleSchema,
+    type: z.enum(["tous", "restaurant", "residence"]).default("tous"),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).max(100).default(50),
+    radiusKm: z.number().min(0.5).max(200).default(50),
+    search: z.string().trim().max(100).optional(),
+  })
+  .strict();
+
+export type EtablissementSearchInput = z.infer<typeof etablissementSearchSchema>;
+
+export const moodSearchSchema = z
+  .object({
+    currentLocation: locationSampleSchema,
+    query: z.string().trim().max(100).optional(),
+    mood: moodSchema.optional(),
+    type: z.enum(["tous", "restaurant", "residence"]).default("tous"),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).max(50).default(20),
+    radiusKm: z.number().min(0.5).max(200).default(50),
+  })
+  .strict();
+
+export type MoodSearchInput = z.infer<typeof moodSearchSchema>;
+
+export interface EtablissementItemDTO {
+  id: string;
+  type: "restaurant" | "residence";
+  nom: string;
+  slug: string;
+  description: string | null;
+  adresse: string;
+  ville: string | null;
+  latitude: number;
+  longitude: number;
+  distanceKm: number;
+  imageUrl: string | null;
+  banniereUrl?: string | null;
+  noteMoyenne: number | null;
+  nombreAvis: number;
+  enLigne: boolean;
+  prixAffiche: string | null;
+  prixFcfa: number | null;
+  tags: string[];
+  placement: "promoted" | "organic";
+  partnerBadgeEnabled: boolean;
+  discoveryToken: string;
+}
+
+export interface EtablissementSearchResultDTO {
+  items: EtablissementItemDTO[];
+  total: number;
+  page: number;
+  limit: number;
+}

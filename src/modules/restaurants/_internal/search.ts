@@ -52,6 +52,60 @@ function buildSearchConditions(input: RestaurantSearchInput, serviceMarketId?: s
       WHERE cuisine ILIKE ${cuisinePattern}
     )`);
   }
+  if (input.mood) {
+    switch (input.mood) {
+      case "calme_discret":
+        conditions.push(
+          or(
+            ilike(restaurants.nom, "%calme%"),
+            ilike(restaurants.nom, "%lounge%"),
+            ilike(restaurants.description, "%calme%"),
+            ilike(restaurants.description, "%romantique%"),
+            ilike(restaurants.description, "%intime%"),
+            ilike(restaurants.description, "%lounge%"),
+            sql`EXISTS (SELECT 1 FROM unnest(COALESCE(${restaurants.cuisines}, ARRAY[]::text[])) AS cuisine WHERE cuisine ILIKE ANY(ARRAY['%calme%', '%lounge%', '%romantique%', '%café%', '%thé%', '%gastronom%']))`,
+          )!,
+        );
+        break;
+      case "entre_amis":
+        conditions.push(
+          or(
+            ilike(restaurants.nom, "%grill%"),
+            ilike(restaurants.nom, "%bar%"),
+            ilike(restaurants.nom, "%burger%"),
+            ilike(restaurants.description, "%ami%"),
+            ilike(restaurants.description, "%fête%"),
+            ilike(restaurants.description, "%terrasse%"),
+            sql`EXISTS (SELECT 1 FROM unnest(COALESCE(${restaurants.cuisines}, ARRAY[]::text[])) AS cuisine WHERE cuisine ILIKE ANY(ARRAY['%grill%', '%burger%', '%pizza%', '%bar%', '%fast food%', '%maquis%', '%africaine%', '%choukouya%', '%garba%']))`,
+          )!,
+        );
+        break;
+      case "belle_vue":
+        conditions.push(
+          or(
+            ilike(restaurants.nom, "%vue%"),
+            ilike(restaurants.nom, "%rooftop%"),
+            ilike(restaurants.nom, "%terrasse%"),
+            ilike(restaurants.description, "%vue%"),
+            ilike(restaurants.description, "%rooftop%"),
+            ilike(restaurants.description, "%lagune%"),
+            ilike(restaurants.description, "%panoramique%"),
+            sql`EXISTS (SELECT 1 FROM unnest(COALESCE(${restaurants.cuisines}, ARRAY[]::text[])) AS cuisine WHERE cuisine ILIKE ANY(ARRAY['%rooftop%', '%vue%', '%lagune%', '%terrasse%']))`,
+          )!,
+        );
+        break;
+      case "coup_de_coeur":
+        conditions.push(
+          or(
+            sql`${restaurants.noteMoyenne} >= 4.0`,
+            sql`${restaurants.nombreCommandes} >= 10`,
+            ilike(restaurants.description, "%coup de coeur%"),
+            sql`EXISTS (SELECT 1 FROM unnest(COALESCE(${restaurants.cuisines}, ARRAY[]::text[])) AS cuisine WHERE cuisine ILIKE ANY(ARRAY['%coup de coeur%', '%signature%', '%gourmet%']))`,
+          )!,
+        );
+        break;
+    }
+  }
   if (input.modeCommande) {
     conditions.push(sql`${input.modeCommande} = ANY(${restaurants.modesCommande})`);
   }

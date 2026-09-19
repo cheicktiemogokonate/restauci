@@ -55,23 +55,43 @@ export async function getClientSession(req: NextRequest): Promise<
   }
 
   try {
+    let clientId: string;
+    let sessionId: string;
+    let issuedAtMs: number;
+
     const payload = await verifyClientAccessToken(token);
-
-    if (!payload) {
-      return {
-        session: null,
-        error:   apiResponse.unauthorized("Token client invalide"),
-      };
+    if (payload) {
+      clientId = payload.clientId;
+      sessionId = payload.sessionId;
+      issuedAtMs = payload.issuedAtMs;
+    } else {
+      // Fallback pour les tokens d'authentification porteurs du rôle 'client'
+      const { jwtVerify } = await import("jose");
+      const { env } = await import("@/infrastructure/env");
+      const secret = new TextEncoder().encode(env.JWT_SECRET);
+      const { payload: generalPayload } = await jwtVerify(token, secret, {
+        algorithms: ["HS256"],
+      });
+      const candidateId = (generalPayload.clientId ?? generalPayload.userId ?? generalPayload.sub);
+      const isClientRole = generalPayload.role === "client" || generalPayload.type === "client-access" || generalPayload.type === "client";
+      if (!isClientRole || typeof candidateId !== "string" || !candidateId) {
+        return {
+          session: null,
+          error: apiResponse.unauthorized("Token client invalide"),
+        };
+      }
+      clientId = candidateId;
+      sessionId = typeof generalPayload.sessionId === "string" ? generalPayload.sessionId : (typeof generalPayload.jti === "string" ? generalPayload.jti : "");
+      issuedAtMs = typeof generalPayload.issuedAtMs === "number" ? generalPayload.issuedAtMs : (typeof generalPayload.iat === "number" ? generalPayload.iat * 1000 : Date.now());
     }
-
 
     try {
       if (
-        (await isSessionRevoked(payload.sessionId)) ||
+        (sessionId ? await isSessionRevoked(sessionId) : false) ||
         (await isOwnerSessionRevoked(
           "client",
-          payload.clientId,
-          payload.issuedAtMs,
+          clientId,
+          issuedAtMs,
         ))
       ) {
         return {
@@ -90,7 +110,7 @@ export async function getClientSession(req: NextRequest): Promise<
       };
     }
 
-    const client = await getClientSessionState(payload.clientId as string);
+    const client = await getClientSessionState(clientId);
     if (!client?.active) {
       return {
         session: null,

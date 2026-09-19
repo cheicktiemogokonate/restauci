@@ -16,15 +16,24 @@ type RestaurantServiceMarketCapabilityStatus =
   | "active"
   | "paused";
 
+export const restaurantMoodSchema = z.enum([
+  "calme_discret",
+  "entre_amis",
+  "belle_vue",
+  "coup_de_coeur",
+]);
+export type RestaurantMood = z.infer<typeof restaurantMoodSchema>;
+
 export const restaurantSearchSchema = z
   .object({
     currentLocation: locationSampleSchema,
     search: z.string().trim().max(100).optional(),
+    mood: restaurantMoodSchema.optional(),
     cuisine: z.string().trim().max(100).optional(),
     modeCommande: z.enum(["sur_place", "livraison", "emporter"]).optional(),
     page: z.number().int().min(1).default(1),
     limit: z.number().int().min(1).max(100).default(20),
-    legacyRadiusKm: z.number().min(0.5).max(50).default(10),
+    legacyRadiusKm: z.number().min(0.5).max(200).default(50),
   })
   .strict();
 
