@@ -67,8 +67,10 @@ import {
 } from "./_internal/persistence";
 import {
   searchPublicResidenceRecords,
-  searchVisibleResidencesNearLocationRecord,
 } from "./_internal/search";
+import {
+  searchVisibleResidencesNearLocationRecord,
+} from "./_internal/geo-search";
 import {
   residenceGeoSearchSchema,
   type ResidenceGeoSearchInput,

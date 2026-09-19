@@ -4,12 +4,12 @@ import { sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db";
 import type { SubscriptionPlanCode } from "@/modules/subscriptions/model";
 import type {
-  PublicResidenceSearchInput,
-  ResidenceDiscoveryEligibleRecord,
+  ResidenceGeoDiscoveryEligibleRecord,
+  ResidenceGeoSearchInput,
   ResidencePhotoDTO,
 } from "../contracts";
 
-type SearchRow = {
+type GeoSearchRow = {
   id: string;
   partner_account_id: string;
   plan_code: SubscriptionPlanCode;
@@ -18,8 +18,12 @@ type SearchRow = {
   description: string;
   price_per_night_fcfa: number | string;
   max_guests: number | string;
+  address: string;
   city: string;
   country: string;
+  latitude: number | string;
+  longitude: number | string;
+  distance_meters: number | string;
   first_published_at: Date | string;
   has_provider_account: boolean;
   photos: ResidencePhotoDTO[] | string | null;
@@ -38,7 +42,7 @@ function rowsFromExecuteResult<T>(result: unknown): T[] {
   return [];
 }
 
-function parsePhotos(value: SearchRow["photos"]): ResidencePhotoDTO[] {
+function parsePhotos(value: GeoSearchRow["photos"]): ResidencePhotoDTO[] {
   if (Array.isArray(value)) return value;
   if (typeof value === "string") {
     const parsed: unknown = JSON.parse(value);
@@ -47,13 +51,16 @@ function parsePhotos(value: SearchRow["photos"]): ResidencePhotoDTO[] {
   return [];
 }
 
-export async function searchPublicResidenceRecords(
-  input: PublicResidenceSearchInput,
-): Promise<ResidenceDiscoveryEligibleRecord[]> {
-  const destination = input.destination?.trim() || null;
-  const checkIn = input.checkIn ?? null;
-  const checkOut = input.checkOut ?? null;
-  const guests = input.guests ?? null;
+export async function searchVisibleResidencesNearLocationRecord(
+  input: ResidenceGeoSearchInput,
+): Promise<ResidenceGeoDiscoveryEligibleRecord[]> {
+  const query = input.query?.trim() ? `%${input.query.trim().replace(/^#/, "")}%` : null;
+  const mood = input.mood ?? null;
+  const radiusMeters = (input.radiusKm ?? 50) * 1_000;
+  const lat = input.currentLocation.lat;
+  const lng = input.currentLocation.lng;
+  const limit = input.limit ?? 50;
+
   const result = await db.execute(sql`
     WITH effective_subscription AS (
       SELECT
@@ -158,9 +165,16 @@ export async function searchPublicResidenceRecords(
       residence.description,
       residence.price_per_night_fcfa,
       residence.max_guests,
+      residence.address,
       residence.city,
       residence.country,
+      residence.latitude,
+      residence.longitude,
       residence.first_published_at,
+      ST_DistanceSphere(
+        ST_SetSRID(ST_MakePoint(residence.longitude, residence.latitude), 4326),
+        ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)
+      ) AS distance_meters,
       EXISTS (
         SELECT 1
         FROM payment_provider_accounts AS provider_account
@@ -183,47 +197,48 @@ export async function searchPublicResidenceRecords(
       ), '[]'::json) AS photos
     FROM quota_ranked AS residence
     WHERE (residence.quota_limit IS NULL OR residence.quota_rank <= residence.quota_limit)
-      AND (
-        ${destination}::text IS NULL
-        OR residence.city ILIKE '%' || ${destination}::text || '%'
-        OR residence.country ILIKE '%' || ${destination}::text || '%'
-        OR residence.title ILIKE '%' || ${destination}::text || '%'
-      )
-      AND (${guests}::integer IS NULL OR residence.max_guests >= ${guests}::integer)
-      AND (
-        ${checkIn}::date IS NULL
-        OR NOT EXISTS (
-          SELECT 1
-          FROM residence_reservations AS reservation
-          WHERE reservation.residence_id = residence.id
-            AND reservation.status <> 'annulee'
-            AND reservation.check_in < ${checkOut}::date
-            AND reservation.check_out > ${checkIn}::date
-        )
+      AND ST_DWithin(
+        ST_SetSRID(ST_MakePoint(residence.longitude, residence.latitude), 4326)::geography,
+        ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography,
+        ${radiusMeters}
       )
       AND (
-        ${checkIn}::date IS NULL
-        OR NOT EXISTS (
-          SELECT 1
-          FROM residence_unavailable_periods AS unavailable
-          WHERE unavailable.residence_id = residence.id
-            AND unavailable.check_in < ${checkOut}::date
-            AND unavailable.check_out > ${checkIn}::date
-        )
+        ${query}::text IS NULL
+        OR residence.title ILIKE ${query}::text
+        OR residence.description ILIKE ${query}::text
+        OR residence.city ILIKE ${query}::text
+        OR residence.address ILIKE ${query}::text
+      )
+      AND (
+        ${mood}::text IS NULL
+        OR (${mood}::text = 'calme_discret' AND (
+          residence.title ILIKE '%calme%' OR residence.title ILIKE '%discret%' OR residence.title ILIKE '%paisible%'
+          OR residence.description ILIKE '%calme%' OR residence.description ILIKE '%discret%' OR residence.description ILIKE '%paisible%'
+          OR residence.description ILIKE '%repos%' OR residence.description ILIKE '%tranquille%' OR residence.description ILIKE '%résidentiel%'
+        ))
+        OR (${mood}::text = 'entre_amis' AND (
+          residence.max_guests >= 4
+          OR residence.title ILIKE '%piscine%' OR residence.title ILIKE '%villa%' OR residence.title ILIKE '%barbecue%'
+          OR residence.description ILIKE '%piscine%' OR residence.description ILIKE '%barbecue%' OR residence.description ILIKE '%bbq%'
+          OR residence.description ILIKE '%fête%' OR residence.description ILIKE '%amis%' OR residence.description ILIKE '%convivial%'
+        ))
+        OR (${mood}::text = 'belle_vue' AND (
+          residence.title ILIKE '%vue%' OR residence.title ILIKE '%rooftop%' OR residence.title ILIKE '%lagune%' OR residence.title ILIKE '%mer%'
+          OR residence.description ILIKE '%vue%' OR residence.description ILIKE '%rooftop%' OR residence.description ILIKE '%lagune%'
+          OR residence.description ILIKE '%mer%' OR residence.description ILIKE '%balcon%' OR residence.description ILIKE '%panoramique%'
+          OR residence.description ILIKE '%penthouse%'
+        ))
+        OR (${mood}::text = 'coup_de_coeur' AND (
+          residence.first_published_at IS NOT NULL
+        ))
       )
     ORDER BY
-      CASE
-        WHEN ${destination}::text IS NULL THEN 0
-        WHEN lower(residence.city) = lower(${destination}::text) THEN 0
-        WHEN residence.city ILIKE '%' || ${destination}::text || '%' THEN 1
-        WHEN residence.title ILIKE '%' || ${destination}::text || '%' THEN 2
-        ELSE 3
-      END,
-      residence.first_published_at DESC,
-      residence.id
+      distance_meters ASC,
+      residence.first_published_at DESC
+    LIMIT ${limit}
   `);
 
-  return rowsFromExecuteResult<SearchRow>(result).map((row, organicRank) => ({
+  return rowsFromExecuteResult<GeoSearchRow>(result).map((row, organicRank) => ({
     item: {
       id: row.id,
       slug: row.slug,
@@ -231,8 +246,12 @@ export async function searchPublicResidenceRecords(
       description: row.description,
       pricePerNightFcfa: Number(row.price_per_night_fcfa),
       maxGuests: Number(row.max_guests),
+      address: row.address,
       city: row.city,
       country: row.country,
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude),
+      distanceKm: Math.round((Number(row.distance_meters) / 1_000) * 10) / 10,
       firstPublishedAt: new Date(row.first_published_at).toISOString(),
       photos: parsePhotos(row.photos),
       bookability: {
