@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24.16.0-alpine3.24 AS dependencies
+FROM node:26.8.2-alpine3.24 AS dependencies
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node:24.16.0-alpine3.24 AS builder
+FROM node:26.8.2-alpine3.24 AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=dependencies /app/node_modules ./node_modules
@@ -17,7 +17,7 @@ COPY . .
 RUN --mount=type=secret,id=app_env,target=/app/.env.production.local,required=true \
     npm run build
 
-FROM node:24.16.0-alpine3.24 AS runner
+FROM node:26.8.2-alpine3.24 AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
