@@ -27,7 +27,7 @@ export type RestaurantMood = z.infer<typeof restaurantMoodSchema>;
 export const restaurantSearchSchema = z
   .object({
     currentLocation: locationSampleSchema,
-    search: z.string().trim().max(100).optional(),
+    query: z.string().trim().max(100).optional(),
     mood: restaurantMoodSchema.optional(),
     cuisine: z.string().trim().max(100).optional(),
     modeCommande: z.enum(["sur_place", "livraison", "emporter"]).optional(),

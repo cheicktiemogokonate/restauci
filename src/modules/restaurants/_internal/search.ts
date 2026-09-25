@@ -23,7 +23,7 @@ function buildSearchConditions(input: RestaurantSearchInput, serviceMarketId?: s
   ];
   if (serviceMarketId) conditions.unshift(eq(restaurants.serviceMarketId, serviceMarketId));
 
-  const search = input.search?.trim();
+  const search = input.query?.trim();
   if (search) {
     const pattern = `%${search}%`;
     conditions.push(

@@ -80,7 +80,7 @@ export async function searchRestaurantsInCurrentMarket(
     eligibility.scope,
     parsed.currentLocation.lat.toFixed(4),
     parsed.currentLocation.lng.toFixed(4),
-    parsed.search ?? "",
+    parsed.query ?? "",
     parsed.cuisine ?? "",
     parsed.modeCommande ?? "",
   ].join(":");
@@ -318,7 +318,7 @@ export async function searchEtablissements(
     try {
       const res = await searchRestaurantsInCurrentMarket({
         currentLocation,
-        search,
+        query: search,
         legacyRadiusKm: radiusKm,
         page: 1,
         limit: Math.max(limit * page, 50),
@@ -395,7 +395,7 @@ export async function searchMoodDiscovery(
     try {
       const res = await searchRestaurantsInCurrentMarket({
         currentLocation,
-        search: query,
+        query,
         mood,
         legacyRadiusKm: radiusKm,
         page: 1,
