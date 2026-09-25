@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err) {
-    log.error({ err }, "Erreur inscription mobile");
+    log.error({ err }, "Erreur inscription mobile.");
     return apiResponse.internalError();
   }
 }
