@@ -6,10 +6,14 @@ import { transactionalDb } from "@/infrastructure/db";
 import { persistAuditLog } from "@/modules/audit/server";
 import {
   authenticateClientSchema,
+  changeClientPasswordSchema,
+  deleteClientAccountSchema,
   listAdminClientsSchema,
   registerClientSchema,
   updateClientProfileSchema,
   type AuthenticateClientCommand,
+  type ChangeClientPasswordCommand,
+  type DeleteClientAccountCommand,
   type ListAdminClientsInput,
   type RegisterClientCommand,
   type UpdateClientProfileCommand,
@@ -22,6 +26,7 @@ import {
   findClientProfile,
   findClientSessionState,
   insertClient,
+  softDeleteClientRecord,
   listAdminClientRecords,
   setClientActiveState,
   updateClientProfileRecord,
@@ -137,6 +142,59 @@ export async function updateClientProfile(
   }
   if (passwordChanged) await revokeOwnerSessions("client", clientId);
   return { id: clientId, passwordChanged };
+}
+
+export async function changeClientPassword(
+  clientId: string,
+  command: ChangeClientPasswordCommand,
+) {
+  const input = changeClientPasswordSchema.parse(command);
+  const current = await findClientAuthRecordById(clientId);
+  if (!current?.password) {
+    throw new ClientDomainError(
+      "CLIENT_NOT_FOUND",
+      "Client introuvable",
+    );
+  }
+  if (!(await comparePassword(input.ancienPassword, current.password))) {
+    throw new ClientDomainError(
+      "CLIENT_CURRENT_PASSWORD_INVALID",
+      "Ancien mot de passe incorrect",
+    );
+  }
+  const newHash = await hashPassword(input.nouveauPassword);
+  await updateClientProfileRecord(clientId, { password: newHash });
+  await revokeOwnerSessions("client", clientId);
+  return { id: clientId, passwordChanged: true };
+}
+
+export async function deleteClientAccount(
+  clientId: string,
+  command: DeleteClientAccountCommand,
+) {
+  const input = deleteClientAccountSchema.parse(command);
+  const current = await findClientAuthRecordById(clientId);
+  if (!current?.password) {
+    throw new ClientDomainError(
+      "CLIENT_NOT_FOUND",
+      "Client introuvable",
+    );
+  }
+  if (!(await comparePassword(input.password, current.password))) {
+    throw new ClientDomainError(
+      "CLIENT_CURRENT_PASSWORD_INVALID",
+      "Mot de passe incorrect",
+    );
+  }
+  const deleted = await softDeleteClientRecord(clientId, new Date());
+  if (!deleted) {
+    throw new ClientDomainError(
+      "CLIENT_ACCOUNT_DELETED",
+      "Ce compte est déjà supprimé ou désactivé",
+    );
+  }
+  await revokeOwnerSessions("client", clientId);
+  return { id: clientId, deleted: true };
 }
 
 export function listAdminClients(input: ListAdminClientsInput) {

@@ -83,3 +83,20 @@ export type RegisterClientCommand = z.infer<typeof registerClientSchema>;
 export type AuthenticateClientCommand = z.infer<typeof authenticateClientSchema>;
 export type UpdateClientProfileCommand = z.infer<typeof updateClientProfileSchema>;
 export type ListAdminClientsInput = z.input<typeof listAdminClientsSchema>;
+
+export const changeClientPasswordSchema = z
+  .object({
+    ancienPassword: z.string().min(1, "L'ancien mot de passe est requis").max(128),
+    nouveauPassword: strongPasswordSchema,
+  })
+  .strict();
+
+export const deleteClientAccountSchema = z
+  .object({
+    password: z.string().min(1, "Le mot de passe est requis").max(128),
+    reason: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
+export type ChangeClientPasswordCommand = z.infer<typeof changeClientPasswordSchema>;
+export type DeleteClientAccountCommand = z.infer<typeof deleteClientAccountSchema>;

@@ -4,7 +4,8 @@ export type ClientDomainErrorCode =
   | "CLIENT_CREDENTIALS_INVALID"
   | "CLIENT_ALREADY_EXISTS"
   | "CLIENT_CURRENT_PASSWORD_INVALID"
-  | "CLIENT_TRANSITION_INVALID";
+  | "CLIENT_TRANSITION_INVALID"
+  | "CLIENT_ACCOUNT_DELETED";
 
 export class ClientDomainError extends Error {
   constructor(

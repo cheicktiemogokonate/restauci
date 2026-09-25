@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://restauci.vercel.app/api/v1"
+      "url": "https://toutci.com/api/v1"
     }
   ],
   "security": [
@@ -501,6 +501,128 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ClientProfileUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session absente ou expirée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requêtes dépassée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/client/auth/password": {
+      "post": {
+        "operationId": "changeClientPassword",
+        "tags": [
+          "Compte consommateur"
+        ],
+        "summary": "Changer le mot de passe du consommateur",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeClientPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session absente ou expirée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requêtes dépassée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/client/account/delete": {
+      "post": {
+        "operationId": "deleteClientAccount",
+        "tags": [
+          "Compte consommateur"
+        ],
+        "summary": "Supprimer le compte consommateur",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteClientAccountRequest"
               }
             }
           }
@@ -5715,6 +5837,44 @@
             "type": "string",
             "minLength": 12,
             "maxLength": 128
+          }
+        }
+      },
+      "ChangeClientPasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ancienPassword",
+          "nouveauPassword"
+        ],
+        "properties": {
+          "ancienPassword": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "nouveauPassword": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128
+          }
+        }
+      },
+      "DeleteClientAccountRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
           }
         }
       },

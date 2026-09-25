@@ -199,3 +199,30 @@ export async function setClientActiveState(
     .returning();
   return client ?? null;
 }
+
+export async function softDeleteClientRecord(
+  clientId: string,
+  now: Date,
+  executor: DbExecutor = db,
+) {
+  const anonymizedPhone = `deleted_${clientId.slice(0, 8)}`;
+  const [client] = await executor
+    .update(clients)
+    .set({
+      actif: false,
+      nom: "Compte supprimé",
+      telephone: anonymizedPhone,
+      email: null,
+      password: null,
+      avatarUrl: null,
+      adresseDefaut: null,
+      latitudeDefaut: null,
+      longitudeDefaut: null,
+      motifSuspension: "Suppression volontaire du compte",
+      suspenduAt: now,
+      updatedAt: now,
+    })
+    .where(and(eq(clients.id, clientId), eq(clients.actif, true)))
+    .returning();
+  return client ? { id: client.id } : null;
+}
