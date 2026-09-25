@@ -29,7 +29,11 @@ export async function POST(req: NextRequest) {
   if (error) return error;
 
   try {
-    const client = await registerClient(data);
+    // registerClient re-parse avec registerClientSchema (strict, sans
+    // tokenTransport) : on lui ne transmet que ses propres champs, sinon le
+    // ZodError "Unrecognized key" est remonté comme 500 INTERNAL_ERROR.
+    const { tokenTransport, ...registerInput } = data;
+    const client = await registerClient(registerInput);
 
     const sessionId = createSessionId();
     const sessionExpiresAt = Math.floor(Date.now() / 1_000) + 7 * 24 * 3600;
@@ -52,12 +56,12 @@ export async function POST(req: NextRequest) {
       client,
       tokens: {
         accessToken,
-        ...(data.tokenTransport === "json" ? { refreshToken } : {}),
+        ...(tokenTransport === "json" ? { refreshToken } : {}),
         expiresIn: 15 * 60,
       },
     });
     applyClientRefreshTransport(response, {
-      transport: data.tokenTransport,
+      transport: tokenTransport,
       token: refreshToken,
       maxAge: 7 * 24 * 3600,
     });
