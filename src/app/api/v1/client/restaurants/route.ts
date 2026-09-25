@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         accuracyMeters: data.accuracyMeters,
         capturedAt: data.capturedAt ?? new Date().toISOString(),
       },
-      search: data.search,
+      query: data.search,
       cuisine: data.cuisine,
       modeCommande: data.modeCommande,
       page,
